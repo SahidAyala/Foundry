@@ -1,123 +1,93 @@
 ---
-description: Creates a PR using the backend PR template and conventional commits format
+description: Creates a PR using this project's PR template and conventional commits format
 ---
 
-Crea un Pull Request siguiendo estos pasos.
+Create a Pull Request following these steps.
 
-## Paso 1.5: Actualizar la rama con main
+## Step 1.5: Update the branch with main
 
-Antes de analizar los cambios, asegúrate de que la rama esté actualizada con `main`.
+Before analyzing the changes, make sure the branch is up to date with `main`.
 
-1. Guarda la rama actual:
-
+1. Save the current branch:
 
 git branch --show-current
 
-
-2. Actualiza referencias remotas:
-
+2. Update remote references:
 
 git fetch origin
 
-
-3. Cambia a main:
-
+3. Switch to main:
 
 git checkout main
 
-
-4. Actualiza main:
-
+4. Update main:
 
 git pull origin main
 
-
-5. Regresa a la rama original:
-
+5. Return to the original branch:
 
 git checkout <branch>
 
-
-6. Haz merge de main:
-
+6. Merge main:
 
 git merge main
 
+### If there are conflicts
 
-### Si hay conflictos
+- Stop immediately
+- Inform the user there are conflicts
+- Ask them to resolve the conflicts before continuing
 
-- Detente inmediatamente
-- Informa al usuario que hay conflictos
-- Pide que los resuelva antes de continuar
+## Step 1: Analyze the changes
 
-## Paso 1: Analizar los cambios
-
-1. Obtén la rama actual:
-
+1. Get the current branch:
 
 git branch --show-current
 
+2. Extract the ticket number from the branch name.
 
-2. Extrae el número de ticket del nombre de la rama.
+Example:
 
-Ejemplo:
-
-
-feat/123-add-payroll-endpoint
+feat/123-add-act-status-transitions
 → ticket = 123
 
-
-3. Verifica que no haya cambios sin commitear:
-
+3. Check that there are no uncommitted changes:
 
 git status --short
 
+If there are pending changes, inform the user and **stop**.
 
-Si hay cambios pendientes, informa al usuario y **detente**.
-
-4. Verifica que la rama tenga upstream:
-
+4. Check that the branch has an upstream:
 
 git rev-parse --abbrev-ref --symbolic-full-name @{u}
 
-
-Si no existe upstream:
-
+If it doesn't exist:
 
 git push -u origin HEAD
 
-
-5. Analiza los cambios contra main:
-
+5. Analyze the changes against main:
 
 git diff main...HEAD
 
-
-y revisa commits:
-
+and review the commits:
 
 git log main..HEAD --oneline
 
-
 ---
 
-# Paso 2: Generar el título del PR
+# Step 2: Generate the PR title
 
-El título debe seguir el formato:
-
+The title must follow the format:
 
 type(scope): description
 
+Example:
 
-Ejemplo:
+feat(domain): Add status transition validation to the Act aggregate
 
+## Rules
 
-feat(payroll): New endpoint GET for listing employees payroll with pagination
-
-
-## Reglas
-
-### type permitido
+### Allowed type
 
 - feat
 - fix
@@ -128,90 +98,89 @@ feat(payroll): New endpoint GET for listing employees payroll with pagination
 
 ### scope
 
-El scope debe representar el módulo afectado.
+The scope must represent the affected area of this project:
 
-Ejemplos:
+domain
+internal/<package>
+cmd/<binary>
+overview
+rfcs
+architecture
+adrs
+guides
+reference
+open-questions
+archive
+build
+repo
 
+If the scope isn't obvious, derive it from:
 
-auth
-employees
-payroll
-projects
-directory
-notifications
-
-
-Si el módulo no es claro, dedúcelo desde:
-
-- archivos modificados
-- nombres de servicios
-- controllers
-- aggregates
+- modified files
+- Go package names
+- domain aggregates / entities
+- the `docs/` section touched (see the precedence order in `AGENTS.md`)
 
 ### description
 
-La descripción debe:
+The description must:
 
-- ser corta
-- empezar con mayúscula
-- explicar el cambio principal
+- be short
+- start with a capital letter
+- explain the main change
 
-Ejemplos:
+Examples:
 
-
-feat(payroll): Add endpoint to list employee payrolls
-fix(auth): Handle expired refresh tokens
-refactor(directory): Move validation logic into aggregate
-
+feat(domain): Add status transition validation to the Act aggregate
+fix(domain): Prevent invalid Act state transitions
+docs(architecture): Clarify the boundary between Act and Engine
+refactor(reference): Consolidate terminology definitions
 
 ---
 
-# Paso 3: Generar descripción del PR
+# Step 3: Generate the PR description
 
-La descripción debe incluir:
+The description must include:
 
 ## Description
 
-Explicación breve del propósito del PR.
+Brief explanation of the PR's purpose.
 
 ## Changes Included
 
-Lista de máximo **5 bullet points** que resuman los cambios reales.
+List of at most **5 bullet points** summarizing the actual changes.
 
-Ejemplo:
+Example:
 
+Add status field and transition rules to the Act aggregate
 
-Add GET /payroll endpoint with pagination
+Add unit tests for valid and invalid transitions
 
-Implement payroll listing service
-
-Add validation for pagination params
-
-Add unit tests for payroll service
-
+Document the transition rules in docs/02-architecture/execution.md
 
 ---
 
-# Paso 4: Crear el PR
+# Step 4: Create the PR
 
-Usa `gh pr create` con este template:
+Use `gh pr create` with this template:
 
-
-gh pr create --title "título generado" --body "$(cat <<'EOF'
+gh pr create --title "generated title" --body "$(cat <<'EOF'
 
 Description
 
-{descripción generada}
+{generated description}
 
 Changes Included
 
-{lista de cambios}
+{list of changes}
 
 Checklist
 
  Tests added or updated
 
- Code follows project architecture
+ Code follows AGENTS.md documentation and terminology rules
+
+ Repository still builds (`go build ./...`) and tests pass (`go test ./...`)
 
 Related Issues
 
@@ -222,22 +191,21 @@ Screenshots (optional)
 EOF
 )"
 
-
-El PR siempre debe ir contra **main**.
-
----
-
-# Paso 5: Confirmar
-
-Después de ejecutar el comando:
-
-1. Mostrar el link generado por `gh`
-2. Confirmar que el PR fue creado correctamente.
+The PR must always target **main**.
 
 ---
 
-# Notas importantes
+# Step 5: Confirm
 
-- No generar más de **5 bullet points**
-- El título debe seguir estrictamente el formato `type(scope): description`
-- Si ocurre cualquier error durante el proceso, detenerse y preguntar al usuario
+After running the command:
+
+1. Show the link generated by `gh`
+2. Confirm the PR was created successfully.
+
+---
+
+# Important notes
+
+- Do not generate more than **5 bullet points**
+- The title must strictly follow the `type(scope): description` format
+- If any error occurs during the process, stop and ask the user

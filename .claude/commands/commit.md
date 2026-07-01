@@ -1,50 +1,44 @@
 ---
-description: Create logical commits following conventional commits and project module scopes
+description: Create logical commits following conventional commits and this project's module scopes
 ---
 
-Commitea los cambios del worktree agrupándolos por **unidad lógica**, no por archivo.
+Commit the worktree changes grouped by **logical unit**, not by file.
 
-## Paso 1: Verificar cambios
+## Step 1: Check for changes
 
-Ejecuta:
-
+Run:
 
 git status --short
 
-
-Si no hay cambios, informa al usuario y detente.
+If there are no changes, inform the user and stop.
 
 ---
 
-## Paso 2: Analizar cambios
+## Step 2: Analyze changes
 
-Analiza el diff completo:
-
+Review the full diff:
 
 git diff
 
+and detect:
 
-y detecta:
+- affected Go packages (`domain/<package>`, future `internal/<package>`, `cmd/<binary>`)
+- Go tests (`*_test.go`)
+- documentation sections (`docs/00-overview`, `docs/01-rfcs`, `docs/02-architecture`, `docs/03-adrs`, `docs/04-guides`, `docs/05-reference`, `docs/06-open-questions`, `docs/archive`)
+- repo entry points and agent config (`AGENTS.md`, `CLAUDE.md`, `README.md`, `.claude/`)
+- build/tooling files (`go.mod`, `go.sum`, `.gitignore`, CI config)
 
-- módulos afectados (`src/contexts/<module>`)
-- tests (`*.spec.ts`)
-- seeds (`prisma/seed`)
-- config (`.gitignore`, config files)
-
-Agrupa los archivos por **unidad lógica**.
+Group files by **logical unit**.
 
 ---
 
-## Paso 3: Generar commits
+## Step 3: Generate commits
 
-Para cada grupo genera un commit siguiendo:
-
+For each group, generate a commit following:
 
 type(scope): description
 
-
-### Tipos permitidos
-
+### Allowed types
 
 feat
 fix
@@ -53,59 +47,62 @@ test
 chore
 docs
 
-
 ### Scope
 
-Derivado del módulo:
+Derived from the affected area:
 
+domain/act.go            → domain
+internal/<package>/...   → <package>
+cmd/<binary>/...         → <binary>
+docs/00-overview/*        → overview
+docs/01-rfcs/*             → rfcs
+docs/02-architecture/*     → architecture
+docs/03-adrs/*             → adrs
+docs/04-guides/*           → guides
+docs/05-reference/*        → reference
+docs/06-open-questions/*   → open-questions
+docs/archive/*             → archive
+AGENTS.md, CLAUDE.md, README.md, .claude/ → repo
+go.mod, go.sum             → build
 
-src/contexts/compliance → compliance
-src/contexts/auth → auth
-src/contexts/directory → directory
+Examples:
 
-
-Ejemplos:
-
-
-feat(compliance): Add onboarding compliance document flow
-test(compliance): Add service tests for compliance onboarding
-chore(seed): Add compliance categories seed data
-refactor(directory): Move invitation logic into domain event
-
+feat(domain): Add Act aggregate with status transitions
+test(domain): Add unit tests for Act status transitions
+docs(architecture): Document the execution model for Acts
+docs(adrs): Record decision on language and toolchain
+chore(repo): Update agent instructions and project entry points
 
 ---
 
-## Paso 4: Crear commits
+## Step 4: Create commits
 
-Para cada grupo:
+For each group:
 
+git add <files>
+git commit -m "generated message"
 
-git add <archivos>
-git commit -m "mensaje generado"
-
-
-**Nunca agregar**
-
+**Never add**
 
 Co-Authored-By
 
-
 ---
 
-## Paso 5: Confirmar
+## Step 5: Confirm
 
-Mostrar:
-
+Show:
 
 git log --oneline -10
 
-
 ---
 
-## Reglas importantes
+## Important rules
 
-- No crear commits por archivo
-- Agrupar cambios relacionados
-- Máximo **5 commits**
-- Usar siempre `type(scope): description`
-- Si hay archivos sensibles (`.env`, secretos), advertir antes de continuar
+- Do not create commits per file
+- Group related changes together
+- Maximum **5 commits**
+- Always use `type(scope): description`
+- Keep a Go package's implementation and its `_test.go` changes in the same commit unless the tests are a deliberate follow-up commit
+- Never use retired terminology in commit messages (`Workflow`, `Stage`, `Provider`, `Skill`, `Runtime`/`Kernel`) — use the canonical terms instead (`Act`, `Step`, `Executor`, `Engine`), per `AGENTS.md`
+- Docs changes that only fix a lower-precedence doc to resolve a contradiction with a higher one (see `AGENTS.md` precedence order) should be a separate `docs` commit from unrelated content additions
+- If there are sensitive files (`.env`, secrets, credentials), warn before continuing
