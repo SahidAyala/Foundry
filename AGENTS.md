@@ -70,6 +70,17 @@ Rules:
 - Honor the [invariants](docs/05-reference/invariants.md); a change that breaks one is wrong.
 - Build the deterministic core before integrating any model.
 
+## Implementation Mode
+
+When implementing code:
+
+- Prefer editing the repository over producing explanations.
+- Do not describe code that has not been written.
+- Execute tests instead of predicting their results.
+- Never fabricate command output.
+- Leave the repository in a green state before stopping.
+- Do not continue to the next PR without explicit approval.
+
 ## How to resolve conflicting documents
 
 1. Identify each document's precedence level (above).
