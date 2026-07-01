@@ -45,6 +45,7 @@ type Judgment struct {
 	Verdict   string
 	Authority string
 	At        *time.Time
+	Checked   []string // validator output that produced the verdict
 }
 
 // NewAct creates a new Act with a unique ID and current timestamp.

@@ -142,6 +142,17 @@ func TestActJSONRoundTrip(t *testing.T) {
 	}
 }
 
+func TestJudgmentFields(t *testing.T) {
+	// Verify that Judgment has all 4 expected fields with correct types.
+	// This is a compile-time check; if a field is missing or wrong, the code won't compile.
+	_ = &Judgment{
+		Verdict:   "",
+		Authority: "",
+		At:        nil,
+		Checked:   []string{},
+	}
+}
+
 func TestActFields(t *testing.T) {
 	// Verify that Act has all 12 expected fields with correct types.
 	// This is a compile-time check; if a field is missing or wrong, the code won't compile.
