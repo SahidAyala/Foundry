@@ -1,0 +1,60 @@
+# Concept Reference
+
+> Quick-reference map of how Foundry's concepts relate, and how mechanism maps to the domain. **Definitions live once, in [terminology.md](terminology.md); the narrative model lives in [../02-architecture/domain.md](../02-architecture/domain.md).** This file only cross-references — it does not define.
+
+## Maturity index (status of every major concept)
+
+See [maturity levels](../04-guides/documentation.md#maturity-levels). **Nothing is CANONICAL yet** — the ceiling is PROVISIONAL until a governance process exists ([../06-open-questions/OQ-006-governance-model.md](../06-open-questions/OQ-006-governance-model.md)).
+
+| Concept / decision | Maturity | Owner | Open question |
+|---|---|---|---|
+| Trust = product; model is substrate; knowledge is durable | PROVISIONAL (strongly grounded in RFC-0001) | [vision.md](../00-overview/vision.md), [principles.md](../00-overview/principles.md) | — |
+| Deterministic-first; control flow in the Engine; untrusted-until-verified; human accountability | PROVISIONAL (grounded in RFC-0001) | [trust.md](../02-architecture/trust.md), [invariants.md](invariants.md) | — |
+| Authored/Derived knowledge split | PROVISIONAL (grounded) | [knowledge.md](../02-architecture/knowledge.md) | — |
+| **Act as domain center** | PROVISIONAL (working hypothesis) | [domain.md](../02-architecture/domain.md) | [OQ-001](../06-open-questions/OQ-001-domain-center.md) |
+| **Pipeline = one Strategy** | PROVISIONAL (working hypothesis) | [execution.md](../02-architecture/execution.md) | [OQ-002](../06-open-questions/OQ-002-pipeline-as-strategy.md) |
+| **Vocabulary** (Act/Engine/Strategy/…) | PROVISIONAL (proposal; some coined here) | [terminology.md](terminology.md) | [OQ-007](../06-open-questions/OQ-007-canonical-terminology.md) |
+| Replay across versions | OPEN | — | [OQ-003](../06-open-questions/OQ-003-replay-across-versions.md) |
+| Verification guarantee strength | OPEN | — | [OQ-004](../06-open-questions/OQ-004-validator-determinism.md) |
+| Extension isolation mechanism | OPEN (requirements only) | [extensibility.md](../02-architecture/extensibility.md) | [OQ-005](../06-open-questions/OQ-005-extension-isolation.md) |
+| Governance / ratification | OPEN (highest priority) | — | [OQ-006](../06-open-questions/OQ-006-governance-model.md) |
+| Language = Go | ACCEPTED (interim authority) | [ADR-0001](../03-adrs/ADR-0001-language-and-toolchain.md) | pending amendment |
+| Workflow / Stage / Provider / Skill / Runtime | REJECTED | [archive](../archive/) | — |
+
+## Domain concepts at a glance
+
+| Concept | Role | Owning document |
+|---|---|---|
+| Act | The unit of justified, accountable, recorded engineering | [domain.md](../02-architecture/domain.md) |
+| Intent | Why an Act exists | [domain.md](../02-architecture/domain.md) |
+| Strategy | How an Act is produced (pluggable) | [execution.md](../02-architecture/execution.md) |
+| Evidence | What was considered + checked | [trust.md](../02-architecture/trust.md) |
+| Judgment | Verdict + accountable acceptance | [trust.md](../02-architecture/trust.md) |
+| Authority | Who owns a Judgment | [trust.md](../02-architecture/trust.md) |
+| Outcome | The proposed transition an Act yields | [domain.md](../02-architecture/domain.md) |
+| Knowledge | The durable medium that compounds | [knowledge.md](../02-architecture/knowledge.md) |
+| Record | The immutable set of Acts | [trust.md](../02-architecture/trust.md), [system-context.md](../02-architecture/system-context.md) |
+
+## How mechanism maps to the domain (the "below the line" map)
+
+Mechanism terms exist only to *implement* the domain. Use this table to translate implementation vocabulary back to what it serves:
+
+| Mechanism term | Serves which domain concept | Note |
+|---|---|---|
+| Engine | produces the **Act**, owns control flow | not a domain concept |
+| Pipeline | **one Strategy** | not the center of the system |
+| Step | a unit inside the Pipeline strategy | replaces "Stage" |
+| Executor | does a unit of work (produces toward an **Outcome**) | a model is one Executor; substrate |
+| Router | places work on Executors | deterministic; no control flow |
+| Validator | produces the *checked* half of **Evidence** | pure; never mutates |
+| Gate | the machine half of a **Judgment** | deterministic verdict |
+| Artifact | the content-addressed form of an **Outcome**/Evidence | identity = content |
+| Context | the *considered* half of **Evidence** | per-Act selection from Knowledge |
+| Budget | a constraint on an **Act** | enforced, not reported |
+| Capability | the matching currency between work and Executors | declared + negotiated |
+
+## Relationship summary
+
+- An **Act** carries an **Intent**, is produced by a **Strategy**, accumulates **Evidence**, yields an **Outcome**, passes a **Judgment** owned by an **Authority**, and is preserved in the **Record**.
+- **Knowledge** is both an input to **Evidence** and an output of accepted **Outcomes** — the compounding loop.
+- All mechanism (Engine, Pipeline, Executor, …) is replaceable substrate beneath these.
