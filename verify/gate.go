@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"foundry/domain"
+	"foundry/engine"
 )
 
 // Gate evaluates a set of Validators and produces a verdict.
@@ -14,6 +15,8 @@ type Gate struct {
 	validators []*Validator
 	rule       string // "all-pass" only, for M0
 }
+
+var _ engine.Verifier = (*Gate)(nil)
 
 // NewGate creates a Gate that evaluates validators according to rule.
 // M0 supports only the "all-pass" rule: every validator must pass.
@@ -27,8 +30,11 @@ func NewGate(rule string, validators ...*Validator) (*Gate, error) {
 	return &Gate{validators: validators, rule: rule}, nil
 }
 
-// Evaluate runs every validator against workspace and returns the resulting Judgment.
-func (g *Gate) Evaluate(ctx context.Context, workspace string) (*domain.Judgment, error) {
+// Verify runs every validator against workspace and returns the resulting
+// Judgment. outcome is accepted to satisfy the engine.Verifier port; Gate's
+// validators check the workspace's file state directly and do not inspect
+// outcome themselves.
+func (g *Gate) Verify(ctx context.Context, outcome *domain.Outcome, workspace string) (*domain.Judgment, error) {
 	checked := make([]string, 0, len(g.validators))
 	allPassed := true
 

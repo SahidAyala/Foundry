@@ -22,6 +22,8 @@ type Act struct {
 	JudgmentVerdict string     `json:"judgment_verdict"`
 	ApprovedBy      string     `json:"approved_by"`
 	ApprovedAt      *time.Time `json:"approved_at"`
+	Iterations      int        `json:"iterations"`
+	CostEstimateUSD float64    `json:"cost_estimate_usd"`
 }
 
 // Intent describes what was requested.
@@ -38,6 +40,13 @@ type Evidence struct {
 // Outcome is what the executor produced.
 type Outcome struct {
 	Patch string
+}
+
+// Budget is an enforceable ceiling on an Act — enforced as a constraint,
+// never merely reported as a metric.
+type Budget struct {
+	MaxIterations int
+	MaxCostUSD    float64
 }
 
 // Judgment is the verdict and approval decision.

@@ -240,6 +240,8 @@ func TestEncode_GoldenShape(t *testing.T) {
 		JudgmentVerdict: "pass",
 		ApprovedBy:      "",
 		ApprovedAt:      nil,
+		Iterations:      1,
+		CostEstimateUSD: 0.50,
 	}
 
 	data, err := encode(act)
@@ -261,7 +263,9 @@ func TestEncode_GoldenShape(t *testing.T) {
   "patch": "diff --git a/main.go b/main.go",
   "judgment_verdict": "pass",
   "approved_by": "",
-  "approved_at": null
+  "approved_at": null,
+  "iterations": 1,
+  "cost_estimate_usd": 0.5
 }`
 
 	if string(data) != want {

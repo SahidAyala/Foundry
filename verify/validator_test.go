@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"foundry/domain"
 )
 
 func TestValidator_Run_Passes(t *testing.T) {
@@ -59,7 +61,7 @@ func TestNewGate_RequiresAtLeastOneValidator(t *testing.T) {
 	}
 }
 
-func TestGate_Evaluate_AllPass(t *testing.T) {
+func TestGate_Verify_AllPass(t *testing.T) {
 	gate, err := NewGate("all-pass",
 		&Validator{Name: "one", Cmd: "exit 0"},
 		&Validator{Name: "two", Cmd: "exit 0"},
@@ -68,9 +70,9 @@ func TestGate_Evaluate_AllPass(t *testing.T) {
 		t.Fatalf("NewGate failed: %v", err)
 	}
 
-	judgment, err := gate.Evaluate(context.Background(), t.TempDir())
+	judgment, err := gate.Verify(context.Background(), &domain.Outcome{}, t.TempDir())
 	if err != nil {
-		t.Fatalf("Evaluate failed: %v", err)
+		t.Fatalf("Verify failed: %v", err)
 	}
 	if judgment.Verdict != "pass" {
 		t.Errorf("Verdict = %q, want %q", judgment.Verdict, "pass")
@@ -80,7 +82,7 @@ func TestGate_Evaluate_AllPass(t *testing.T) {
 	}
 }
 
-func TestGate_Evaluate_MixedResults(t *testing.T) {
+func TestGate_Verify_MixedResults(t *testing.T) {
 	gate, err := NewGate("all-pass",
 		&Validator{Name: "passing", Cmd: "exit 0"},
 		&Validator{Name: "failing", Cmd: "exit 1"},
@@ -89,9 +91,9 @@ func TestGate_Evaluate_MixedResults(t *testing.T) {
 		t.Fatalf("NewGate failed: %v", err)
 	}
 
-	judgment, err := gate.Evaluate(context.Background(), t.TempDir())
+	judgment, err := gate.Verify(context.Background(), &domain.Outcome{}, t.TempDir())
 	if err != nil {
-		t.Fatalf("Evaluate failed: %v", err)
+		t.Fatalf("Verify failed: %v", err)
 	}
 	if judgment.Verdict != "fail" {
 		t.Errorf("Verdict = %q, want %q", judgment.Verdict, "fail")
@@ -101,14 +103,14 @@ func TestGate_Evaluate_MixedResults(t *testing.T) {
 	}
 }
 
-func TestGate_Evaluate_PropagatesValidatorError(t *testing.T) {
+func TestGate_Verify_PropagatesValidatorError(t *testing.T) {
 	gate, err := NewGate("all-pass", &Validator{Name: "bad-workspace", Cmd: "exit 0"})
 	if err != nil {
 		t.Fatalf("NewGate failed: %v", err)
 	}
 
-	if _, err := gate.Evaluate(context.Background(), "/nonexistent/workspace/path"); err == nil {
-		t.Fatal("Evaluate with nonexistent workspace returned nil error")
+	if _, err := gate.Verify(context.Background(), &domain.Outcome{}, "/nonexistent/workspace/path"); err == nil {
+		t.Fatal("Verify with nonexistent workspace returned nil error")
 	}
 }
 
@@ -118,9 +120,9 @@ func TestJudgment_GoldenShape(t *testing.T) {
 		t.Fatalf("NewGate failed: %v", err)
 	}
 
-	judgment, err := gate.Evaluate(context.Background(), t.TempDir())
+	judgment, err := gate.Verify(context.Background(), &domain.Outcome{}, t.TempDir())
 	if err != nil {
-		t.Fatalf("Evaluate failed: %v", err)
+		t.Fatalf("Verify failed: %v", err)
 	}
 
 	data, err := json.MarshalIndent(judgment, "", "  ")
