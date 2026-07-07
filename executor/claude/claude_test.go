@@ -113,6 +113,53 @@ func TestExecute_Failure(t *testing.T) {
 	}
 }
 
+// TestExecute_FailureWithEmptyStreams guards against a regression to
+// "execution failed: exit status 1: " with nothing to debug — observed
+// live when the claude CLI exits non-zero without writing to either
+// stream.
+func TestExecute_FailureWithEmptyStreams(t *testing.T) {
+	e := newExecutor(&fakeRunner{err: errors.New("exit status 1")})
+
+	_, err := e.Execute(context.Background(), &domain.Intent{Text: "x"}, nil)
+	if err == nil {
+		t.Fatal("Execute returned nil error on failure")
+	}
+	if !strings.Contains(err.Error(), "execution failed") {
+		t.Errorf("error = %q, want it to mention 'execution failed'", err)
+	}
+	if !strings.Contains(err.Error(), "claude -p") {
+		t.Errorf("error = %q, want a concrete next debugging step when both streams are empty", err)
+	}
+}
+
+// TestExecute_FailureIncludesStdoutWhenStderrEmpty covers a CLI that writes
+// its failure explanation to stdout instead of stderr.
+func TestExecute_FailureIncludesStdoutWhenStderrEmpty(t *testing.T) {
+	e := newExecutor(&fakeRunner{err: errors.New("exit status 1"), stdout: "not authenticated"})
+
+	_, err := e.Execute(context.Background(), &domain.Intent{Text: "x"}, nil)
+	if err == nil {
+		t.Fatal("Execute returned nil error on failure")
+	}
+	if !strings.Contains(err.Error(), "not authenticated") {
+		t.Errorf("error = %q, want it to include captured stdout", err)
+	}
+}
+
+// TestExecute_FailureIncludesBothStreamsWhenPresent covers the branch where
+// stderr and stdout both carry diagnostic content.
+func TestExecute_FailureIncludesBothStreamsWhenPresent(t *testing.T) {
+	e := newExecutor(&fakeRunner{err: errors.New("exit status 1"), stderr: "warn: retrying", stdout: "giving up"})
+
+	_, err := e.Execute(context.Background(), &domain.Intent{Text: "x"}, nil)
+	if err == nil {
+		t.Fatal("Execute returned nil error on failure")
+	}
+	if !strings.Contains(err.Error(), "warn: retrying") || !strings.Contains(err.Error(), "giving up") {
+		t.Errorf("error = %q, want it to include both stderr and stdout", err)
+	}
+}
+
 func TestExecute_EmptyOutput(t *testing.T) {
 	e := newExecutor(&fakeRunner{stdout: "   \n"})
 
