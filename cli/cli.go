@@ -136,9 +136,8 @@ func (c *CLI) Show(ctx context.Context, actID string) error {
 }
 
 // formatAct renders a recorded Act for human review: identity, judgment,
-// approval, budget usage, the considered Evidence as a list, and the patch
-// as a unified diff. The checked findings are not yet recorded on the Act
-// (only the verdict is), so the verdict stands in for them.
+// approval, budget usage, the considered and checked Evidence, and the
+// patch as a unified diff.
 func formatAct(act *domain.Act) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Act:        %s\n", act.ID)
@@ -158,6 +157,17 @@ func formatAct(act *domain.Act) string {
 	} else {
 		for _, entry := range act.ConsideredFiles {
 			fmt.Fprintf(&b, "  - %s\n", firstLine(entry))
+		}
+	}
+
+	b.WriteString("\nChecked evidence:\n")
+	if len(act.CheckedFindings) == 0 {
+		b.WriteString("  (none)\n")
+	} else {
+		for _, entry := range act.CheckedFindings {
+			for _, line := range strings.Split(strings.TrimRight(entry, "\n"), "\n") {
+				fmt.Fprintf(&b, "  %s\n", line)
+			}
 		}
 	}
 

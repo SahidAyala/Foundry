@@ -14,10 +14,7 @@ type Act struct {
 	Intent          string     `json:"intent"`
 	CreatedAt       time.Time  `json:"created_at"`
 	ConsideredFiles []string   `json:"considered_files"`
-	BuildOutput     string     `json:"build_output"`
-	TestOutput      string     `json:"test_output"`
-	BuildPassed     bool       `json:"build_passed"`
-	TestPassed      bool       `json:"test_passed"`
+	CheckedFindings []string   `json:"checked_findings"`
 	Patch           string     `json:"patch"`
 	JudgmentVerdict string     `json:"judgment_verdict"`
 	ApprovedBy      string     `json:"approved_by"`
@@ -29,12 +26,6 @@ type Act struct {
 // Intent describes what was requested.
 type Intent struct {
 	Text string
-}
-
-// Evidence is what was considered (context) and what was checked (verification results).
-type Evidence struct {
-	Considered []string
-	Checked    []string
 }
 
 // Outcome is what the executor produced.

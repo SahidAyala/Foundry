@@ -71,10 +71,7 @@ func TestActJSONRoundTrip(t *testing.T) {
 		Intent:          "add logging to main.go",
 		CreatedAt:       now,
 		ConsideredFiles: []string{"main.go", "go.mod"},
-		BuildOutput:     "go build ./...\nok",
-		TestOutput:      "ok\tmodule/...\t0.001s",
-		BuildPassed:     true,
-		TestPassed:      true,
+		CheckedFindings: []string{"go-build: pass", "go-test: pass"},
 		Patch:           "diff --git a/main.go b/main.go\nindex abc..def",
 		JudgmentVerdict: "pass",
 		ApprovedBy:      "alice",
@@ -112,17 +109,13 @@ func TestActJSONRoundTrip(t *testing.T) {
 			t.Errorf("ConsideredFiles[%d]: got %q, want %q", i, f, original.ConsideredFiles[i])
 		}
 	}
-	if unmarshaled.BuildOutput != original.BuildOutput {
-		t.Errorf("BuildOutput: got %q, want %q", unmarshaled.BuildOutput, original.BuildOutput)
+	if len(unmarshaled.CheckedFindings) != len(original.CheckedFindings) {
+		t.Errorf("CheckedFindings length: got %d, want %d", len(unmarshaled.CheckedFindings), len(original.CheckedFindings))
 	}
-	if unmarshaled.TestOutput != original.TestOutput {
-		t.Errorf("TestOutput: got %q, want %q", unmarshaled.TestOutput, original.TestOutput)
-	}
-	if unmarshaled.BuildPassed != original.BuildPassed {
-		t.Errorf("BuildPassed: got %v, want %v", unmarshaled.BuildPassed, original.BuildPassed)
-	}
-	if unmarshaled.TestPassed != original.TestPassed {
-		t.Errorf("TestPassed: got %v, want %v", unmarshaled.TestPassed, original.TestPassed)
+	for i, f := range unmarshaled.CheckedFindings {
+		if f != original.CheckedFindings[i] {
+			t.Errorf("CheckedFindings[%d]: got %q, want %q", i, f, original.CheckedFindings[i])
+		}
 	}
 	if unmarshaled.Patch != original.Patch {
 		t.Errorf("Patch: got %q, want %q", unmarshaled.Patch, original.Patch)
@@ -154,20 +147,19 @@ func TestJudgmentFields(t *testing.T) {
 }
 
 func TestActFields(t *testing.T) {
-	// Verify that Act has all 12 expected fields with correct types.
+	// Verify that Act has all 11 expected fields with correct types.
 	// This is a compile-time check; if a field is missing or wrong, the code won't compile.
 	_ = &Act{
 		ID:              "",
 		Intent:          "",
 		CreatedAt:       time.Time{},
 		ConsideredFiles: []string{},
-		BuildOutput:     "",
-		TestOutput:      "",
-		BuildPassed:     false,
-		TestPassed:      false,
+		CheckedFindings: []string{},
 		Patch:           "",
 		JudgmentVerdict: "",
 		ApprovedBy:      "",
 		ApprovedAt:      nil,
+		Iterations:      0,
+		CostEstimateUSD: 0,
 	}
 }

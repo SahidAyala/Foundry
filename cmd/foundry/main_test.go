@@ -352,4 +352,23 @@ func TestRun_Do_DemoRenameWithRepair(t *testing.T) {
 	if !strings.Contains(last, "failed previous attempt") || !strings.Contains(last, "go-build: fail") {
 		t.Errorf("recorded Evidence missing the build findings the repair used, got %q", last)
 	}
+
+	// The final, passing round's checked Evidence is recorded on the Act
+	// too — `foundry show` must be able to display why a pass verdict
+	// held, not only that it did.
+	if len(act.CheckedFindings) == 0 {
+		t.Fatal("recorded Act has no checked Evidence")
+	}
+	for _, prefix := range []string{"go-build: pass", "go-test: pass"} {
+		found := false
+		for _, f := range act.CheckedFindings {
+			if strings.HasPrefix(f, prefix) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("recorded CheckedFindings = %v, want an entry starting with %q", act.CheckedFindings, prefix)
+		}
+	}
 }

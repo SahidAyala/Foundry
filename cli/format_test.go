@@ -17,6 +17,7 @@ func TestFormatAct_Golden(t *testing.T) {
 			"main.go:\npackage main\n",
 			"verification findings from the failed previous attempt:\ntests: fail",
 		},
+		CheckedFindings: []string{"go-build: pass", "go-test: pass"},
 		Patch:           "diff --git a/main.go b/main.go\n--- a/main.go\n+++ b/main.go\n@@ -1 +1,2 @@\n package main\n+// added\n",
 		JudgmentVerdict: "pass",
 		ApprovedBy:      "tester",
@@ -35,6 +36,10 @@ Iterations: 2 (estimated cost $1.00)
 Considered evidence:
   - main.go:
   - verification findings from the failed previous attempt:
+
+Checked evidence:
+  go-build: pass
+  go-test: pass
 
 Patch:
 diff --git a/main.go b/main.go
@@ -66,6 +71,9 @@ Approved:   no
 Iterations: 0 (estimated cost $0.00)
 
 Considered evidence:
+  (none)
+
+Checked evidence:
   (none)
 
 Patch:

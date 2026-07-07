@@ -62,4 +62,11 @@ func TestCLI_Do_RepairFlowIsRecorded(t *testing.T) {
 	if !strings.Contains(last, "failed previous attempt") || !strings.Contains(last, "1 test failed") {
 		t.Errorf("recorded Evidence missing the repair findings, got %q", last)
 	}
+
+	// The recorded checked Evidence reflects the repair's passing round,
+	// not the failed first attempt — a later `foundry show` sees why the
+	// final verdict is pass.
+	if len(act.CheckedFindings) != 1 || act.CheckedFindings[0] != "check: pass" {
+		t.Errorf("recorded CheckedFindings = %v, want [\"check: pass\"]", act.CheckedFindings)
+	}
 }

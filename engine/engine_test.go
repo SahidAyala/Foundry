@@ -243,6 +243,27 @@ func TestEngine_Run_RepairAfterFailPasses(t *testing.T) {
 	if !strings.Contains(last, "1 test failed") {
 		t.Errorf("Act Evidence missing repair findings, got %q", last)
 	}
+	// The recorded checked Evidence reflects the final (repaired) round's
+	// findings, not the failed first attempt's.
+	if len(act.CheckedFindings) != 1 || act.CheckedFindings[0] != "tests: pass" {
+		t.Errorf("CheckedFindings = %v, want the repaired round's findings [\"tests: pass\"]", act.CheckedFindings)
+	}
+}
+
+func TestEngine_Run_RecordsCheckedFindingsOnFirstPass(t *testing.T) {
+	verifier := &seqVerifier{judgments: []*domain.Judgment{
+		{Verdict: "pass", Checked: []string{"go-build: pass", "go-test: pass"}},
+	}}
+	eng := engine.NewEngine(&fakeGatherer{files: []string{"main.go"}}, executor.NewScriptedExecutor(scriptedPatch), verifier, "")
+
+	act, err := eng.Run(context.Background(), &domain.Intent{Text: "test"})
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+	want := []string{"go-build: pass", "go-test: pass"}
+	if !reflect.DeepEqual(act.CheckedFindings, want) {
+		t.Errorf("CheckedFindings = %v, want %v", act.CheckedFindings, want)
+	}
 }
 
 func TestEngine_Run_NoRepairWhenFirstAttemptPasses(t *testing.T) {
