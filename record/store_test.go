@@ -49,8 +49,7 @@ func TestFileStore_WriteReadRoundTrip(t *testing.T) {
 	original := newAct("a1b2c3d4e5f6a7b8", "add logging to main.go", time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC))
 	original.ConsideredFiles = []string{"main.go"}
 	original.Patch = "diff --git a/main.go b/main.go"
-	original.BuildPassed = true
-	original.TestPassed = true
+	original.CheckedFindings = []string{"go-build: pass", "go-test: pass"}
 
 	if err := store.Write(ctx, original); err != nil {
 		t.Fatalf("Write failed: %v", err)
@@ -73,11 +72,8 @@ func TestFileStore_WriteReadRoundTrip(t *testing.T) {
 	if got.Patch != original.Patch {
 		t.Errorf("Patch = %q, want %q", got.Patch, original.Patch)
 	}
-	if got.BuildPassed != original.BuildPassed {
-		t.Errorf("BuildPassed = %v, want %v", got.BuildPassed, original.BuildPassed)
-	}
-	if got.TestPassed != original.TestPassed {
-		t.Errorf("TestPassed = %v, want %v", got.TestPassed, original.TestPassed)
+	if len(got.CheckedFindings) != len(original.CheckedFindings) || got.CheckedFindings[0] != original.CheckedFindings[0] {
+		t.Errorf("CheckedFindings = %v, want %v", got.CheckedFindings, original.CheckedFindings)
 	}
 	if len(got.ConsideredFiles) != len(original.ConsideredFiles) || got.ConsideredFiles[0] != original.ConsideredFiles[0] {
 		t.Errorf("ConsideredFiles = %v, want %v", got.ConsideredFiles, original.ConsideredFiles)
@@ -101,10 +97,7 @@ func TestFileStore_ReadWriteProperty(t *testing.T) {
 			Intent:          "second intent",
 			CreatedAt:       time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC),
 			ConsideredFiles: []string{"a.go", "b.go"},
-			BuildOutput:     "ok",
-			TestOutput:      "ok",
-			BuildPassed:     true,
-			TestPassed:      false,
+			CheckedFindings: []string{"go-build: fail\nboom"},
 			Patch:           "diff",
 			JudgmentVerdict: "fail",
 			ApprovedBy:      "bob",
@@ -232,10 +225,7 @@ func TestEncode_GoldenShape(t *testing.T) {
 		Intent:          "add logging to main.go",
 		CreatedAt:       time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 		ConsideredFiles: []string{"main.go"},
-		BuildOutput:     "ok",
-		TestOutput:      "ok",
-		BuildPassed:     true,
-		TestPassed:      true,
+		CheckedFindings: []string{"go-build: pass", "go-test: pass"},
 		Patch:           "diff --git a/main.go b/main.go",
 		JudgmentVerdict: "pass",
 		ApprovedBy:      "",
@@ -256,10 +246,10 @@ func TestEncode_GoldenShape(t *testing.T) {
   "considered_files": [
     "main.go"
   ],
-  "build_output": "ok",
-  "test_output": "ok",
-  "build_passed": true,
-  "test_passed": true,
+  "checked_findings": [
+    "go-build: pass",
+    "go-test: pass"
+  ],
   "patch": "diff --git a/main.go b/main.go",
   "judgment_verdict": "pass",
   "approved_by": "",

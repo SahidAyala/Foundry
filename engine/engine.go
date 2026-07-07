@@ -104,6 +104,7 @@ func (e *Engine) RunBudgeted(ctx context.Context, intent *domain.Intent, budget 
 		act.CostEstimateUSD = spent.costUSD
 	}
 	act.JudgmentVerdict = judgment.Verdict
+	act.CheckedFindings = judgment.Checked
 
 	return act, nil
 }
