@@ -132,6 +132,73 @@ func TestGather_BoundsTotalOutput(t *testing.T) {
 	}
 }
 
+func TestGather_IncludesReadme(t *testing.T) {
+	repo := newRepo(t, map[string]string{
+		"main.go":   "package main\n",
+		"README.md": "# Project\n",
+	})
+
+	got := gather(t, repo, "add logging to main.go")
+
+	want := []string{"main.go:\npackage main\n", "README.md:\n# Project\n"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Gather = %q, want %q", got, want)
+	}
+}
+
+func TestGather_IncludesNearbyFilesByPriority(t *testing.T) {
+	repo := newRepo(t, map[string]string{
+		"pkg/a.go":        "package pkg // a\n",
+		"pkg/b.go":        "package pkg // b\n",
+		"pkg/config.yaml": "key: value\n",
+		"pkg/NOTES.md":    "notes\n",
+	})
+
+	got := gather(t, repo, "update pkg/a.go")
+
+	// The named file first, then neighbors by priority: config, docs, code.
+	want := []string{
+		"pkg/a.go:\npackage pkg // a\n",
+		"pkg/config.yaml:\nkey: value\n",
+		"pkg/NOTES.md:\nnotes\n",
+		"pkg/b.go:\npackage pkg // b\n",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Gather = %q, want %q", got, want)
+	}
+}
+
+func TestGather_ReadmeNamedInIntentNotDuplicated(t *testing.T) {
+	repo := newRepo(t, map[string]string{"README.md": "# Project\n"})
+
+	got := gather(t, repo, "improve README.md")
+
+	want := []string{"README.md:\n# Project\n"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Gather = %q, want %q", got, want)
+	}
+}
+
+func TestGather_SupplementaryRespectsBudget(t *testing.T) {
+	repo := newRepo(t, map[string]string{
+		"a.txt":    "tiny",
+		"huge.txt": strings.Repeat("x", 2*maxContextBytes),
+	})
+
+	got := gather(t, repo, "summarize a.txt")
+
+	if len(got) != 2 {
+		t.Fatalf("Gather returned %d entries, want 2: named + truncated neighbor", len(got))
+	}
+	if !strings.HasSuffix(got[1], "[truncated]") {
+		t.Errorf("oversized supplementary entry not truncated: %q", got[1][len(got[1])-40:])
+	}
+	total := len(got[0]) + len(got[1])
+	if total > maxContextBytes+len("\n[truncated]") {
+		t.Errorf("total gathered %d exceeds bound", total)
+	}
+}
+
 func TestGather_Deterministic(t *testing.T) {
 	repo := newRepo(t, map[string]string{"main.go": "package main\n"})
 	intent := "add logging to main.go and missing.go"
