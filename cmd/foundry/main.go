@@ -33,6 +33,10 @@ func run(args []string, stdin io.Reader, stdout io.Writer, newExecutor func(work
 	switch args[0] {
 	case "do":
 		return commands.Do(context.Background(), args[1:], stdin, stdout, newExecutor)
+	case "log":
+		return commands.Log(context.Background(), args[1:], stdout)
+	case "show":
+		return commands.Show(context.Background(), args[1:], stdout)
 	default:
 		fmt.Fprintf(os.Stderr, "foundry: unknown command %q\n", args[0])
 		return 2
