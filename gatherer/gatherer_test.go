@@ -2,6 +2,7 @@ package gatherer
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -218,6 +219,91 @@ func TestGather_CancelledContext(t *testing.T) {
 
 	if _, err := NewNaiveGatherer(repo).Gather(ctx, &domain.Intent{Text: "read main.go"}); err == nil {
 		t.Fatal("Gather returned nil error with cancelled context")
+	}
+}
+
+// TestGather_FallsBackToIdentifierWhenNoFileNamed is the exact shape of the
+// interview demo script: "rename User to Account" names an entity, not a
+// file, so the naive filename extraction alone finds nothing to gather.
+// other/widget.go sits in a different directory so the assertion isolates
+// the identifier match from the pre-existing nearby-files supplement.
+func TestGather_FallsBackToIdentifierWhenNoFileNamed(t *testing.T) {
+	repo := newRepo(t, map[string]string{
+		"user.go":         "package demo\n\ntype User struct{}\n",
+		"other/widget.go": "package other\n\ntype Widget struct{}\n",
+	})
+
+	got := gather(t, repo, "rename User to Account")
+
+	want := []string{"user.go:\npackage demo\n\ntype User struct{}\n"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Gather = %q, want %q", got, want)
+	}
+}
+
+// TestGather_IdentifierFallbackSkippedWhenNamedFileResolves guards against
+// the fallback firing when the naive extraction already found something. It
+// puts the identifier-matching file in a directory the named file's
+// directory-neighbor supplement would never reach, so if the fallback
+// incorrectly ran anyway, this file — and only this file — would appear.
+func TestGather_IdentifierFallbackSkippedWhenNamedFileResolves(t *testing.T) {
+	repo := newRepo(t, map[string]string{
+		"user.go":        "package demo\n\ntype User struct{}\n",
+		"pkg/account.go": "package pkg\n\ntype Account struct{}\n",
+	})
+
+	got := gather(t, repo, "rename the User struct in user.go to Account")
+
+	want := []string{"user.go:\npackage demo\n\ntype User struct{}\n"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Gather = %q, want %q (identifier fallback must not also run)", got, want)
+	}
+}
+
+// TestGather_IdentifierFallbackCapsMatches guards against a common
+// identifier flooding the gathered context with every file that mentions
+// it. Each candidate lives in its own directory so the pre-existing nearby-
+// files supplement (which uncappedly lists a whole directory) contributes
+// nothing extra — this isolates the fallback's own cap.
+func TestGather_IdentifierFallbackCapsMatches(t *testing.T) {
+	files := map[string]string{}
+	for i := 0; i < maxIdentifierMatches+5; i++ {
+		files[fmt.Sprintf("d%02d/file.go", i)] = "package demo\n\ntype User struct{}\n"
+	}
+	repo := newRepo(t, files)
+
+	got := gather(t, repo, "rename User to Account")
+
+	if len(got) != maxIdentifierMatches {
+		t.Errorf("Gather returned %d entries, want the capped %d: %q", len(got), maxIdentifierMatches, got)
+	}
+}
+
+// TestGather_IdentifierFallbackNoMatchesStillEmpty covers an Intent with no
+// resolvable file and no identifier any file mentions.
+func TestGather_IdentifierFallbackNoMatchesStillEmpty(t *testing.T) {
+	repo := newRepo(t, map[string]string{"user.go": "package demo\n"})
+
+	got := gather(t, repo, "make the tests faster")
+
+	if len(got) != 0 {
+		t.Errorf("Gather = %q, want empty", got)
+	}
+}
+
+func TestExtractIdentifiers(t *testing.T) {
+	for _, tc := range []struct {
+		text string
+		want []string
+	}{
+		{"rename User to Account", []string{"User", "Account"}},
+		{"make the tests faster", nil},
+		{"dedupe User User", []string{"User"}},
+		{"Ok", nil}, // shorter than the 3-character minimum
+	} {
+		if got := extractIdentifiers(tc.text); !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("extractIdentifiers(%q) = %q, want %q", tc.text, got, tc.want)
+		}
 	}
 }
 
