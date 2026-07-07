@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 
 	"foundry/cli"
@@ -13,6 +14,7 @@ import (
 	"foundry/gatherer"
 	"foundry/record"
 	"foundry/verify"
+	"foundry/workspace"
 )
 
 // Do implements the `foundry do` command: parse its arguments, wire the Act
@@ -41,16 +43,18 @@ func Do(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, n
 		return 1
 	}
 
-	// PIC-1 pins real, project-specific build/test commands once a target
-	// project is chosen; until then this checks that repoPath is a usable
-	// git repository.
-	gate, err := verify.NewGate("all-pass", &verify.Validator{Name: "repo-sanity", Cmd: "git rev-parse HEAD"})
+	gate, err := verify.NewGate("all-pass", projectValidators(repoPath)...)
 	if err != nil {
 		fmt.Fprintln(stdout, err)
 		return 1
 	}
 
-	eng := engine.NewEngine(gatherer.NewNaiveGatherer(repoPath), newExecutor(repoPath), gate, repoPath)
+	// Validators judge the proposed patch, not the developer's checkout:
+	// the Gate runs inside a staged worktree with the patch applied.
+	verifier := workspace.NewStagedVerifier(gate)
+
+	eng := engine.NewEngine(gatherer.NewNaiveGatherer(repoPath), newExecutor(repoPath), verifier, repoPath)
+	eng.SetReporter(cli.NewProgressReporter(stdout))
 	c := cli.NewCLI(eng, store, stdin, stdout)
 
 	if err := c.Do(ctx, intent, repoPath); err != nil {
@@ -58,4 +62,19 @@ func Do(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, n
 		return 1
 	}
 	return 0
+}
+
+// projectValidators picks the checks the Gate runs against the staged,
+// patched repository. A Go module gets its real build and tests; anything
+// else falls back to a repository sanity check. PIC-1 replaces this
+// detection with pinned, project-specific commands once budgets and
+// configuration exist.
+func projectValidators(repoPath string) []*verify.Validator {
+	if _, err := os.Stat(filepath.Join(repoPath, "go.mod")); err == nil {
+		return []*verify.Validator{
+			{Name: "go-build", Cmd: "go build ./..."},
+			{Name: "go-test", Cmd: "go test ./..."},
+		}
+	}
+	return []*verify.Validator{{Name: "repo-sanity", Cmd: "git rev-parse HEAD"}}
 }
