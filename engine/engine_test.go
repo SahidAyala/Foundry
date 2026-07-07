@@ -3,6 +3,8 @@ package engine_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -338,5 +340,106 @@ func TestScriptedExecutor_Deterministic(t *testing.T) {
 	}
 	if outcome2.Patch != "fixed-patch" {
 		t.Errorf("outcome2.Patch = %q, want %q", outcome2.Patch, "fixed-patch")
+	}
+}
+
+// fakeReporter records every engine.Reporter event, in call order, as
+// human-readable strings for assertions.
+type fakeReporter struct {
+	events []string
+}
+
+func (r *fakeReporter) Gathering() { r.events = append(r.events, "gathering") }
+func (r *fakeReporter) Executing(iteration int) {
+	r.events = append(r.events, fmt.Sprintf("executing:%d", iteration))
+}
+func (r *fakeReporter) Verifying(iteration int) {
+	r.events = append(r.events, fmt.Sprintf("verifying:%d", iteration))
+}
+func (r *fakeReporter) Verified(iteration int, verdict string) {
+	r.events = append(r.events, fmt.Sprintf("verified:%d:%s", iteration, verdict))
+}
+func (r *fakeReporter) Repairing() { r.events = append(r.events, "repairing") }
+func (r *fakeReporter) RepairSkipped(reason string) {
+	r.events = append(r.events, "repair-skipped:"+reason)
+}
+func (r *fakeReporter) BudgetExceeded(reason string) {
+	r.events = append(r.events, "budget-exceeded:"+reason)
+}
+
+func TestEngine_Run_ReportsPassWithoutRepair(t *testing.T) {
+	eng := newEngine("pass")
+	reporter := &fakeReporter{}
+	eng.SetReporter(reporter)
+
+	if _, err := eng.Run(context.Background(), &domain.Intent{Text: "test"}); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	want := []string{"gathering", "executing:1", "verifying:1", "verified:1:pass"}
+	if !reflect.DeepEqual(reporter.events, want) {
+		t.Errorf("events = %v, want %v", reporter.events, want)
+	}
+}
+
+func TestEngine_Run_ReportsRepairRound(t *testing.T) {
+	exec := &captureExecutor{patches: []string{"first-patch", "repaired-patch"}}
+	verifier := &seqVerifier{judgments: []*domain.Judgment{
+		{Verdict: "fail", Checked: []string{"tests: fail"}},
+		{Verdict: "pass"},
+	}}
+	eng := engine.NewEngine(&fakeGatherer{files: []string{"main.go"}}, exec, verifier, "")
+	reporter := &fakeReporter{}
+	eng.SetReporter(reporter)
+
+	if _, err := eng.Run(context.Background(), &domain.Intent{Text: "test"}); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	want := []string{
+		"gathering", "executing:1", "verifying:1", "verified:1:fail",
+		"repairing", "executing:2", "verifying:2", "verified:2:pass",
+	}
+	if !reflect.DeepEqual(reporter.events, want) {
+		t.Errorf("events = %v, want %v", reporter.events, want)
+	}
+}
+
+func TestEngine_RunBudgeted_ReportsBudgetExceededBeforeExecute(t *testing.T) {
+	eng := newEngine("pass")
+	reporter := &fakeReporter{}
+	eng.SetReporter(reporter)
+
+	_, err := eng.RunBudgeted(context.Background(), &domain.Intent{Text: "test"},
+		&domain.Budget{MaxIterations: 0, MaxCostUSD: 1.00})
+	if !errors.Is(err, engine.ErrBudgetExceeded) {
+		t.Fatalf("error = %v, want ErrBudgetExceeded", err)
+	}
+
+	want := []string{"gathering", "budget-exceeded:budget exceeded: iteration 1 over limit 0"}
+	if !reflect.DeepEqual(reporter.events, want) {
+		t.Errorf("events = %v, want %v", reporter.events, want)
+	}
+}
+
+func TestEngine_RunBudgeted_ReportsRepairSkippedWhenBudgetRefuses(t *testing.T) {
+	exec := &captureExecutor{patches: []string{"first-patch"}}
+	verifier := &seqVerifier{judgments: []*domain.Judgment{{Verdict: "fail", Checked: []string{"tests: fail"}}}}
+	eng := engine.NewEngine(&fakeGatherer{}, exec, verifier, "")
+	reporter := &fakeReporter{}
+	eng.SetReporter(reporter)
+
+	_, err := eng.RunBudgeted(context.Background(), &domain.Intent{Text: "test"},
+		&domain.Budget{MaxIterations: 1, MaxCostUSD: 1.00})
+	if err != nil {
+		t.Fatalf("RunBudgeted failed: %v (budget-refused repair is not an error)", err)
+	}
+
+	want := []string{
+		"gathering", "executing:1", "verifying:1", "verified:1:fail", "repairing",
+		"repair-skipped:budget exceeded: iteration 2 over limit 1",
+	}
+	if !reflect.DeepEqual(reporter.events, want) {
+		t.Errorf("events = %v, want %v", reporter.events, want)
 	}
 }
