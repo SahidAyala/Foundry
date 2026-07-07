@@ -191,12 +191,41 @@ func TestRun_NoArgs(t *testing.T) {
 	if code := run(nil, strings.NewReader(""), &out, scriptedExecutor); code != 2 {
 		t.Errorf("run(nil) exit code = %d, want 2", code)
 	}
+	for _, want := range []string{"Usage: foundry <command>", "do ", "log ", "show "} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("no-args output missing %q, got:\n%s", want, out.String())
+		}
+	}
 }
 
 func TestRun_UnknownCommand(t *testing.T) {
 	var out bytes.Buffer
 	if code := run([]string{"bogus"}, strings.NewReader(""), &out, scriptedExecutor); code != 2 {
 		t.Errorf("run([\"bogus\"]) exit code = %d, want 2", code)
+	}
+	if !strings.Contains(out.String(), `unknown command "bogus"`) {
+		t.Errorf("unknown-command output missing the bad command name, got:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "Usage: foundry <command>") {
+		t.Errorf("unknown-command output missing top-level usage, got:\n%s", out.String())
+	}
+}
+
+// TestRun_TopLevelHelp guards a real first-run trap: before this, `foundry
+// --help` fell through to the "unknown command" branch instead of showing
+// usage — the first thing anyone discovering the tool is likely to type.
+func TestRun_TopLevelHelp(t *testing.T) {
+	for _, flag := range []string{"-h", "--help", "help"} {
+		var out bytes.Buffer
+		code := run([]string{flag}, strings.NewReader(""), &out, scriptedExecutor)
+		if code != 0 {
+			t.Errorf("run([%q]) exit code = %d, want 0", flag, code)
+		}
+		for _, want := range []string{"Usage: foundry <command>", "do ", "log ", "show "} {
+			if !strings.Contains(out.String(), want) {
+				t.Errorf("run([%q]) output missing %q, got:\n%s", flag, want, out.String())
+			}
+		}
 	}
 }
 
