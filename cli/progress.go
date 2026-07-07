@@ -3,9 +3,17 @@ package cli
 import (
 	"fmt"
 	"io"
+	"strings"
 
+	"foundry/domain"
 	"foundry/engine"
 )
+
+// maxFindingLines bounds how many lines of a failed Judgment's Checked
+// findings ProgressReporter prints live, so one verbose validator (a full
+// compiler dump) cannot flood the terminal during a demo. The recorded Act
+// always carries the findings in full (`foundry show`).
+const maxFindingLines = 12
 
 // ProgressReporter narrates an Act's lifecycle to out as the Engine runs it:
 // gathering, each Execute/Verify round, and repair. It satisfies
@@ -40,8 +48,33 @@ func (p *ProgressReporter) Verifying(iteration int) {
 	p.line(ansiCyan, "→ Verifying the proposed patch...")
 }
 
-func (p *ProgressReporter) Verified(iteration int, verdict string) {
-	fmt.Fprintf(p.out, "  %s\n", renderVerdict(verdict, p.color))
+func (p *ProgressReporter) Verified(iteration int, judgment *domain.Judgment) {
+	fmt.Fprintf(p.out, "  %s\n", renderVerdict(judgment.Verdict, p.color))
+	if judgment.Verdict == "pass" {
+		return
+	}
+
+	lines := findingLines(judgment.Checked)
+	shown, remaining := lines, 0
+	if len(lines) > maxFindingLines {
+		shown, remaining = lines[:maxFindingLines], len(lines)-maxFindingLines
+	}
+	for _, line := range shown {
+		fmt.Fprintf(p.out, "    %s\n", line)
+	}
+	if remaining > 0 {
+		fmt.Fprintf(p.out, "    ... (%d more lines; see `foundry show` for the full findings)\n", remaining)
+	}
+}
+
+// findingLines flattens a Judgment's Checked entries into individual lines,
+// in order, for a compact live rendering.
+func findingLines(checked []string) []string {
+	var lines []string
+	for _, c := range checked {
+		lines = append(lines, strings.Split(strings.TrimRight(c, "\n"), "\n")...)
+	}
+	return lines
 }
 
 func (p *ProgressReporter) Repairing() {

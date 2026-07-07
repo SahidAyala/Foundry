@@ -356,8 +356,8 @@ func (r *fakeReporter) Executing(iteration int) {
 func (r *fakeReporter) Verifying(iteration int) {
 	r.events = append(r.events, fmt.Sprintf("verifying:%d", iteration))
 }
-func (r *fakeReporter) Verified(iteration int, verdict string) {
-	r.events = append(r.events, fmt.Sprintf("verified:%d:%s", iteration, verdict))
+func (r *fakeReporter) Verified(iteration int, judgment *domain.Judgment) {
+	r.events = append(r.events, fmt.Sprintf("verified:%d:%s", iteration, judgment.Verdict))
 }
 func (r *fakeReporter) Repairing() { r.events = append(r.events, "repairing") }
 func (r *fakeReporter) RepairSkipped(reason string) {

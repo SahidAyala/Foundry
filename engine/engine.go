@@ -88,7 +88,7 @@ func (e *Engine) RunBudgeted(ctx context.Context, intent *domain.Intent, budget 
 	if err != nil {
 		return nil, fmt.Errorf("engine: verify: %w", err)
 	}
-	e.reporter.Verified(spent.iterations, judgment.Verdict)
+	e.reporter.Verified(spent.iterations, judgment)
 
 	// Bounded repair (M0.2): a failed verification earns exactly one more
 	// Execute, budget permitting, with the findings fed back as context.

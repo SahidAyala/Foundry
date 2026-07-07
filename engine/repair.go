@@ -48,7 +48,7 @@ func (e *Engine) repairOnce(
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("engine: repair verify: %w", err)
 	}
-	e.reporter.Verified(spent.iterations, newJudgment.Verdict)
+	e.reporter.Verified(spent.iterations, newJudgment)
 	return repaired, newOutcome, newJudgment, nil
 }
 

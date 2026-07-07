@@ -1,5 +1,7 @@
 package engine
 
+import "foundry/domain"
+
 // Reporter observes an Act's lifecycle as the Engine runs it — pure
 // narration, never control flow. Only the Engine decides what runs next
 // (I1); a Reporter is told what already happened so a caller can show
@@ -13,8 +15,10 @@ type Reporter interface {
 	// Verifying is called before a Verifier.Verify call for the same
 	// iteration just executed.
 	Verifying(iteration int)
-	// Verified is called after Verify returns a Judgment for iteration.
-	Verified(iteration int, verdict string)
+	// Verified is called with the Judgment Verify returned for iteration
+	// — including its Checked findings, so a caller can show why a
+	// verdict failed, not only that it did.
+	Verified(iteration int, judgment *domain.Judgment)
 	// Repairing is called once, when a failed first verification earns
 	// the bounded repair attempt.
 	Repairing()
@@ -31,12 +35,12 @@ type Reporter interface {
 // called.
 type noopReporter struct{}
 
-func (noopReporter) Gathering()                       {}
-func (noopReporter) Executing(iteration int)          {}
-func (noopReporter) Verifying(iteration int)          {}
-func (noopReporter) Verified(iteration int, s string) {}
-func (noopReporter) Repairing()                       {}
-func (noopReporter) RepairSkipped(reason string)      {}
-func (noopReporter) BudgetExceeded(reason string)     {}
+func (noopReporter) Gathering()                                        {}
+func (noopReporter) Executing(iteration int)                           {}
+func (noopReporter) Verifying(iteration int)                           {}
+func (noopReporter) Verified(iteration int, judgment *domain.Judgment) {}
+func (noopReporter) Repairing()                                        {}
+func (noopReporter) RepairSkipped(reason string)                       {}
+func (noopReporter) BudgetExceeded(reason string)                      {}
 
 var _ Reporter = noopReporter{}
