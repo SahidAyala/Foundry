@@ -174,6 +174,56 @@ func TestWorkspace_Clean_RestoresOriginalState(t *testing.T) {
 	}
 }
 
+// TestWorkspace_Land_KeepsChangeAndReturnsToOriginalBranch guards against a
+// throwaway `foundry/act-<id>` branch being left behind after a successful
+// apply: Land must both restore the original branch and carry the applied
+// change forward, unlike Clean which discards it.
+func TestWorkspace_Land_KeepsChangeAndReturnsToOriginalBranch(t *testing.T) {
+	repo := initGitRepo(t)
+
+	ws, err := NewWorkspace(repo, "temp-branch")
+	if err != nil {
+		t.Fatalf("NewWorkspace failed: %v", err)
+	}
+
+	patch := strings.Replace(replacePatch, "%s", "goodbye", 1)
+	if err := ws.Apply(context.Background(), patch); err != nil {
+		t.Fatalf("Apply failed: %v", err)
+	}
+
+	if err := ws.Land(context.Background()); err != nil {
+		t.Fatalf("Land failed: %v", err)
+	}
+
+	branch, err := gitOutput(context.Background(), repo, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		t.Fatalf("rev-parse failed: %v", err)
+	}
+	if branch != "main" {
+		t.Errorf("current branch = %q, want %q", branch, "main")
+	}
+
+	data, err := os.ReadFile(filepath.Join(repo, "greeting.txt"))
+	if err != nil {
+		t.Fatalf("read file: %v", err)
+	}
+	if string(data) != "goodbye\n" {
+		t.Errorf("file contents = %q, want the applied change %q", data, "goodbye\n")
+	}
+
+	list, err := gitOutput(context.Background(), repo, "branch", "--list", "temp-branch")
+	if err != nil {
+		t.Fatalf("branch --list failed: %v", err)
+	}
+	if list != "" {
+		t.Errorf("branch %q still exists after Land", "temp-branch")
+	}
+
+	if _, err := os.Stat(ws.patchPath); !os.IsNotExist(err) {
+		t.Errorf("patch file %q was not removed by Land", ws.patchPath)
+	}
+}
+
 func TestWorkspace_TwoWorkspaces_NoInterference(t *testing.T) {
 	repoA := initGitRepo(t)
 	repoB := initGitRepo(t)

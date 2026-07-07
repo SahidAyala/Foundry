@@ -165,6 +165,29 @@ func TestCLI_Do_ApprovedAppliesAndRecords(t *testing.T) {
 	if !strings.Contains(out.String(), "Applied and recorded") {
 		t.Errorf("output missing confirmation, got:\n%s", out.String())
 	}
+
+	// A successfully applied Act must never leave the developer's repo on
+	// a throwaway branch, nor leave that branch lying around.
+	branch := gitOutput(t, repo, "rev-parse", "--abbrev-ref", "HEAD")
+	if branch != "main" {
+		t.Errorf("repo left on branch %q, want %q", branch, "main")
+	}
+	if list := gitOutput(t, repo, "branch", "--list", "foundry/act-*"); list != "" {
+		t.Errorf("throwaway branch left behind: %q", list)
+	}
+}
+
+// gitOutput runs git with args in dir and returns its trimmed output,
+// failing the test on error.
+func gitOutput(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v failed: %v\n%s", args, err, out)
+	}
+	return strings.TrimSpace(string(out))
 }
 
 func TestCLI_Do_DeclinedDoesNothing(t *testing.T) {

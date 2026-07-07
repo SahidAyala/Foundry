@@ -75,6 +75,28 @@ func (w *Workspace) Apply(ctx context.Context, patch string) error {
 	return nil
 }
 
+// Land checks the repository back out to the branch it was on before
+// NewWorkspace and deletes the throwaway branch, keeping the applied patch:
+// since both branches share the same commit, only the workspace's uncommitted
+// working-tree change differs, so the checkout carries it forward intact.
+// Land is the accept path once an Authority has approved the Outcome; Clean
+// remains the discard path and must never be called after Land.
+func (w *Workspace) Land(ctx context.Context) error {
+	if _, err := gitOutput(ctx, w.repoPath, "checkout", w.originalRef); err != nil {
+		return fmt.Errorf("workspace: checkout %q: %w", w.originalRef, err)
+	}
+	if _, err := gitOutput(ctx, w.repoPath, "branch", "-D", w.branchName); err != nil {
+		return fmt.Errorf("workspace: delete branch %q: %w", w.branchName, err)
+	}
+
+	if w.patchPath != "" {
+		if err := os.Remove(w.patchPath); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("workspace: remove patch file: %w", err)
+		}
+	}
+	return nil
+}
+
 // Clean discards any changes made in the workspace's branch, checks the
 // repository back out to the branch it was on before NewWorkspace, and
 // deletes the throwaway branch.
