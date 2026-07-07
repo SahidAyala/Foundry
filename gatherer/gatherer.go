@@ -6,8 +6,10 @@
 package gatherer
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -27,6 +29,21 @@ const maxContextBytes = 100 * 1024
 // happens in extractFileNames.
 var tokenPattern = regexp.MustCompile(`[A-Za-z0-9_\-./]+`)
 
+// identifierPattern matches capitalized-word-like tokens (e.g. "User",
+// "Account") that look like a type or function name, for the identifier
+// fallback in Gather: an Intent that names an entity rather than a file
+// (e.g. "rename User to Account") still needs to find relevant files.
+var identifierPattern = regexp.MustCompile(`\b[A-Z][A-Za-z0-9]{2,}\b`)
+
+const (
+	// maxIdentifierMatches bounds how many files the identifier fallback
+	// contributes, so a common word cannot flood the gathered context.
+	maxIdentifierMatches = 5
+	// maxIdentifierScanFiles bounds how much of the repository the
+	// fallback's content scan reads, so it stays cheap on a large repo.
+	maxIdentifierScanFiles = 2000
+)
+
 // NaiveGatherer satisfies the engine.Gatherer port by reading files named in
 // the Intent from a fixed repository root.
 type NaiveGatherer struct {
@@ -40,14 +57,17 @@ func NewNaiveGatherer(repoPath string) *NaiveGatherer {
 
 var _ engine.Gatherer = (*NaiveGatherer)(nil)
 
-// Gather returns considered context in two phases, both bounded by one
-// shared maxContextBytes budget. First, the files named in the Intent's
+// Gather returns considered context in up to three phases, all bounded by
+// one shared maxContextBytes budget. First, the files named in the Intent's
 // text, in order of first mention: contents when the file exists, or a
 // "not found" / "refused" marker otherwise — missing files are never a hard
-// error. Second, supplementary context: the repository's README.md and the
-// files sharing a directory with the named files that were found, ordered
-// by priority (config files, then docs, then code) so that when the budget
-// truncates, the highest-priority context survives.
+// error. Second, if no named file resolved — an Intent like "rename User to
+// Account" names an entity, not a file — the identifier fallback: files
+// whose content mentions a capitalized identifier from the Intent, bounded
+// and deterministically ordered. Third, supplementary context: the
+// repository's README.md and the files sharing a directory with whatever
+// resolved above, ordered by priority (config files, then docs, then code)
+// so that when the budget truncates, the highest-priority context survives.
 func (g *NaiveGatherer) Gather(ctx context.Context, intent *domain.Intent) ([]string, error) {
 	var (
 		gathered  []string
@@ -71,6 +91,17 @@ func (g *NaiveGatherer) Gather(ctx context.Context, intent *domain.Intent) ([]st
 		return remaining > 0
 	}
 
+	// include records name as resolved (for supplementary's directory scan
+	// and dedup) and appends its content within budget.
+	include := func(name, content string) bool {
+		included[name] = true
+		if dir := filepath.Dir(name); !seenDir[dir] {
+			seenDir[dir] = true
+			dirs = append(dirs, dir)
+		}
+		return appendBounded(name + ":\n" + content)
+	}
+
 	for _, name := range extractFileNames(intent.Text) {
 		if err := ctx.Err(); err != nil {
 			return nil, fmt.Errorf("gatherer: %w", err)
@@ -88,13 +119,23 @@ func (g *NaiveGatherer) Gather(ctx context.Context, intent *domain.Intent) ([]st
 			continue
 		}
 
-		included[name] = true
-		if dir := filepath.Dir(name); !seenDir[dir] {
-			seenDir[dir] = true
-			dirs = append(dirs, dir)
-		}
-		if !appendBounded(name + ":\n" + string(content)) {
+		if !include(name, string(content)) {
 			return gathered, nil
+		}
+	}
+
+	if len(included) == 0 {
+		for _, name := range g.findByIdentifier(extractIdentifiers(intent.Text)) {
+			if err := ctx.Err(); err != nil {
+				return nil, fmt.Errorf("gatherer: %w", err)
+			}
+			content, err := os.ReadFile(filepath.Join(g.repoPath, name))
+			if err != nil {
+				continue
+			}
+			if !include(name, string(content)) {
+				return gathered, nil
+			}
 		}
 	}
 
@@ -217,4 +258,72 @@ func extractFileNames(text string) []string {
 		names = append(names, token)
 	}
 	return names
+}
+
+// extractIdentifiers returns the capitalized-word-like tokens in text,
+// deduped, in order of first mention.
+func extractIdentifiers(text string) []string {
+	var (
+		ids  []string
+		seen = map[string]bool{}
+	)
+	for _, tok := range identifierPattern.FindAllString(text, -1) {
+		if seen[tok] {
+			continue
+		}
+		seen[tok] = true
+		ids = append(ids, tok)
+	}
+	return ids
+}
+
+// findByIdentifier walks the repository for regular, non-hidden files whose
+// content contains any of ids, returning repository-relative paths in a
+// deterministic (sorted) order, capped at maxIdentifierMatches and reading
+// at most maxIdentifierScanFiles files. It is a last-resort fallback for an
+// Intent that names an entity rather than a file, so a scan error midway
+// (permissions, an unreadable file) is not fatal: whatever matched so far is
+// still useful context.
+func (g *NaiveGatherer) findByIdentifier(ids []string) []string {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	var matches []string
+	scanned := 0
+	filepath.WalkDir(g.repoPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if len(matches) >= maxIdentifierMatches || scanned >= maxIdentifierScanFiles {
+			return filepath.SkipAll
+		}
+		if d.IsDir() {
+			if path != g.repoPath && (strings.HasPrefix(d.Name(), ".") || d.Name() == "vendor" || d.Name() == "node_modules") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasPrefix(d.Name(), ".") {
+			return nil
+		}
+		scanned++
+
+		content, err := os.ReadFile(path)
+		if err != nil || len(content) > maxContextBytes {
+			return nil
+		}
+		for _, id := range ids {
+			if bytes.Contains(content, []byte(id)) {
+				if rel, err := filepath.Rel(g.repoPath, path); err == nil {
+					matches = append(matches, filepath.ToSlash(rel))
+				}
+				break
+			}
+		}
+		return nil
+	})
+
+	sort.Strings(matches)
+	return matches
 }
