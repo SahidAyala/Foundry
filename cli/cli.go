@@ -179,13 +179,18 @@ func firstLine(s string) string {
 }
 
 // applyPatch applies act's patch to repoPath on an isolated branch named for
-// the Act, reusing the workspace package's git-apply mechanism.
+// the Act, then lands it back on the branch the developer was on: a
+// throwaway `foundry/act-<id>` branch must never be left behind for a
+// successfully applied Act.
 func applyPatch(ctx context.Context, repoPath string, act *domain.Act) error {
 	ws, err := workspace.NewWorkspace(repoPath, "foundry/act-"+act.ID)
 	if err != nil {
 		return err
 	}
-	return ws.Apply(ctx, act.Patch)
+	if err := ws.Apply(ctx, act.Patch); err != nil {
+		return err
+	}
+	return ws.Land(ctx)
 }
 
 // ParseArgs parses arguments for the `do` command: a required positional
