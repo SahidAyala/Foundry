@@ -72,7 +72,7 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, intent *domain.Intent, con
 		case errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded):
 			return nil, fmt.Errorf("claude: timed out after %s", e.timeout)
 		default:
-			return nil, fmt.Errorf("claude: execution failed: %w: %s", err, strings.TrimSpace(stderr))
+			return nil, executionError(err, stdout, stderr)
 		}
 	}
 
@@ -81,6 +81,29 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, intent *domain.Intent, con
 		return nil, err
 	}
 	return &domain.Outcome{Patch: patch}, nil
+}
+
+// executionError builds a diagnostic error for a failed Claude Code
+// invocation. A non-zero exit with an empty stderr (observed, e.g., when the
+// CLI's own environment checks reject the process silently) previously
+// surfaced as "execution failed: exit status 1: " with nothing to debug;
+// this includes whichever of stdout/stderr carry content, and a concrete
+// next step when neither does.
+func executionError(err error, stdout, stderr string) error {
+	stdout, stderr = strings.TrimSpace(stdout), strings.TrimSpace(stderr)
+
+	var detail string
+	switch {
+	case stderr != "" && stdout != "":
+		detail = fmt.Sprintf("\nstderr: %s\nstdout: %s", stderr, stdout)
+	case stderr != "":
+		detail = "\nstderr: " + stderr
+	case stdout != "":
+		detail = "\nstdout: " + stdout
+	default:
+		detail = "\n(no output on stdout or stderr; run `claude -p \"say ok\"` in the workspace to check the CLI is installed and authenticated)"
+	}
+	return fmt.Errorf("claude: execution failed: %w%s", err, detail)
 }
 
 // buildPrompt assembles the instruction sent to Claude Code: the Intent, any
