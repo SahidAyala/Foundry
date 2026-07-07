@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"foundry/domain"
 )
@@ -36,6 +37,51 @@ func TestValidator_Run_Fails(t *testing.T) {
 	}
 	if !strings.Contains(result.Output, "boom") {
 		t.Errorf("Output = %q, want it to contain %q", result.Output, "boom")
+	}
+}
+
+// TestValidator_Run_TimesOutOnHangingCommand guards the fix for a real gap:
+// production wires no deadline on the context `foundry do` runs under, so a
+// hanging validator (an AI-generated infinite loop, most plausibly inside
+// its own test suite) previously hung the entire Act forever. A timeout
+// must resolve quickly and fail cleanly, not hang or error out.
+func TestValidator_Run_TimesOutOnHangingCommand(t *testing.T) {
+	v := &Validator{Name: "hang", Cmd: "sleep 5", Timeout: 50 * time.Millisecond}
+
+	start := time.Now()
+	result, err := v.Run(context.Background(), t.TempDir())
+	elapsed := time.Since(start)
+
+	if err != nil {
+		t.Fatalf("Run returned error on timeout: %v (a timeout must be a failed Result, not an error)", err)
+	}
+	if elapsed > 2*time.Second {
+		t.Fatalf("Run took %s, want it bounded by the 50ms Timeout", elapsed)
+	}
+	if result.Passed {
+		t.Error("Passed = true, want false for a timed-out validator")
+	}
+	if !strings.Contains(result.Output, "timed out") {
+		t.Errorf("Output = %q, want it to mention the timeout", result.Output)
+	}
+}
+
+// TestValidator_Run_DefaultTimeoutDoesNotBlockFastCommands guards against a
+// regression where the default timeout itself becomes the bottleneck for
+// the common case: a fast command must still return immediately.
+func TestValidator_Run_DefaultTimeoutDoesNotBlockFastCommands(t *testing.T) {
+	v := &Validator{Name: "fast", Cmd: "exit 0"} // Timeout unset
+
+	start := time.Now()
+	result, err := v.Run(context.Background(), t.TempDir())
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Errorf("Run took %s for a fast command, want near-instant", elapsed)
+	}
+	if !result.Passed {
+		t.Error("Passed = false, want true")
 	}
 }
 
