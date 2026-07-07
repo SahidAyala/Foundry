@@ -18,6 +18,7 @@ type Engine struct {
 	executor  Executor
 	verifier  Verifier
 	workspace string // directory the Verifier checks
+	reporter  Reporter
 }
 
 // NewEngine wires the ports an Engine needs to produce an Act. workspace is
@@ -28,7 +29,15 @@ func NewEngine(gatherer Gatherer, executor Executor, verifier Verifier, workspac
 		executor:  executor,
 		verifier:  verifier,
 		workspace: workspace,
+		reporter:  noopReporter{},
 	}
+}
+
+// SetReporter attaches r as the Engine's progress observer, replacing the
+// default no-op. Reporter is optional and additive: it never changes what
+// Run or RunBudgeted does, only what a caller can observe while it runs.
+func (e *Engine) SetReporter(r Reporter) {
+	e.reporter = r
 }
 
 // Run gathers context, executes the work, and verifies the outcome under the
@@ -51,6 +60,7 @@ func (e *Engine) RunBudgeted(ctx context.Context, intent *domain.Intent, budget 
 	act := domain.NewAct(intent.Text)
 	spent := &tracker{budget: budget}
 
+	e.reporter.Gathering()
 	considered, err := e.gatherer.Gather(ctx, intent)
 	if err != nil {
 		return nil, fmt.Errorf("engine: gather: %w", err)
@@ -58,11 +68,13 @@ func (e *Engine) RunBudgeted(ctx context.Context, intent *domain.Intent, budget 
 	act.ConsideredFiles = considered
 
 	if err := spent.charge(executeCostEstimateUSD); err != nil {
+		e.reporter.BudgetExceeded(err.Error())
 		act.JudgmentVerdict = VerdictBudgetExceeded
 		act.Iterations = spent.iterations
 		act.CostEstimateUSD = spent.costUSD
 		return act, fmt.Errorf("engine: execute: %w", err)
 	}
+	e.reporter.Executing(spent.iterations)
 	outcome, err := e.executor.Execute(ctx, intent, considered)
 	if err != nil {
 		return nil, fmt.Errorf("engine: execute: %w", err)
@@ -71,14 +83,17 @@ func (e *Engine) RunBudgeted(ctx context.Context, intent *domain.Intent, budget 
 	act.Iterations = spent.iterations
 	act.CostEstimateUSD = spent.costUSD
 
+	e.reporter.Verifying(spent.iterations)
 	judgment, err := e.verifier.Verify(ctx, outcome, e.workspace)
 	if err != nil {
 		return nil, fmt.Errorf("engine: verify: %w", err)
 	}
+	e.reporter.Verified(spent.iterations, judgment.Verdict)
 
 	// Bounded repair (M0.2): a failed verification earns exactly one more
 	// Execute, budget permitting, with the findings fed back as context.
 	if judgment.Verdict == verdictFail {
+		e.reporter.Repairing()
 		considered, outcome, judgment, err = e.repairOnce(ctx, intent, considered, outcome, judgment, spent)
 		if err != nil {
 			return nil, err

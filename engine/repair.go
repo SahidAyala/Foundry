@@ -30,6 +30,7 @@ func (e *Engine) repairOnce(
 	spent *tracker,
 ) ([]string, *domain.Outcome, *domain.Judgment, error) {
 	if err := spent.charge(executeCostEstimateUSD); err != nil {
+		e.reporter.RepairSkipped(err.Error())
 		return considered, outcome, judgment, nil
 	}
 
@@ -37,14 +38,17 @@ func (e *Engine) repairOnce(
 	repaired = append(repaired, considered...)
 	repaired = append(repaired, repairContext(judgment))
 
+	e.reporter.Executing(spent.iterations)
 	newOutcome, err := e.executor.Execute(ctx, intent, repaired)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("engine: repair execute: %w", err)
 	}
+	e.reporter.Verifying(spent.iterations)
 	newJudgment, err := e.verifier.Verify(ctx, newOutcome, e.workspace)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("engine: repair verify: %w", err)
 	}
+	e.reporter.Verified(spent.iterations, newJudgment.Verdict)
 	return repaired, newOutcome, newJudgment, nil
 }
 
