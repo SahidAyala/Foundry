@@ -98,6 +98,86 @@ func (c *CLI) Do(ctx context.Context, intent string, repoPath string) error {
 	return nil
 }
 
+// Log writes the most recent limit recorded Acts, newest first, one per
+// line: ID, creation time, verdict, and Intent.
+func (c *CLI) Log(ctx context.Context, limit int) error {
+	if limit <= 0 {
+		return fmt.Errorf("cli: log limit must be positive, got %d", limit)
+	}
+
+	acts, err := c.recorder.List(ctx)
+	if err != nil {
+		return fmt.Errorf("cli: log: %w", err)
+	}
+	if len(acts) == 0 {
+		fmt.Fprintln(c.out, "No acts recorded.")
+		return nil
+	}
+	if len(acts) > limit {
+		acts = acts[len(acts)-limit:]
+	}
+
+	for i := len(acts) - 1; i >= 0; i-- {
+		act := acts[i]
+		fmt.Fprintf(c.out, "%s  %s  %-4s  %s\n",
+			act.ID, act.CreatedAt.Format(time.RFC3339), act.JudgmentVerdict, act.Intent)
+	}
+	return nil
+}
+
+// Show writes the full recorded Act identified by actID, pretty-printed.
+func (c *CLI) Show(ctx context.Context, actID string) error {
+	act, err := c.recorder.Read(ctx, actID)
+	if err != nil {
+		return fmt.Errorf("cli: show: %w", err)
+	}
+	fmt.Fprint(c.out, formatAct(act))
+	return nil
+}
+
+// formatAct renders a recorded Act for human review: identity, judgment,
+// approval, budget usage, the considered Evidence as a list, and the patch
+// as a unified diff. The checked findings are not yet recorded on the Act
+// (only the verdict is), so the verdict stands in for them.
+func formatAct(act *domain.Act) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Act:        %s\n", act.ID)
+	fmt.Fprintf(&b, "Created:    %s\n", act.CreatedAt.Format(time.RFC3339))
+	fmt.Fprintf(&b, "Intent:     %s\n", act.Intent)
+	fmt.Fprintf(&b, "Verdict:    %s\n", act.JudgmentVerdict)
+	if act.ApprovedBy != "" && act.ApprovedAt != nil {
+		fmt.Fprintf(&b, "Approved:   by %s at %s\n", act.ApprovedBy, act.ApprovedAt.Format(time.RFC3339))
+	} else {
+		b.WriteString("Approved:   no\n")
+	}
+	fmt.Fprintf(&b, "Iterations: %d (estimated cost $%.2f)\n", act.Iterations, act.CostEstimateUSD)
+
+	b.WriteString("\nConsidered evidence:\n")
+	if len(act.ConsideredFiles) == 0 {
+		b.WriteString("  (none)\n")
+	} else {
+		for _, entry := range act.ConsideredFiles {
+			fmt.Fprintf(&b, "  - %s\n", firstLine(entry))
+		}
+	}
+
+	b.WriteString("\nPatch:\n")
+	if act.Patch == "" {
+		b.WriteString("  (none)\n")
+	} else {
+		fmt.Fprintf(&b, "%s\n", strings.TrimRight(act.Patch, "\n"))
+	}
+	return b.String()
+}
+
+// firstLine returns s up to its first newline. Considered-evidence entries
+// carry file contents after a "name:" header line; the header alone keeps
+// the listing readable.
+func firstLine(s string) string {
+	head, _, _ := strings.Cut(s, "\n")
+	return head
+}
+
 // applyPatch applies act's patch to repoPath on an isolated branch named for
 // the Act, reusing the workspace package's git-apply mechanism.
 func applyPatch(ctx context.Context, repoPath string, act *domain.Act) error {

@@ -3,11 +3,13 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"foundry/cli"
 	"foundry/domain"
@@ -202,10 +204,96 @@ func TestCLI_Do_ShowsPatchAndVerdict(t *testing.T) {
 	}
 
 	output := out.String()
-	for _, want := range []string{"Proposed patch:", "APPLIED.md", "Verdict: pass", "Approve and apply? (y/n)"} {
+	for _, want := range []string{"Proposed patch:", "APPLIED.md", "Verdict: ✓ pass", "Approve and apply? (y/n)"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("output missing %q, got:\n%s", want, output)
 		}
+	}
+}
+
+// newHistoryStore returns a FileStore preloaded with count Acts created an
+// hour apart, IDs act-0 (oldest) through act-<count-1> (newest).
+func newHistoryStore(t *testing.T, count int) *record.FileStore {
+	t.Helper()
+
+	store, err := record.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("record.NewFileStore failed: %v", err)
+	}
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	for i := 0; i < count; i++ {
+		act := &domain.Act{
+			ID:              fmt.Sprintf("act-%d", i),
+			Intent:          fmt.Sprintf("intent %d", i),
+			CreatedAt:       base.Add(time.Duration(i) * time.Hour),
+			JudgmentVerdict: "pass",
+		}
+		if err := store.Write(context.Background(), act); err != nil {
+			t.Fatalf("store.Write failed: %v", err)
+		}
+	}
+	return store
+}
+
+func TestCLI_Log_NewestFirstWithLimit(t *testing.T) {
+	var out bytes.Buffer
+	c := cli.NewCLI(nil, newHistoryStore(t, 3), strings.NewReader(""), &out)
+
+	if err := c.Log(context.Background(), 2); err != nil {
+		t.Fatalf("Log failed: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimRight(out.String(), "\n"), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("Log printed %d lines, want 2:\n%s", len(lines), out.String())
+	}
+	if !strings.HasPrefix(lines[0], "act-2") || !strings.HasPrefix(lines[1], "act-1") {
+		t.Errorf("Log order wrong, want act-2 then act-1:\n%s", out.String())
+	}
+	if !strings.Contains(lines[0], "intent 2") || !strings.Contains(lines[0], "pass") {
+		t.Errorf("Log line missing intent or verdict: %q", lines[0])
+	}
+}
+
+func TestCLI_Log_EmptyStore(t *testing.T) {
+	var out bytes.Buffer
+	c := cli.NewCLI(nil, newHistoryStore(t, 0), strings.NewReader(""), &out)
+
+	if err := c.Log(context.Background(), 10); err != nil {
+		t.Fatalf("Log failed: %v", err)
+	}
+	if !strings.Contains(out.String(), "No acts recorded.") {
+		t.Errorf("Log on empty store printed %q", out.String())
+	}
+}
+
+func TestCLI_Log_RejectsNonPositiveLimit(t *testing.T) {
+	c := cli.NewCLI(nil, newHistoryStore(t, 1), strings.NewReader(""), &bytes.Buffer{})
+
+	if err := c.Log(context.Background(), 0); err == nil {
+		t.Fatal("Log with limit 0 returned nil error")
+	}
+}
+
+func TestCLI_Show_PrintsFullAct(t *testing.T) {
+	var out bytes.Buffer
+	c := cli.NewCLI(nil, newHistoryStore(t, 2), strings.NewReader(""), &out)
+
+	if err := c.Show(context.Background(), "act-1"); err != nil {
+		t.Fatalf("Show failed: %v", err)
+	}
+	for _, want := range []string{"Act:        act-1", "Intent:     intent 1", "Verdict:    pass", "Patch:"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("Show output missing %q:\n%s", want, out.String())
+		}
+	}
+}
+
+func TestCLI_Show_UnknownID(t *testing.T) {
+	c := cli.NewCLI(nil, newHistoryStore(t, 1), strings.NewReader(""), &bytes.Buffer{})
+
+	if err := c.Show(context.Background(), "no-such-act"); err == nil {
+		t.Fatal("Show with unknown ID returned nil error")
 	}
 }
 
