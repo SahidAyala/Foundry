@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -260,6 +261,52 @@ func TestEncode_GoldenShape(t *testing.T) {
 
 	if string(data) != want {
 		t.Errorf("encode golden mismatch:\ngot:\n%s\nwant:\n%s", data, want)
+	}
+}
+
+func TestFileStore_WriteReadRoundTrip_Steps(t *testing.T) {
+	store, err := NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewFileStore failed: %v", err)
+	}
+	ctx := context.Background()
+
+	original := newAct("stepsstepsstepsx", "add logging to main.go", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	original.Steps = []domain.StepRecord{
+		{StepID: "1", Kind: domain.StepKindGenerate, Considered: []string{"main.go"}, Produced: []string{"diff"}},
+		{StepID: "2", Kind: domain.StepKindVerify, Checked: []string{"go-build: pass"}, JudgmentVerdict: "pass"},
+	}
+
+	if err := store.Write(ctx, original); err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+
+	got, err := store.Read(ctx, original.ID)
+	if err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if len(got.Steps) != 2 {
+		t.Fatalf("Steps length = %d, want 2", len(got.Steps))
+	}
+	if got.Steps[0].Kind != domain.StepKindGenerate || got.Steps[1].Kind != domain.StepKindVerify {
+		t.Errorf("Steps kinds = [%q, %q], want [%q, %q]",
+			got.Steps[0].Kind, got.Steps[1].Kind, domain.StepKindGenerate, domain.StepKindVerify)
+	}
+}
+
+func TestEncode_GoldenShape_OmitsStepsWhenEmpty(t *testing.T) {
+	// TestEncode_GoldenShape (above) already pins the exact byte-for-byte
+	// shape for an Act with no Steps and asserts no "steps" key appears;
+	// this test names that guarantee explicitly so a future change to the
+	// json tag is caught here even if the golden string is ever updated.
+	act := &domain.Act{ID: "x", Intent: "y", CreatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+
+	data, err := encode(act)
+	if err != nil {
+		t.Fatalf("encode failed: %v", err)
+	}
+	if strings.Contains(string(data), `"steps"`) {
+		t.Errorf("encode included a \"steps\" key for an Act with no Steps:\n%s", data)
 	}
 }
 

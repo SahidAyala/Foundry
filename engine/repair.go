@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"foundry/domain"
 )
@@ -18,9 +19,11 @@ const verdictFail = "fail"
 // verification: it charges the Budget for one more Executor.Execute call,
 // feeds the failed Judgment's findings back to the Executor as additional
 // considered context, and re-verifies the new Outcome. Its results replace
-// the first attempt's. If the Budget refuses the attempt, the first
-// attempt's considered context, outcome, and judgment are returned
-// unchanged — exhaustion here is normal control flow, not an error.
+// the first attempt's, and its generate/verify calls are appended to act's
+// Step trace. If the Budget refuses the attempt, the first attempt's
+// considered context, outcome, and judgment are returned unchanged, and no
+// StepRecord is appended — exhaustion here is normal control flow, not an
+// error.
 func (e *Engine) repairOnce(
 	ctx context.Context,
 	intent *domain.Intent,
@@ -28,6 +31,7 @@ func (e *Engine) repairOnce(
 	outcome *domain.Outcome,
 	judgment *domain.Judgment,
 	spent *tracker,
+	act *domain.Act,
 ) ([]string, *domain.Outcome, *domain.Judgment, error) {
 	if err := spent.charge(executeCostEstimateUSD); err != nil {
 		e.reporter.RepairSkipped(err.Error())
@@ -39,16 +43,21 @@ func (e *Engine) repairOnce(
 	repaired = append(repaired, repairContext(judgment))
 
 	e.reporter.Executing(spent.iterations)
+	generateStart := time.Now()
 	newOutcome, err := e.executor.Execute(ctx, intent, repaired)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("engine: repair execute: %w", err)
 	}
+	recordStep(act, domain.StepKindGenerate, repaired, producedPatch(newOutcome), nil, "", generateStart)
+
 	e.reporter.Verifying(spent.iterations)
+	verifyStart := time.Now()
 	newJudgment, err := e.verifier.Verify(ctx, newOutcome, e.workspace)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("engine: repair verify: %w", err)
 	}
 	e.reporter.Verified(spent.iterations, newJudgment)
+	recordStep(act, domain.StepKindVerify, nil, nil, newJudgment.Checked, newJudgment.Verdict, verifyStart)
 	return repaired, newOutcome, newJudgment, nil
 }
 

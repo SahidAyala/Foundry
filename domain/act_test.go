@@ -3,6 +3,7 @@ package domain
 import (
 	"encoding/json"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 )
@@ -147,7 +148,7 @@ func TestJudgmentFields(t *testing.T) {
 }
 
 func TestActFields(t *testing.T) {
-	// Verify that Act has all 11 expected fields with correct types.
+	// Verify that Act has all 12 expected fields with correct types.
 	// This is a compile-time check; if a field is missing or wrong, the code won't compile.
 	_ = &Act{
 		ID:              "",
@@ -161,5 +162,83 @@ func TestActFields(t *testing.T) {
 		ApprovedAt:      nil,
 		Iterations:      0,
 		CostEstimateUSD: 0,
+		Steps:           []StepRecord{},
+	}
+}
+
+func TestStepRecordFields(t *testing.T) {
+	// Verify that StepRecord has all 8 expected fields with correct types.
+	// This is a compile-time check; if a field is missing or wrong, the code won't compile.
+	_ = &StepRecord{
+		StepID:          "",
+		Kind:            "",
+		Considered:      []string{},
+		Produced:        []string{},
+		Checked:         []string{},
+		JudgmentVerdict: "",
+		Authority:       "",
+		StartedAt:       time.Time{},
+		FinishedAt:      time.Time{},
+	}
+}
+
+func TestActJSONRoundTrip_Steps(t *testing.T) {
+	started := time.Now()
+	finished := started.Add(time.Second)
+	original := &Act{
+		ID:        "a1b2c3d4e5f6g7h8",
+		Intent:    "add logging to main.go",
+		CreatedAt: started,
+		Steps: []StepRecord{
+			{
+				StepID:     "1",
+				Kind:       StepKindGenerate,
+				Considered: []string{"main.go"},
+				Produced:   []string{"diff --git a/main.go b/main.go"},
+				StartedAt:  started,
+				FinishedAt: finished,
+			},
+			{
+				StepID:          "2",
+				Kind:            StepKindVerify,
+				Checked:         []string{"go-build: pass"},
+				JudgmentVerdict: "pass",
+				StartedAt:       finished,
+				FinishedAt:      finished,
+			},
+		},
+	}
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	unmarshaled := &Act{}
+	if err := json.Unmarshal(data, unmarshaled); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+
+	if len(unmarshaled.Steps) != 2 {
+		t.Fatalf("Steps length = %d, want 2", len(unmarshaled.Steps))
+	}
+	if unmarshaled.Steps[0].Kind != StepKindGenerate || unmarshaled.Steps[0].StepID != "1" {
+		t.Errorf("Steps[0] = %+v, want Kind=%q StepID=1", unmarshaled.Steps[0], StepKindGenerate)
+	}
+	if unmarshaled.Steps[1].Kind != StepKindVerify || unmarshaled.Steps[1].JudgmentVerdict != "pass" {
+		t.Errorf("Steps[1] = %+v, want Kind=%q JudgmentVerdict=pass", unmarshaled.Steps[1], StepKindVerify)
+	}
+}
+
+func TestActJSONRoundTrip_StepsOmittedWhenEmpty(t *testing.T) {
+	original := NewAct("test")
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	if strings.Contains(string(data), `"steps"`) {
+		t.Errorf("JSON contains a \"steps\" key for an Act with no Steps; want it omitted:\n%s", data)
 	}
 }
