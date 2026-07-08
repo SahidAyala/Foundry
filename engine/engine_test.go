@@ -443,6 +443,115 @@ func TestEngine_RunBudgeted_ReportsBudgetExceededBeforeExecute(t *testing.T) {
 	}
 }
 
+func TestEngine_Run_StepsTrace_PassNoRepair(t *testing.T) {
+	act, err := newEngine("pass").Run(context.Background(), &domain.Intent{Text: "test"})
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	if len(act.Steps) != 2 {
+		t.Fatalf("Steps length = %d, want 2 (generate, verify)", len(act.Steps))
+	}
+
+	generate, verify := act.Steps[0], act.Steps[1]
+	if generate.StepID != "1" || generate.Kind != domain.StepKindGenerate {
+		t.Errorf("Steps[0] = %+v, want StepID=1 Kind=%q", generate, domain.StepKindGenerate)
+	}
+	if len(generate.Considered) != 1 || generate.Considered[0] != "main.go" {
+		t.Errorf("Steps[0].Considered = %v, want [main.go]", generate.Considered)
+	}
+	if len(generate.Produced) != 1 || generate.Produced[0] != scriptedPatch {
+		t.Errorf("Steps[0].Produced = %v, want [%q]", generate.Produced, scriptedPatch)
+	}
+	if generate.StartedAt.IsZero() || generate.FinishedAt.Before(generate.StartedAt) {
+		t.Errorf("Steps[0] timestamps invalid: started=%v finished=%v", generate.StartedAt, generate.FinishedAt)
+	}
+
+	if verify.StepID != "2" || verify.Kind != domain.StepKindVerify {
+		t.Errorf("Steps[1] = %+v, want StepID=2 Kind=%q", verify, domain.StepKindVerify)
+	}
+	if verify.JudgmentVerdict != "pass" {
+		t.Errorf("Steps[1].JudgmentVerdict = %q, want pass", verify.JudgmentVerdict)
+	}
+	if len(verify.Considered) != 0 || len(verify.Produced) != 0 {
+		t.Errorf("Steps[1] carries Considered/Produced (%v, %v); a verify step should carry neither", verify.Considered, verify.Produced)
+	}
+}
+
+func TestEngine_Run_StepsTrace_FailThenRepair(t *testing.T) {
+	exec := &captureExecutor{patches: []string{"first-patch", "repaired-patch"}}
+	verifier := &seqVerifier{judgments: []*domain.Judgment{
+		{Verdict: "fail", Checked: []string{"tests: fail\n1 test failed"}},
+		{Verdict: "pass", Checked: []string{"tests: pass"}},
+	}}
+	eng := engine.NewEngine(&fakeGatherer{files: []string{"main.go"}}, exec, verifier, "")
+
+	act, err := eng.Run(context.Background(), &domain.Intent{Text: "test"})
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	if len(act.Steps) != 4 {
+		t.Fatalf("Steps length = %d, want 4 (generate, verify, generate, verify)", len(act.Steps))
+	}
+
+	wantKinds := []string{domain.StepKindGenerate, domain.StepKindVerify, domain.StepKindGenerate, domain.StepKindVerify}
+	wantIDs := []string{"1", "2", "3", "4"}
+	for i, step := range act.Steps {
+		if step.Kind != wantKinds[i] || step.StepID != wantIDs[i] {
+			t.Errorf("Steps[%d] = {StepID:%q Kind:%q}, want {StepID:%q Kind:%q}",
+				i, step.StepID, step.Kind, wantIDs[i], wantKinds[i])
+		}
+	}
+
+	if act.Steps[0].JudgmentVerdict != "" || act.Steps[0].Produced[0] != "first-patch" {
+		t.Errorf("Steps[0] = %+v, want Produced=[first-patch]", act.Steps[0])
+	}
+	if act.Steps[1].JudgmentVerdict != "fail" {
+		t.Errorf("Steps[1].JudgmentVerdict = %q, want fail", act.Steps[1].JudgmentVerdict)
+	}
+	repairGenerate := act.Steps[2]
+	if len(repairGenerate.Considered) == 0 || !strings.Contains(repairGenerate.Considered[len(repairGenerate.Considered)-1], "1 test failed") {
+		t.Errorf("Steps[2].Considered = %v, want the failed round's findings included", repairGenerate.Considered)
+	}
+	if len(repairGenerate.Produced) != 1 || repairGenerate.Produced[0] != "repaired-patch" {
+		t.Errorf("Steps[2].Produced = %v, want [repaired-patch]", repairGenerate.Produced)
+	}
+	if act.Steps[3].JudgmentVerdict != "pass" {
+		t.Errorf("Steps[3].JudgmentVerdict = %q, want pass", act.Steps[3].JudgmentVerdict)
+	}
+}
+
+func TestEngine_RunBudgeted_StepsTrace_EmptyOnBudgetExceededBeforeExecute(t *testing.T) {
+	eng := newEngine("pass")
+
+	act, err := eng.RunBudgeted(context.Background(), &domain.Intent{Text: "test"},
+		&domain.Budget{MaxIterations: 0, MaxCostUSD: 1.00})
+	if !errors.Is(err, engine.ErrBudgetExceeded) {
+		t.Fatalf("error = %v, want ErrBudgetExceeded", err)
+	}
+	if len(act.Steps) != 0 {
+		t.Errorf("Steps = %v, want empty (Execute never ran)", act.Steps)
+	}
+}
+
+func TestEngine_RunBudgeted_StepsTrace_RepairSkippedAddsNoSteps(t *testing.T) {
+	exec := &captureExecutor{patches: []string{"first-patch"}}
+	verifier := &seqVerifier{judgments: []*domain.Judgment{
+		{Verdict: "fail", Checked: []string{"tests: fail"}},
+	}}
+	eng := engine.NewEngine(&fakeGatherer{}, exec, verifier, "")
+
+	act, err := eng.RunBudgeted(context.Background(), &domain.Intent{Text: "test"},
+		&domain.Budget{MaxIterations: 1, MaxCostUSD: 1.00})
+	if err != nil {
+		t.Fatalf("RunBudgeted failed: %v", err)
+	}
+	if len(act.Steps) != 2 {
+		t.Fatalf("Steps length = %d, want 2 (repair round refused, no third/fourth step)", len(act.Steps))
+	}
+}
+
 func TestEngine_RunBudgeted_ReportsRepairSkippedWhenBudgetRefuses(t *testing.T) {
 	exec := &captureExecutor{patches: []string{"first-patch"}}
 	verifier := &seqVerifier{judgments: []*domain.Judgment{{Verdict: "fail", Checked: []string{"tests: fail"}}}}

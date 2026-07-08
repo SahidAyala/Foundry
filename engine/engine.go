@@ -8,6 +8,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"foundry/domain"
 )
@@ -75,6 +76,7 @@ func (e *Engine) RunBudgeted(ctx context.Context, intent *domain.Intent, budget 
 		return act, fmt.Errorf("engine: execute: %w", err)
 	}
 	e.reporter.Executing(spent.iterations)
+	generateStart := time.Now()
 	outcome, err := e.executor.Execute(ctx, intent, considered)
 	if err != nil {
 		return nil, fmt.Errorf("engine: execute: %w", err)
@@ -82,19 +84,22 @@ func (e *Engine) RunBudgeted(ctx context.Context, intent *domain.Intent, budget 
 	act.Patch = outcome.Patch
 	act.Iterations = spent.iterations
 	act.CostEstimateUSD = spent.costUSD
+	recordStep(act, domain.StepKindGenerate, considered, producedPatch(outcome), nil, "", generateStart)
 
 	e.reporter.Verifying(spent.iterations)
+	verifyStart := time.Now()
 	judgment, err := e.verifier.Verify(ctx, outcome, e.workspace)
 	if err != nil {
 		return nil, fmt.Errorf("engine: verify: %w", err)
 	}
 	e.reporter.Verified(spent.iterations, judgment)
+	recordStep(act, domain.StepKindVerify, nil, nil, judgment.Checked, judgment.Verdict, verifyStart)
 
 	// Bounded repair (M0.2): a failed verification earns exactly one more
 	// Execute, budget permitting, with the findings fed back as context.
 	if judgment.Verdict == verdictFail {
 		e.reporter.Repairing()
-		considered, outcome, judgment, err = e.repairOnce(ctx, intent, considered, outcome, judgment, spent)
+		considered, outcome, judgment, err = e.repairOnce(ctx, intent, considered, outcome, judgment, spent, act)
 		if err != nil {
 			return nil, err
 		}

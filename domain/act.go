@@ -10,17 +10,51 @@ import (
 // It carries an Intent, accumulates Evidence, yields an Outcome, and passes a Judgment.
 // Once recorded to durable storage, an Act is never modified.
 type Act struct {
-	ID              string     `json:"id"`
-	Intent          string     `json:"intent"`
-	CreatedAt       time.Time  `json:"created_at"`
-	ConsideredFiles []string   `json:"considered_files"`
-	CheckedFindings []string   `json:"checked_findings"`
-	Patch           string     `json:"patch"`
-	JudgmentVerdict string     `json:"judgment_verdict"`
-	ApprovedBy      string     `json:"approved_by"`
-	ApprovedAt      *time.Time `json:"approved_at"`
-	Iterations      int        `json:"iterations"`
-	CostEstimateUSD float64    `json:"cost_estimate_usd"`
+	ID              string       `json:"id"`
+	Intent          string       `json:"intent"`
+	CreatedAt       time.Time    `json:"created_at"`
+	ConsideredFiles []string     `json:"considered_files"`
+	CheckedFindings []string     `json:"checked_findings"`
+	Patch           string       `json:"patch"`
+	JudgmentVerdict string       `json:"judgment_verdict"`
+	ApprovedBy      string       `json:"approved_by"`
+	ApprovedAt      *time.Time   `json:"approved_at"`
+	Iterations      int          `json:"iterations"`
+	CostEstimateUSD float64      `json:"cost_estimate_usd"`
+	Steps           []StepRecord `json:"steps,omitempty"`
+}
+
+// Step kinds a StepRecord may carry today. The full vocabulary proposed in
+// docs/01-rfcs/RFC-0002-pipeline-execution-runtime.md §4.2 also includes
+// "approve", "apply", and "record"; those happen above the Engine (in the
+// CLI) and are added to this set only once that part of the trace is wired
+// up (RFC-0002 §9 Phase 4), not before.
+const (
+	StepKindGenerate = "generate"
+	StepKindVerify   = "verify"
+)
+
+// StepRecord is one recorded attempt at a unit of work within an Act's
+// production: a single Executor call (a "generate" step) or a single
+// verification pass (a "verify" step). An Act accumulates StepRecords in
+// the order they ran, including repair rounds, so its trace can answer
+// "what happened at step N" instead of exposing only the latest considered
+// and checked Evidence.
+//
+// StepRecord is additive: it coexists with Act's flat fields (Patch,
+// JudgmentVerdict, ConsideredFiles, CheckedFindings, ...), which remain the
+// final-round view existing callers already rely on. See
+// docs/01-rfcs/RFC-0002-pipeline-execution-runtime.md §4.5 and §9 Phase 1.
+type StepRecord struct {
+	StepID          string    `json:"step_id"`
+	Kind            string    `json:"kind"`
+	Considered      []string  `json:"considered,omitempty"`
+	Produced        []string  `json:"produced,omitempty"`
+	Checked         []string  `json:"checked,omitempty"`
+	JudgmentVerdict string    `json:"judgment_verdict,omitempty"`
+	Authority       string    `json:"authority,omitempty"`
+	StartedAt       time.Time `json:"started_at"`
+	FinishedAt      time.Time `json:"finished_at"`
 }
 
 // Intent describes what was requested.
