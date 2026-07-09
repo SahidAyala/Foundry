@@ -1,12 +1,14 @@
 // Package engine drives the machine-owned production of an Act: it gathers
 // Context, enforces Budget, and delegates producing the Act's Outcome and
-// Judgment to a Strategy (strategy.go), which today always walks
-// DefaultPipeline (step.go) — the Engine no longer hardcodes repair as
-// bespoke Go control flow (docs/01-rfcs/RFC-0002-pipeline-execution-runtime.md
-// §9 Phase 2). The accountable steps that follow — an Authority's
-// acceptance, applying the Outcome, and recording the Act — happen at the
-// trust boundary above the Engine (see docs/02-architecture/execution.md
-// steps 5–8); the Engine has never known about them.
+// Judgment to a Strategy (strategy.go), which today always walks the
+// "default" Pipeline (step.go) resolved from a PipelineRegistry
+// (registry.go) — the Engine no longer hardcodes repair as bespoke Go
+// control flow, nor constructs a Pipeline itself
+// (docs/01-rfcs/RFC-0002-pipeline-execution-runtime.md §9 Phase 2). The
+// accountable steps that follow — an Authority's acceptance, applying the
+// Outcome, and recording the Act — happen at the trust boundary above the
+// Engine (see docs/02-architecture/execution.md steps 5–8); the Engine has
+// never known about them.
 package engine
 
 import (
@@ -28,17 +30,27 @@ type Engine struct {
 }
 
 // NewEngine wires the ports an Engine needs to produce an Act, using
-// PipelineStrategy over DefaultPipeline — today's only Strategy and
-// Pipeline. workspace is the directory the Verifier checks; for M0.0 this
-// is the repository path.
+// PipelineStrategy over the "default" Pipeline resolved from
+// NewDefaultRegistry (registry.go) — today's only Strategy and Pipeline.
+// The Engine never constructs a Pipeline itself; it only depends on the
+// named Pipeline a PipelineRegistry hands it (registry.go's centralized
+// construction). workspace is the directory the Verifier checks; for M0.0
+// this is the repository path.
 func NewEngine(gatherer Gatherer, executor Executor, verifier Verifier, workspace string) *Engine {
+	pipeline, err := NewDefaultRegistry().Get("default")
+	if err != nil {
+		// NewDefaultRegistry always registers "default"; a lookup miss
+		// here means the built-in registry itself is broken, not
+		// something a caller triggered.
+		panic(fmt.Sprintf("engine: NewEngine: %v", err))
+	}
 	return &Engine{
 		gatherer:  gatherer,
 		executor:  executor,
 		verifier:  verifier,
 		workspace: workspace,
 		reporter:  noopReporter{},
-		strategy:  PipelineStrategy{Pipeline: DefaultPipeline()},
+		strategy:  PipelineStrategy{Pipeline: pipeline},
 	}
 }
 
