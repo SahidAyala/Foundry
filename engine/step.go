@@ -37,8 +37,9 @@ type Pipeline struct {
 // DefaultPipeline reproduces the Engine's original fixed lifecycle exactly:
 // one Executor call, one verification pass, and — on a failing verdict —
 // at most one bounded repair round. It is registered under the name
-// "default" by NewDefaultRegistry (registry.go), the only Pipeline in
-// existence today.
+// "default" by NewDefaultRegistry (registry.go) — the only Pipeline this
+// build of Foundry ships built in, though a PipelineRegistry itself
+// supports registering any number of Pipelines under distinct names.
 func DefaultPipeline() Pipeline {
 	return Pipeline{
 		Name: "default",

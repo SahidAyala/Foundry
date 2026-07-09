@@ -130,7 +130,7 @@ func newCLI(t *testing.T, repoPath, patch, validatorCmd string, in string, out *
 	if err != nil {
 		t.Fatalf("verify.NewGate failed: %v", err)
 	}
-	eng := engine.NewEngine(emptyGatherer{}, executor.NewScriptedExecutor(patch), gate, repoPath)
+	eng := engine.NewEngine(emptyGatherer{}, executor.NewScriptedExecutor(patch), gate, repoPath, engine.DefaultPipeline())
 	return cli.NewCLI(eng, store, strings.NewReader(in), out), store
 }
 

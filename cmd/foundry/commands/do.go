@@ -53,7 +53,17 @@ func Do(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, n
 	// the Gate runs inside a staged worktree with the patch applied.
 	verifier := workspace.NewStagedVerifier(gate)
 
-	eng := engine.NewEngine(gatherer.NewNaiveGatherer(repoPath), newExecutor(repoPath), verifier, repoPath)
+	// pipelineName is the one place `foundry do` selects which Pipeline
+	// runs. It is hardcoded today; a future --pipeline flag replaces this
+	// literal with a parsed value — no change to engine.go required.
+	const pipelineName = "default"
+	pipeline, err := engine.NewDefaultRegistry().Get(pipelineName)
+	if err != nil {
+		fmt.Fprintln(stdout, err)
+		return 1
+	}
+
+	eng := engine.NewEngine(gatherer.NewNaiveGatherer(repoPath), newExecutor(repoPath), verifier, repoPath, pipeline)
 	eng.SetReporter(cli.NewProgressReporter(stdout))
 	c := cli.NewCLI(eng, store, stdin, stdout)
 
