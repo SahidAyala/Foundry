@@ -53,6 +53,17 @@ var _ Strategy = PipelineStrategy{}
 // marked VerdictBudgetExceeded and the refusal is returned as an error
 // wrapping ErrBudgetExceeded. A Budget refusal on a repair attempt is not
 // an error — the prior attempt's Judgment stands as final.
+//
+// Produce executes s.Pipeline purely from its Steps and RepairPolicy — any
+// well-formed sequence of generate/verify Steps runs unmodified, with no
+// Engine or Strategy code change required to add a differently-shaped
+// Pipeline. A Pipeline is well-formed only if every verify Step is preceded
+// by a generate Step in the same attempt, at least one verify Step exists,
+// and every Step's Kind is one Produce recognizes; Produce returns a clear
+// error instead of a nil-pointer panic or a silently skipped Step when a
+// Pipeline violates any of these (docs/01-rfcs/RFC-0002-pipeline-execution-runtime.md
+// §5: Step kinds are "a closed set, extensible only by adding a new kind
+// deliberately, not by the Pipeline document inventing arbitrary behavior").
 func (s PipelineStrategy) Produce(ctx context.Context, act *domain.Act, intent *domain.Intent, considered []string, rc runContext) error {
 	var outcome *domain.Outcome
 	var judgment *domain.Judgment
@@ -94,6 +105,9 @@ func (s PipelineStrategy) Produce(ctx context.Context, act *domain.Act, intent *
 				recordStep(act, domain.StepKindGenerate, considered, producedPatch(outcome), nil, "", start)
 
 			case domain.StepKindVerify:
+				if outcome == nil {
+					return fmt.Errorf("engine: pipeline %q step %q: verify has no Outcome to check — no generate step ran before it", s.Pipeline.Name, step.ID)
+				}
 				rc.reporter.Verifying(rc.spent.iterations)
 				start := time.Now()
 				j, err := rc.verifier.Verify(ctx, outcome, rc.workspace)
@@ -103,9 +117,15 @@ func (s PipelineStrategy) Produce(ctx context.Context, act *domain.Act, intent *
 				judgment = j
 				rc.reporter.Verified(rc.spent.iterations, judgment)
 				recordStep(act, domain.StepKindVerify, nil, nil, judgment.Checked, judgment.Verdict, start)
+
+			default:
+				return fmt.Errorf("engine: pipeline %q step %q: unrecognized step kind %q", s.Pipeline.Name, step.ID, step.Kind)
 			}
 		}
 
+		if judgment == nil {
+			return fmt.Errorf("engine: pipeline %q declares no verify step: it can never produce a Judgment", s.Pipeline.Name)
+		}
 		if judgment.Verdict != verdictFail || attempt >= s.Pipeline.Repair.MaxAttempts {
 			break
 		}
