@@ -3,10 +3,18 @@ package engine
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"foundry/domain"
 )
+
+// verdictFail is the Gate verdict that triggers a Pipeline's bounded
+// repair: PipelineStrategy treats it as a signal to re-run the Pipeline,
+// not as an error. The architecture reserves a distinct "repair" verdict
+// (docs/02-architecture/execution.md step 6); M0's Gate emits only
+// pass/fail, so fail is the trigger (backlog PR-011).
+const verdictFail = "fail"
 
 // Strategy is the pluggable means by which an Act's Outcome and Judgment
 // are produced, once Context has been gathered and a Budget tracker is in
@@ -118,4 +126,12 @@ func wrapStepError(attempt int, op string, err error) error {
 		return fmt.Errorf("engine: repair %s: %w", op, err)
 	}
 	return fmt.Errorf("engine: %s: %w", op, err)
+}
+
+// repairContext renders a failed Judgment's checked findings as one
+// considered-context entry, so the Executor sees what failed on the
+// previous attempt and the Act's Evidence records what the repair saw.
+func repairContext(judgment *domain.Judgment) string {
+	return "verification findings from the failed previous attempt:\n" +
+		strings.Join(judgment.Checked, "\n")
 }
