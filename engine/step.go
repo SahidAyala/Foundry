@@ -27,17 +27,21 @@ type RepairPolicy struct {
 // document: declarative (e.g. YAML) Pipeline authoring and any way to
 // select a Pipeline other than DefaultPipeline are deferred to a later
 // phase (docs/01-rfcs/RFC-0002-pipeline-execution-runtime.md §9 Phase 3+).
+// Name identifies a Pipeline within a PipelineRegistry (registry.go).
 type Pipeline struct {
+	Name   string
 	Steps  []Step
 	Repair RepairPolicy
 }
 
 // DefaultPipeline reproduces the Engine's original fixed lifecycle exactly:
 // one Executor call, one verification pass, and — on a failing verdict —
-// at most one bounded repair round. It is the only Pipeline in existence
-// today.
+// at most one bounded repair round. It is registered under the name
+// "default" by NewDefaultRegistry (registry.go), the only Pipeline in
+// existence today.
 func DefaultPipeline() Pipeline {
 	return Pipeline{
+		Name: "default",
 		Steps: []Step{
 			{ID: "generate", Kind: domain.StepKindGenerate},
 			{ID: "verify", Kind: domain.StepKindVerify},
