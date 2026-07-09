@@ -1,7 +1,5 @@
 package engine
 
-import "foundry/domain"
-
 // Step is one instruction in a Pipeline: what kind of work to perform.
 // Step's Kind reuses the domain.StepKind* vocabulary that also labels the
 // StepRecord an executed Step leaves in an Act's trace (domain/act.go), so
@@ -24,29 +22,13 @@ type RepairPolicy struct {
 
 // Pipeline is an ordered sequence of Steps a Strategy executes to produce
 // an Act's Outcome and Judgment. It is Go data, not a user-authored
-// document: declarative (e.g. YAML) Pipeline authoring and any way to
-// select a Pipeline other than DefaultPipeline are deferred to a later
-// phase (docs/01-rfcs/RFC-0002-pipeline-execution-runtime.md §9 Phase 3+).
-// Name identifies a Pipeline within a PipelineRegistry (registry.go).
+// document: declarative (e.g. YAML) Pipeline authoring is deferred to a
+// later phase (docs/01-rfcs/RFC-0002-pipeline-execution-runtime.md §9
+// Phase 3+). A Pipeline is discovered by a PipelineProvider (provider.go —
+// DefaultPipeline is built in via BuiltinProvider, builtin_provider.go) and
+// identified by Name within a PipelineRegistry (registry.go).
 type Pipeline struct {
 	Name   string
 	Steps  []Step
 	Repair RepairPolicy
-}
-
-// DefaultPipeline reproduces the Engine's original fixed lifecycle exactly:
-// one Executor call, one verification pass, and — on a failing verdict —
-// at most one bounded repair round. It is registered under the name
-// "default" by NewDefaultRegistry (registry.go) — the only Pipeline this
-// build of Foundry ships built in, though a PipelineRegistry itself
-// supports registering any number of Pipelines under distinct names.
-func DefaultPipeline() Pipeline {
-	return Pipeline{
-		Name: "default",
-		Steps: []Step{
-			{ID: "generate", Kind: domain.StepKindGenerate},
-			{ID: "verify", Kind: domain.StepKindVerify},
-		},
-		Repair: RepairPolicy{MaxAttempts: 1},
-	}
 }

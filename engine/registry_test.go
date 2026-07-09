@@ -1,11 +1,13 @@
 package engine_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 
 	"foundry/domain"
 	"foundry/engine"
+	"foundry/executor"
 )
 
 func testPipeline(name string) engine.Pipeline {
@@ -189,6 +191,101 @@ func TestPipelineRegistry_MultipleNamedPipelinesCoexist(t *testing.T) {
 	}
 }
 
+func TestPipelineRegistry_RegisterMany_RegistersEachPipeline(t *testing.T) {
+	registry := engine.NewPipelineRegistry()
+
+	err := registry.RegisterMany(testPipeline("plan"), testPipeline("review"), testPipeline("apply"))
+	if err != nil {
+		t.Fatalf("RegisterMany failed: %v", err)
+	}
+
+	for _, name := range []string{"plan", "review", "apply"} {
+		got, err := registry.Get(name)
+		if err != nil {
+			t.Errorf("Get(%q) failed after RegisterMany: %v", name, err)
+			continue
+		}
+		if got.Name != name {
+			t.Errorf("Get(%q).Name = %q, want %q", name, got.Name, name)
+		}
+	}
+}
+
+// TestPipelineRegistry_RegisterMany_StopsAtFirstDuplicate verifies
+// RegisterMany behaves exactly like a loop of Register calls: it fails at
+// the first duplicate name, and every Pipeline registered before the
+// failing one stays registered — RegisterMany is not an all-or-nothing
+// transaction.
+func TestPipelineRegistry_RegisterMany_StopsAtFirstDuplicate(t *testing.T) {
+	registry := engine.NewPipelineRegistry()
+
+	err := registry.RegisterMany(testPipeline("plan"), testPipeline("plan"), testPipeline("review"))
+	if err == nil {
+		t.Fatal("RegisterMany with a duplicate name returned nil error")
+	}
+	if !strings.Contains(err.Error(), "plan") {
+		t.Errorf("error = %q, want it to name the duplicate %q", err.Error(), "plan")
+	}
+
+	if _, getErr := registry.Get("plan"); getErr != nil {
+		t.Errorf("Get(\"plan\") failed; the successful registration before the duplicate should survive: %v", getErr)
+	}
+	if _, getErr := registry.Get("review"); getErr == nil {
+		t.Error("Get(\"review\") succeeded; RegisterMany should have stopped before registering it")
+	}
+}
+
+func TestPipelineRegistry_MustGet_ReturnsRegisteredPipeline(t *testing.T) {
+	registry := engine.NewPipelineRegistry()
+	if err := registry.Register(testPipeline("plan")); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+
+	got := registry.MustGet("plan")
+	if got.Name != "plan" {
+		t.Errorf("MustGet(\"plan\").Name = %q, want %q", got.Name, "plan")
+	}
+}
+
+func TestPipelineRegistry_MustGet_PanicsForUnknownName(t *testing.T) {
+	registry := engine.NewPipelineRegistry()
+
+	defer func() {
+		if recover() == nil {
+			t.Error("MustGet for an unregistered name did not panic")
+		}
+	}()
+	registry.MustGet("does-not-exist")
+}
+
+// TestPipelineRegistry_CannotMutateProviderState verifies the registry
+// never mutates what a PipelineProvider produced: registering a
+// provider's output, then mutating a Pipeline obtained back out of the
+// registry, must never be visible in a later Load from the same provider.
+func TestPipelineRegistry_CannotMutateProviderState(t *testing.T) {
+	provider := engine.BuiltinProvider{}
+	registry := engine.NewPipelineRegistry()
+
+	pipelines, err := provider.Load(context.Background())
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if err := registry.RegisterMany(pipelines...); err != nil {
+		t.Fatalf("RegisterMany failed: %v", err)
+	}
+
+	got := registry.MustGet("default")
+	got.Steps[0].Kind = "mutated-by-registry-caller"
+
+	reloaded, err := provider.Load(context.Background())
+	if err != nil {
+		t.Fatalf("second Load failed: %v", err)
+	}
+	if reloaded[0].Steps[0].Kind == "mutated-by-registry-caller" {
+		t.Error("mutating a registry-returned Pipeline affected the provider's own state")
+	}
+}
+
 func TestNewDefaultRegistry_RegistersDefaultPipeline(t *testing.T) {
 	registry := engine.NewDefaultRegistry()
 
@@ -211,5 +308,44 @@ func TestNewDefaultRegistry_RegistersDefaultPipeline(t *testing.T) {
 	}
 	if got.Repair != want.Repair {
 		t.Errorf("Repair = %+v, want %+v", got.Repair, want.Repair)
+	}
+}
+
+// TestNewDefaultRegistry_EngineBehaviorUnchanged pins the exact scenario a
+// composition root (cmd/foundry/commands/do.go) relies on: resolving
+// "default" out of NewDefaultRegistry() and wiring it into an Engine must
+// produce byte-for-byte the same Act as wiring engine.DefaultPipeline()
+// directly. This is the regression the PipelineProvider refactor (moving
+// DefaultPipeline's construction behind BuiltinProvider) must never cause.
+func TestNewDefaultRegistry_EngineBehaviorUnchanged(t *testing.T) {
+	newSubject := func(pipeline engine.Pipeline) *engine.Engine {
+		gatherer := &fakeGatherer{files: []string{"main.go"}}
+		verifier := &fakeVerifier{verdict: "pass"}
+		exec := executor.NewScriptedExecutor(scriptedPatch)
+		return engine.NewEngine(gatherer, exec, verifier, "", pipeline)
+	}
+
+	resolved, err := engine.NewDefaultRegistry().Get("default")
+	if err != nil {
+		t.Fatalf("composition-root-style Get(\"default\") failed: %v", err)
+	}
+
+	viaRegistry, err := newSubject(resolved).Run(context.Background(), &domain.Intent{Text: "add a comment"})
+	if err != nil {
+		t.Fatalf("Run (via registry) failed: %v", err)
+	}
+	viaDirect, err := newSubject(engine.DefaultPipeline()).Run(context.Background(), &domain.Intent{Text: "add a comment"})
+	if err != nil {
+		t.Fatalf("Run (via DefaultPipeline) failed: %v", err)
+	}
+
+	if viaRegistry.Patch != viaDirect.Patch {
+		t.Errorf("Patch = %q, want %q", viaRegistry.Patch, viaDirect.Patch)
+	}
+	if viaRegistry.JudgmentVerdict != viaDirect.JudgmentVerdict {
+		t.Errorf("JudgmentVerdict = %q, want %q", viaRegistry.JudgmentVerdict, viaDirect.JudgmentVerdict)
+	}
+	if len(viaRegistry.Steps) != len(viaDirect.Steps) {
+		t.Errorf("Steps = %v, want %v", viaRegistry.Steps, viaDirect.Steps)
 	}
 }
