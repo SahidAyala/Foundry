@@ -1,14 +1,18 @@
-// Package engine runs the machine-owned steps of the Act lifecycle: gather,
-// execute, and verify. It produces an Act carrying a machine verdict. The
-// accountable steps that follow — an Authority's acceptance, applying the
-// Outcome, and recording the Act — happen at the trust boundary above the
-// Engine (see docs/02-architecture/execution.md steps 5–8).
+// Package engine drives the machine-owned production of an Act: it gathers
+// Context, enforces Budget, and delegates producing the Act's Outcome and
+// Judgment to a Strategy (strategy.go), which today always walks
+// DefaultPipeline (step.go) — the Engine no longer hardcodes repair as
+// bespoke Go control flow (docs/01-rfcs/RFC-0002-pipeline-execution-runtime.md
+// §9 Phase 2). The accountable steps that follow — an Authority's
+// acceptance, applying the Outcome, and recording the Act — happen at the
+// trust boundary above the Engine (see docs/02-architecture/execution.md
+// steps 5–8); the Engine has never known about them.
 package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"time"
 
 	"foundry/domain"
 )
@@ -20,10 +24,13 @@ type Engine struct {
 	verifier  Verifier
 	workspace string // directory the Verifier checks
 	reporter  Reporter
+	strategy  Strategy
 }
 
-// NewEngine wires the ports an Engine needs to produce an Act. workspace is
-// the directory the Verifier checks; for M0.0 this is the repository path.
+// NewEngine wires the ports an Engine needs to produce an Act, using
+// PipelineStrategy over DefaultPipeline — today's only Strategy and
+// Pipeline. workspace is the directory the Verifier checks; for M0.0 this
+// is the repository path.
 func NewEngine(gatherer Gatherer, executor Executor, verifier Verifier, workspace string) *Engine {
 	return &Engine{
 		gatherer:  gatherer,
@@ -31,6 +38,7 @@ func NewEngine(gatherer Gatherer, executor Executor, verifier Verifier, workspac
 		verifier:  verifier,
 		workspace: workspace,
 		reporter:  noopReporter{},
+		strategy:  PipelineStrategy{Pipeline: DefaultPipeline()},
 	}
 }
 
@@ -49,14 +57,14 @@ func (e *Engine) Run(ctx context.Context, intent *domain.Intent) (*domain.Act, e
 	return e.RunBudgeted(ctx, intent, DefaultBudget())
 }
 
-// RunBudgeted is Run under an explicit Budget: every Executor.Execute call is
-// charged against the Budget's iteration and cost ceilings before it runs.
-// A failed verification triggers at most one repair attempt (repair.go),
-// itself charged against the same Budget; the repair's judgment is final.
-// If a call would exceed the Budget, the Engine halts and returns the Act —
-// its verdict set to VerdictBudgetExceeded and its usage recorded — together
-// with an error wrapping ErrBudgetExceeded. This is the one case where both
-// return values are non-nil.
+// RunBudgeted is Run under an explicit Budget. It gathers Context itself,
+// then hands off to its Strategy (today, PipelineStrategy over
+// DefaultPipeline) to produce the Act's Outcome and Judgment, charging
+// every unit of work against the Budget's iteration and cost ceilings. If a
+// call would exceed the Budget on the Strategy's first attempt, the Engine
+// halts and returns the Act — its verdict set to VerdictBudgetExceeded and
+// its usage recorded — together with an error wrapping ErrBudgetExceeded.
+// This is the one case where both return values are non-nil.
 func (e *Engine) RunBudgeted(ctx context.Context, intent *domain.Intent, budget *domain.Budget) (*domain.Act, error) {
 	act := domain.NewAct(intent.Text)
 	spent := &tracker{budget: budget}
@@ -68,48 +76,18 @@ func (e *Engine) RunBudgeted(ctx context.Context, intent *domain.Intent, budget 
 	}
 	act.ConsideredFiles = considered
 
-	if err := spent.charge(executeCostEstimateUSD); err != nil {
-		e.reporter.BudgetExceeded(err.Error())
-		act.JudgmentVerdict = VerdictBudgetExceeded
-		act.Iterations = spent.iterations
-		act.CostEstimateUSD = spent.costUSD
-		return act, fmt.Errorf("engine: execute: %w", err)
+	rc := runContext{
+		executor:  e.executor,
+		verifier:  e.verifier,
+		workspace: e.workspace,
+		reporter:  e.reporter,
+		spent:     spent,
 	}
-	e.reporter.Executing(spent.iterations)
-	generateStart := time.Now()
-	outcome, err := e.executor.Execute(ctx, intent, considered)
-	if err != nil {
-		return nil, fmt.Errorf("engine: execute: %w", err)
-	}
-	act.Patch = outcome.Patch
-	act.Iterations = spent.iterations
-	act.CostEstimateUSD = spent.costUSD
-	recordStep(act, domain.StepKindGenerate, considered, producedPatch(outcome), nil, "", generateStart)
-
-	e.reporter.Verifying(spent.iterations)
-	verifyStart := time.Now()
-	judgment, err := e.verifier.Verify(ctx, outcome, e.workspace)
-	if err != nil {
-		return nil, fmt.Errorf("engine: verify: %w", err)
-	}
-	e.reporter.Verified(spent.iterations, judgment)
-	recordStep(act, domain.StepKindVerify, nil, nil, judgment.Checked, judgment.Verdict, verifyStart)
-
-	// Bounded repair (M0.2): a failed verification earns exactly one more
-	// Execute, budget permitting, with the findings fed back as context.
-	if judgment.Verdict == verdictFail {
-		e.reporter.Repairing()
-		considered, outcome, judgment, err = e.repairOnce(ctx, intent, considered, outcome, judgment, spent, act)
-		if err != nil {
-			return nil, err
+	if err := e.strategy.Produce(ctx, act, intent, considered, rc); err != nil {
+		if errors.Is(err, ErrBudgetExceeded) {
+			return act, err
 		}
-		act.ConsideredFiles = considered
-		act.Patch = outcome.Patch
-		act.Iterations = spent.iterations
-		act.CostEstimateUSD = spent.costUSD
+		return nil, err
 	}
-	act.JudgmentVerdict = judgment.Verdict
-	act.CheckedFindings = judgment.Checked
-
 	return act, nil
 }
