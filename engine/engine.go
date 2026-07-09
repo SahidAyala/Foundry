@@ -1,14 +1,17 @@
 // Package engine drives the machine-owned production of an Act: it gathers
 // Context, enforces Budget, and delegates producing the Act's Outcome and
-// Judgment to a Strategy (strategy.go), which today always walks the
-// "default" Pipeline (step.go) resolved from a PipelineRegistry
-// (registry.go) — the Engine no longer hardcodes repair as bespoke Go
-// control flow, nor constructs a Pipeline itself
-// (docs/01-rfcs/RFC-0002-pipeline-execution-runtime.md §9 Phase 2). The
-// accountable steps that follow — an Authority's acceptance, applying the
-// Outcome, and recording the Act — happen at the trust boundary above the
-// Engine (see docs/02-architecture/execution.md steps 5–8); the Engine has
-// never known about them.
+// Judgment to a Strategy (strategy.go) walking a Pipeline (step.go) — the
+// Engine no longer hardcodes repair as bespoke Go control flow, nor
+// constructs or selects a Pipeline itself
+// (docs/01-rfcs/RFC-0002-pipeline-execution-runtime.md §9 Phase 2). Which
+// Pipeline to run is resolved by the Engine's caller — today, from a
+// PipelineRegistry (registry.go) — and handed to NewEngine; the Engine
+// depends only on the resulting Pipeline value, never on a name, a
+// registry, or how one was built. The accountable steps that follow — an
+// Authority's acceptance, applying the Outcome, and recording the Act —
+// happen at the trust boundary above the Engine (see
+// docs/02-architecture/execution.md steps 5–8); the Engine has never known
+// about them.
 package engine
 
 import (
@@ -30,20 +33,14 @@ type Engine struct {
 }
 
 // NewEngine wires the ports an Engine needs to produce an Act, using
-// PipelineStrategy over the "default" Pipeline resolved from
-// NewDefaultRegistry (registry.go) — today's only Strategy and Pipeline.
-// The Engine never constructs a Pipeline itself; it only depends on the
-// named Pipeline a PipelineRegistry hands it (registry.go's centralized
-// construction). workspace is the directory the Verifier checks; for M0.0
-// this is the repository path.
-func NewEngine(gatherer Gatherer, executor Executor, verifier Verifier, workspace string) *Engine {
-	pipeline, err := NewDefaultRegistry().Get("default")
-	if err != nil {
-		// NewDefaultRegistry always registers "default"; a lookup miss
-		// here means the built-in registry itself is broken, not
-		// something a caller triggered.
-		panic(fmt.Sprintf("engine: NewEngine: %v", err))
-	}
+// PipelineStrategy over pipeline — today's only Strategy. The caller
+// resolves pipeline (today, always DefaultPipeline via a PipelineRegistry
+// lookup made by the composition root, e.g. cmd/foundry/commands/do.go);
+// NewEngine neither constructs nor selects one, so which Pipeline a future
+// caller passes — driven by CLI configuration or otherwise — never
+// requires an Engine change. workspace is the directory the Verifier
+// checks; for M0.0 this is the repository path.
+func NewEngine(gatherer Gatherer, executor Executor, verifier Verifier, workspace string, pipeline Pipeline) *Engine {
 	return &Engine{
 		gatherer:  gatherer,
 		executor:  executor,

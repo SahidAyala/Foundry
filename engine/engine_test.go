@@ -40,7 +40,7 @@ func newEngine(verdict string) *engine.Engine {
 	gatherer := &fakeGatherer{files: []string{"main.go"}}
 	verifier := &fakeVerifier{verdict: verdict}
 	exec := executor.NewScriptedExecutor(scriptedPatch)
-	return engine.NewEngine(gatherer, exec, verifier, "")
+	return engine.NewEngine(gatherer, exec, verifier, "", engine.DefaultPipeline())
 }
 
 func TestEngine_Run_ProducesMachineJudgedAct(t *testing.T) {
@@ -97,7 +97,7 @@ func TestEngine_Run_GatherErrorStopsLifecycle(t *testing.T) {
 	gatherer := &fakeGatherer{err: errors.New("gather boom")}
 	verifier := &fakeVerifier{verdict: "pass"}
 	exec := executor.NewScriptedExecutor(scriptedPatch)
-	eng := engine.NewEngine(gatherer, exec, verifier, "")
+	eng := engine.NewEngine(gatherer, exec, verifier, "", engine.DefaultPipeline())
 
 	if _, err := eng.Run(context.Background(), &domain.Intent{Text: "test"}); err == nil {
 		t.Fatal("Run with failing Gatherer returned nil error")
@@ -108,7 +108,7 @@ func TestEngine_Run_VerifyErrorStopsLifecycle(t *testing.T) {
 	gatherer := &fakeGatherer{files: []string{"main.go"}}
 	verifier := &fakeVerifier{err: errors.New("verify boom")}
 	exec := executor.NewScriptedExecutor(scriptedPatch)
-	eng := engine.NewEngine(gatherer, exec, verifier, "")
+	eng := engine.NewEngine(gatherer, exec, verifier, "", engine.DefaultPipeline())
 
 	if _, err := eng.Run(context.Background(), &domain.Intent{Text: "test"}); err == nil {
 		t.Fatal("Run with failing Verifier returned nil error")
@@ -211,7 +211,7 @@ func TestEngine_Run_RepairAfterFailPasses(t *testing.T) {
 		{Verdict: "fail", Checked: []string{"tests: fail\n1 test failed"}},
 		{Verdict: "pass", Checked: []string{"tests: pass"}},
 	}}
-	eng := engine.NewEngine(&fakeGatherer{files: []string{"main.go"}}, exec, verifier, "")
+	eng := engine.NewEngine(&fakeGatherer{files: []string{"main.go"}}, exec, verifier, "", engine.DefaultPipeline())
 
 	act, err := eng.Run(context.Background(), &domain.Intent{Text: "test"})
 	if err != nil {
@@ -254,7 +254,7 @@ func TestEngine_Run_RecordsCheckedFindingsOnFirstPass(t *testing.T) {
 	verifier := &seqVerifier{judgments: []*domain.Judgment{
 		{Verdict: "pass", Checked: []string{"go-build: pass", "go-test: pass"}},
 	}}
-	eng := engine.NewEngine(&fakeGatherer{files: []string{"main.go"}}, executor.NewScriptedExecutor(scriptedPatch), verifier, "")
+	eng := engine.NewEngine(&fakeGatherer{files: []string{"main.go"}}, executor.NewScriptedExecutor(scriptedPatch), verifier, "", engine.DefaultPipeline())
 
 	act, err := eng.Run(context.Background(), &domain.Intent{Text: "test"})
 	if err != nil {
@@ -269,7 +269,7 @@ func TestEngine_Run_RecordsCheckedFindingsOnFirstPass(t *testing.T) {
 func TestEngine_Run_NoRepairWhenFirstAttemptPasses(t *testing.T) {
 	exec := &captureExecutor{patches: []string{"first-patch"}}
 	verifier := &seqVerifier{judgments: []*domain.Judgment{{Verdict: "pass"}}}
-	eng := engine.NewEngine(&fakeGatherer{}, exec, verifier, "")
+	eng := engine.NewEngine(&fakeGatherer{}, exec, verifier, "", engine.DefaultPipeline())
 
 	act, err := eng.Run(context.Background(), &domain.Intent{Text: "test"})
 	if err != nil {
@@ -289,7 +289,7 @@ func TestEngine_Run_RepairStillFailingIsFinal(t *testing.T) {
 		{Verdict: "fail", Checked: []string{"build: fail"}},
 		{Verdict: "fail", Checked: []string{"build: fail"}},
 	}}
-	eng := engine.NewEngine(&fakeGatherer{}, exec, verifier, "")
+	eng := engine.NewEngine(&fakeGatherer{}, exec, verifier, "", engine.DefaultPipeline())
 
 	act, err := eng.Run(context.Background(), &domain.Intent{Text: "test"})
 	if err != nil {
@@ -306,12 +306,80 @@ func TestEngine_Run_RepairStillFailingIsFinal(t *testing.T) {
 	}
 }
 
+// TestEngine_Run_CustomPipeline_NoRepairAllowed proves the Engine has no
+// built-in assumption of "exactly one repair round": a Pipeline whose
+// RepairPolicy forbids repair entirely (MaxAttempts: 0) must leave a
+// failing verdict as final after a single Execute call, even though
+// DefaultPipeline (MaxAttempts: 1) would repair once for the same
+// Judgment (see TestEngine_Run_RepairStillFailingIsFinal above).
+func TestEngine_Run_CustomPipeline_NoRepairAllowed(t *testing.T) {
+	noRepair := engine.Pipeline{
+		Name:   "no-repair",
+		Steps:  engine.DefaultPipeline().Steps,
+		Repair: engine.RepairPolicy{MaxAttempts: 0},
+	}
+	exec := &captureExecutor{patches: []string{"first-patch"}}
+	verifier := &seqVerifier{judgments: []*domain.Judgment{
+		{Verdict: "fail", Checked: []string{"build: fail"}},
+	}}
+	eng := engine.NewEngine(&fakeGatherer{}, exec, verifier, "", noRepair)
+
+	act, err := eng.Run(context.Background(), &domain.Intent{Text: "test"})
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+	if act.JudgmentVerdict != "fail" {
+		t.Errorf("JudgmentVerdict = %q, want %q", act.JudgmentVerdict, "fail")
+	}
+	if len(exec.calls) != 1 {
+		t.Errorf("Executor called %d times, want 1 (the Pipeline's RepairPolicy forbids repair)", len(exec.calls))
+	}
+	if act.Iterations != 1 {
+		t.Errorf("Iterations = %d, want 1", act.Iterations)
+	}
+}
+
+// TestEngine_Run_CustomPipeline_MultipleRepairRoundsAllowed proves the
+// Engine will run as many repair rounds as a Pipeline's RepairPolicy
+// permits, not just the single round DefaultPipeline happens to declare:
+// a Pipeline with MaxAttempts: 2 repairs twice before a still-failing
+// verdict becomes final.
+func TestEngine_Run_CustomPipeline_MultipleRepairRoundsAllowed(t *testing.T) {
+	tworepairs := engine.Pipeline{
+		Name:   "two-repairs",
+		Steps:  engine.DefaultPipeline().Steps,
+		Repair: engine.RepairPolicy{MaxAttempts: 2},
+	}
+	exec := &captureExecutor{patches: []string{"first-patch", "second-patch", "third-patch"}}
+	verifier := &seqVerifier{judgments: []*domain.Judgment{
+		{Verdict: "fail", Checked: []string{"build: fail"}},
+		{Verdict: "fail", Checked: []string{"build: fail"}},
+		{Verdict: "pass"},
+	}}
+	eng := engine.NewEngine(&fakeGatherer{}, exec, verifier, "", tworepairs)
+
+	act, err := eng.RunBudgeted(context.Background(), &domain.Intent{Text: "test"},
+		&domain.Budget{MaxIterations: 3, MaxCostUSD: 1.50})
+	if err != nil {
+		t.Fatalf("RunBudgeted failed: %v", err)
+	}
+	if act.JudgmentVerdict != "pass" {
+		t.Errorf("JudgmentVerdict = %q, want %q", act.JudgmentVerdict, "pass")
+	}
+	if len(exec.calls) != 3 {
+		t.Errorf("Executor called %d times, want 3 (one initial attempt plus two repairs)", len(exec.calls))
+	}
+	if act.Patch != "third-patch" {
+		t.Errorf("Patch = %q, want the third attempt's patch", act.Patch)
+	}
+}
+
 func TestEngine_RunBudgeted_RepairRefusedByExhaustedBudget(t *testing.T) {
 	exec := &captureExecutor{patches: []string{"first-patch"}}
 	verifier := &seqVerifier{judgments: []*domain.Judgment{
 		{Verdict: "fail", Checked: []string{"tests: fail"}},
 	}}
-	eng := engine.NewEngine(&fakeGatherer{}, exec, verifier, "")
+	eng := engine.NewEngine(&fakeGatherer{}, exec, verifier, "", engine.DefaultPipeline())
 
 	act, err := eng.RunBudgeted(context.Background(), &domain.Intent{Text: "test"},
 		&domain.Budget{MaxIterations: 1, MaxCostUSD: 1.00})
@@ -337,7 +405,7 @@ func TestEngine_Run_RepairExecuteErrorStopsLifecycle(t *testing.T) {
 	verifier := &seqVerifier{judgments: []*domain.Judgment{
 		{Verdict: "fail", Checked: []string{"tests: fail"}},
 	}}
-	eng := engine.NewEngine(&fakeGatherer{}, exec, verifier, "")
+	eng := engine.NewEngine(&fakeGatherer{}, exec, verifier, "", engine.DefaultPipeline())
 
 	if _, err := eng.Run(context.Background(), &domain.Intent{Text: "test"}); err == nil {
 		t.Fatal("Run with failing repair Execute returned nil error")
@@ -409,7 +477,7 @@ func TestEngine_Run_ReportsRepairRound(t *testing.T) {
 		{Verdict: "fail", Checked: []string{"tests: fail"}},
 		{Verdict: "pass"},
 	}}
-	eng := engine.NewEngine(&fakeGatherer{files: []string{"main.go"}}, exec, verifier, "")
+	eng := engine.NewEngine(&fakeGatherer{files: []string{"main.go"}}, exec, verifier, "", engine.DefaultPipeline())
 	reporter := &fakeReporter{}
 	eng.SetReporter(reporter)
 
@@ -484,7 +552,7 @@ func TestEngine_Run_StepsTrace_FailThenRepair(t *testing.T) {
 		{Verdict: "fail", Checked: []string{"tests: fail\n1 test failed"}},
 		{Verdict: "pass", Checked: []string{"tests: pass"}},
 	}}
-	eng := engine.NewEngine(&fakeGatherer{files: []string{"main.go"}}, exec, verifier, "")
+	eng := engine.NewEngine(&fakeGatherer{files: []string{"main.go"}}, exec, verifier, "", engine.DefaultPipeline())
 
 	act, err := eng.Run(context.Background(), &domain.Intent{Text: "test"})
 	if err != nil {
@@ -540,7 +608,7 @@ func TestEngine_RunBudgeted_StepsTrace_RepairSkippedAddsNoSteps(t *testing.T) {
 	verifier := &seqVerifier{judgments: []*domain.Judgment{
 		{Verdict: "fail", Checked: []string{"tests: fail"}},
 	}}
-	eng := engine.NewEngine(&fakeGatherer{}, exec, verifier, "")
+	eng := engine.NewEngine(&fakeGatherer{}, exec, verifier, "", engine.DefaultPipeline())
 
 	act, err := eng.RunBudgeted(context.Background(), &domain.Intent{Text: "test"},
 		&domain.Budget{MaxIterations: 1, MaxCostUSD: 1.00})
@@ -555,7 +623,7 @@ func TestEngine_RunBudgeted_StepsTrace_RepairSkippedAddsNoSteps(t *testing.T) {
 func TestEngine_RunBudgeted_ReportsRepairSkippedWhenBudgetRefuses(t *testing.T) {
 	exec := &captureExecutor{patches: []string{"first-patch"}}
 	verifier := &seqVerifier{judgments: []*domain.Judgment{{Verdict: "fail", Checked: []string{"tests: fail"}}}}
-	eng := engine.NewEngine(&fakeGatherer{}, exec, verifier, "")
+	eng := engine.NewEngine(&fakeGatherer{}, exec, verifier, "", engine.DefaultPipeline())
 	reporter := &fakeReporter{}
 	eng.SetReporter(reporter)
 

@@ -123,6 +123,72 @@ func TestPipelineRegistry_ImmutableAfterConstruction(t *testing.T) {
 	}
 }
 
+// TestPipelineRegistry_MultipleNamedPipelinesCoexist verifies the registry
+// is not limited to a single entry: distinct names resolve independently,
+// and looking one up leaves the others (including the built-in "default")
+// exactly as registered.
+func TestPipelineRegistry_MultipleNamedPipelinesCoexist(t *testing.T) {
+	registry := engine.NewDefaultRegistry()
+
+	plan := engine.Pipeline{
+		Name:   "plan",
+		Steps:  []engine.Step{{ID: "plan", Kind: domain.StepKindGenerate}},
+		Repair: engine.RepairPolicy{MaxAttempts: 0},
+	}
+	review := engine.Pipeline{
+		Name: "review",
+		Steps: []engine.Step{
+			{ID: "generate", Kind: domain.StepKindGenerate},
+			{ID: "verify", Kind: domain.StepKindVerify},
+			{ID: "verify-again", Kind: domain.StepKindVerify},
+		},
+		Repair: engine.RepairPolicy{MaxAttempts: 2},
+	}
+	if err := registry.Register(plan); err != nil {
+		t.Fatalf("Register(plan) failed: %v", err)
+	}
+	if err := registry.Register(review); err != nil {
+		t.Fatalf("Register(review) failed: %v", err)
+	}
+
+	gotDefault, err := registry.Get("default")
+	if err != nil {
+		t.Fatalf("Get(default) failed: %v", err)
+	}
+	if len(gotDefault.Steps) != len(engine.DefaultPipeline().Steps) {
+		t.Errorf("default Pipeline changed shape after registering others: Steps = %v", gotDefault.Steps)
+	}
+
+	gotPlan, err := registry.Get("plan")
+	if err != nil {
+		t.Fatalf("Get(plan) failed: %v", err)
+	}
+	if len(gotPlan.Steps) != 1 || gotPlan.Steps[0].ID != "plan" {
+		t.Errorf("plan Pipeline = %+v, want its own single Step", gotPlan)
+	}
+	if gotPlan.Repair.MaxAttempts != 0 {
+		t.Errorf("plan Repair.MaxAttempts = %d, want 0", gotPlan.Repair.MaxAttempts)
+	}
+
+	gotReview, err := registry.Get("review")
+	if err != nil {
+		t.Fatalf("Get(review) failed: %v", err)
+	}
+	if len(gotReview.Steps) != 3 {
+		t.Errorf("review Pipeline Steps = %v, want 3", gotReview.Steps)
+	}
+	if gotReview.Repair.MaxAttempts != 2 {
+		t.Errorf("review Repair.MaxAttempts = %d, want 2", gotReview.Repair.MaxAttempts)
+	}
+
+	// Every name registered under this run is independently resolvable.
+	for _, name := range []string{"default", "plan", "review"} {
+		if _, err := registry.Get(name); err != nil {
+			t.Errorf("Get(%q) failed after registering all three: %v", name, err)
+		}
+	}
+}
+
 func TestNewDefaultRegistry_RegistersDefaultPipeline(t *testing.T) {
 	registry := engine.NewDefaultRegistry()
 
