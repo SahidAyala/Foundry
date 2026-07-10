@@ -3,6 +3,7 @@ package project
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"foundry/engine"
@@ -55,4 +56,69 @@ func (ProjectLoader) LoadRegistry(ctx context.Context, root string) (*engine.Pip
 // pipelinesDir returns root's conventional Pipeline-documents directory.
 func pipelinesDir(root string) string {
 	return filepath.Join(root, PipelinesDir)
+}
+
+// Scaffold writes root's pipelines directory with one starter Pipeline
+// document per non-built-in slash command this build resolves by
+// default ("feature", "bugfix", "release" — "review" already exists as
+// a built-in and needs no starter). Each starter reproduces
+// engine.DefaultPipeline's own generate → verify, one-bounded-repair
+// shape under the slash command's name, ready for a project to edit —
+// it is a starting point, not a policy Scaffold expects to be kept as-is.
+//
+// Scaffold is safe to re-run: it never overwrites a file that already
+// exists, mirroring `git init`'s own re-run safety. A project's edits to
+// an already-scaffolded document are never clobbered by running /init
+// again.
+func (ProjectLoader) Scaffold(root string) error {
+	dir := pipelinesDir(root)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("project: scaffold %q: %w", dir, err)
+	}
+
+	for _, starter := range starterDocuments {
+		path := filepath.Join(dir, starter.filename)
+		if _, err := os.Stat(path); err == nil {
+			continue // Already exists — never overwrite a project's own edits.
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("project: scaffold %q: %w", path, err)
+		}
+		if err := os.WriteFile(path, []byte(starter.document), 0o644); err != nil {
+			return fmt.Errorf("project: scaffold %q: %w", path, err)
+		}
+	}
+	return nil
+}
+
+// starterDocument is one file Scaffold writes into a freshly initialized
+// project's pipelines directory.
+type starterDocument struct {
+	filename string
+	document string
+}
+
+// starterDocuments are the Pipeline documents Scaffold writes for a
+// project that has never run /init before.
+var starterDocuments = []starterDocument{
+	{filename: "feature.json", document: starterPipelineDocument("feature")},
+	{filename: "bugfix.json", document: starterPipelineDocument("bugfix")},
+	{filename: "release.json", document: starterPipelineDocument("release")},
+}
+
+// starterPipelineDocument renders a minimal, valid PipelineDocument
+// (engine/document.go) under name: generate → verify, one bounded
+// repair — the same shape engine.DefaultPipeline already has, decoded
+// the same way BuiltinProvider's own embedded documents are.
+func starterPipelineDocument(name string) string {
+	return fmt.Sprintf(`{
+  "name": %q,
+  "steps": [
+    { "id": "generate", "kind": "generate" },
+    { "id": "verify", "kind": "verify" }
+  ],
+  "repair": {
+    "max_attempts": 1
+  }
+}
+`, name)
 }
