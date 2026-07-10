@@ -31,12 +31,16 @@ type RepairPolicy struct {
 }
 
 // Pipeline is an ordered sequence of Steps a Strategy executes to produce
-// an Act's Outcome and Judgment. It is Go data, not a user-authored
-// document: declarative (e.g. YAML) Pipeline authoring is deferred to a
-// later phase (docs/01-rfcs/RFC-0002-pipeline-execution-runtime.md §9
-// Phase 3+). A Pipeline is discovered by a PipelineProvider (provider.go —
-// DefaultPipeline is built in via BuiltinProvider, builtin_provider.go) and
-// identified by Name within a PipelineRegistry (registry.go).
+// an Act's Outcome and Judgment. It is the runtime shape a Strategy walks,
+// not the authored shape a Pipeline is written in: a Pipeline is authored
+// as a declarative PipelineDocument (document.go) and translated into this
+// type by DecodePipelineDocument, so its schema and evolution stay
+// separate from what PipelineStrategy actually executes
+// (docs/01-rfcs/RFC-0002-pipeline-execution-runtime.md §9 Phase 3). A
+// Pipeline is discovered by a PipelineProvider (provider.go —
+// DefaultPipeline is built in via BuiltinProvider, builtin_provider.go,
+// which now decodes its document rather than constructing this type by
+// hand) and identified by Name within a PipelineRegistry (registry.go).
 //
 // Audited against RFC-0002 (§4.2, §4.5, §5, §6, §7) for missing structural
 // concepts: Name, Steps, and RepairPolicy already cover everything the
