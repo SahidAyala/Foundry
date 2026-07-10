@@ -1,8 +1,10 @@
 package session
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"path/filepath"
 
 	"foundry/engine"
@@ -40,6 +42,18 @@ type Session struct {
 	// --repo flag on the interactive surface.
 	Root string
 
+	// In and Out are the session's whole-lifetime input and output —
+	// shared by every CommandHandler and, through it, every cli.CLI it
+	// constructs, for both reading approval and writing output. In is
+	// wrapped in exactly one *bufio.Reader for the session's entire
+	// lifetime (NewSession does this once): cli.PromptForApproval reads
+	// directly from an already-*bufio.Reader input instead of wrapping
+	// it again, so state (how much of the stream has been consumed)
+	// survives correctly across more than one approval prompt over the
+	// session's life — see the note on cli.PromptForApproval.
+	In  *bufio.Reader
+	Out io.Writer
+
 	registry *engine.PipelineRegistry
 	recorder record.Recorder
 	gatherer engine.Gatherer
@@ -50,7 +64,7 @@ type Session struct {
 // NewSession resolves root's full Pipeline registry (built-in plus
 // project-local, via project.ProjectLoader) and wires the Engine
 // dependencies every slash command shares for the rest of the process.
-func NewSession(ctx context.Context, root string, newExecutor NewExecutor) (*Session, error) {
+func NewSession(ctx context.Context, root string, in io.Reader, out io.Writer, newExecutor NewExecutor) (*Session, error) {
 	registry, err := (project.ProjectLoader{}).LoadRegistry(ctx, root)
 	if err != nil {
 		return nil, fmt.Errorf("session: load pipelines: %w", err)
@@ -68,6 +82,8 @@ func NewSession(ctx context.Context, root string, newExecutor NewExecutor) (*Ses
 
 	return &Session{
 		Root:     root,
+		In:       bufio.NewReader(in),
+		Out:      out,
 		registry: registry,
 		recorder: recorder,
 		gatherer: gatherer.NewNaiveGatherer(root),

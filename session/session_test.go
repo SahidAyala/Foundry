@@ -1,6 +1,7 @@
 package session_test
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"os/exec"
@@ -50,15 +51,42 @@ const scriptedPatch = "diff --git a/session_test_file.txt b/session_test_file.tx
 	"@@ -0,0 +1 @@\n" +
 	"+created by test\n"
 
+const secondScriptedPatch = "diff --git a/session_test_file_two.txt b/session_test_file_two.txt\n" +
+	"new file mode 100644\n" +
+	"--- /dev/null\n" +
+	"+++ b/session_test_file_two.txt\n" +
+	"@@ -0,0 +1 @@\n" +
+	"+created by test\n"
+
 func newScriptedExecutorFactory(patch string) session.NewExecutor {
 	return func(root string) engine.Executor {
 		return executor.NewScriptedExecutor(patch)
 	}
 }
 
+// sequencedExecutor returns one canned patch per Execute call, in order —
+// for tests where a Session's single shared Executor must still produce
+// distinct Outcomes across more than one Pipeline run.
+type sequencedExecutor struct {
+	patches []string
+	calls   int
+}
+
+func (e *sequencedExecutor) Execute(ctx context.Context, intent *domain.Intent, considered []string) (*domain.Outcome, error) {
+	patch := e.patches[e.calls]
+	e.calls++
+	return &domain.Outcome{Patch: patch}, nil
+}
+
+func newSequencedExecutorFactory(patches ...string) session.NewExecutor {
+	return func(root string) engine.Executor {
+		return &sequencedExecutor{patches: patches}
+	}
+}
+
 func TestNewSession_ResolvesBuiltinPipelines(t *testing.T) {
 	root := initGitRepo(t)
-	s, err := session.NewSession(context.Background(), root, newScriptedExecutorFactory(scriptedPatch))
+	s, err := session.NewSession(context.Background(), root, &bytes.Buffer{}, &bytes.Buffer{}, newScriptedExecutorFactory(scriptedPatch))
 	if err != nil {
 		t.Fatalf("NewSession failed: %v", err)
 	}
@@ -72,7 +100,7 @@ func TestNewSession_ResolvesBuiltinPipelines(t *testing.T) {
 
 func TestSession_Engine_UnknownPipelineNameFailsWithClearError(t *testing.T) {
 	root := initGitRepo(t)
-	s, err := session.NewSession(context.Background(), root, newScriptedExecutorFactory(scriptedPatch))
+	s, err := session.NewSession(context.Background(), root, &bytes.Buffer{}, &bytes.Buffer{}, newScriptedExecutorFactory(scriptedPatch))
 	if err != nil {
 		t.Fatalf("NewSession failed: %v", err)
 	}
@@ -97,7 +125,7 @@ func TestSession_Engine_UnknownPipelineNameFailsWithClearError(t *testing.T) {
 // itself carries no state between calls.
 func TestSession_RunsDefaultAndReviewIndependentlyWithoutContamination(t *testing.T) {
 	root := initGitRepo(t)
-	s, err := session.NewSession(context.Background(), root, newScriptedExecutorFactory(scriptedPatch))
+	s, err := session.NewSession(context.Background(), root, &bytes.Buffer{}, &bytes.Buffer{}, newScriptedExecutorFactory(scriptedPatch))
 	if err != nil {
 		t.Fatalf("NewSession failed: %v", err)
 	}
