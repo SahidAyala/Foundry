@@ -10,6 +10,7 @@ import (
 	"foundry/cmd/foundry/commands"
 	"foundry/engine"
 	"foundry/executor/claude"
+	"foundry/session"
 )
 
 func main() {
@@ -26,8 +27,7 @@ func claudeExecutor(workspace string) engine.Executor {
 
 func run(args []string, stdin io.Reader, stdout io.Writer, newExecutor func(workspace string) engine.Executor) int {
 	if len(args) == 0 {
-		fmt.Fprint(stdout, usage())
-		return 2
+		return runSession(context.Background(), stdin, stdout, newExecutor)
 	}
 
 	switch args[0] {
@@ -45,6 +45,35 @@ func run(args []string, stdin io.Reader, stdout io.Writer, newExecutor func(work
 		fmt.Fprint(stdout, usage())
 		return 2
 	}
+}
+
+// runSession starts an interactive session rooted at the current
+// working directory — this is what `foundry` with no subcommand at all
+// now does, replacing the old "print usage, exit 2" behavior. The
+// one-shot do/log/show subcommands below remain available unchanged for
+// scripting and CI; the interactive session is additive, not a
+// replacement
+// (docs/01-rfcs/RFC-0003-interactive-assistant-and-multi-executor-pipelines.md
+// §3.1).
+func runSession(ctx context.Context, stdin io.Reader, stdout io.Writer, newExecutor func(workspace string) engine.Executor) int {
+	root, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintln(stdout, err)
+		return 1
+	}
+
+	s, err := session.NewSession(ctx, root, stdin, stdout, newExecutor)
+	if err != nil {
+		fmt.Fprintln(stdout, err)
+		return 1
+	}
+
+	repl := session.NewREPL(s, session.DefaultCommandRegistry())
+	if err := repl.Run(ctx); err != nil {
+		fmt.Fprintln(stdout, err)
+		return 1
+	}
+	return 0
 }
 
 // usage lists foundry's subcommands. Each subcommand's own --help gives
