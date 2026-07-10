@@ -52,6 +52,32 @@ Documentation is **single-source-of-truth**: every concept is defined once, in `
 4. [docs/05-reference/terminology.md](docs/05-reference/terminology.md) — the canonical vocabulary
 5. [docs/00-overview/roadmap.md](docs/00-overview/roadmap.md) — what is being built, and the open decisions that still need a human
 
+## Install
+
+**Requirements:** [Go](https://go.dev/dl/) 1.21+. `git` is also required for the one-line install below (not needed if you already have a local clone).
+
+### One-line install (no clone needed)
+
+```
+curl -fsSL https://raw.githubusercontent.com/SahidAyala/Foundry/main/install.sh | bash
+```
+
+This fetches the source into a temporary directory, builds it, and removes the temporary directory afterward — nothing but the `foundry` binary is left on your machine.
+
+### From a local clone
+
+```
+git clone git@github.com:SahidAyala/Foundry.git
+cd Foundry
+./install.sh
+```
+
+### What it does
+
+Either way, the binary is installed to `/usr/local/bin` (override with `FOUNDRY_INSTALL_DIR=<dir>`; `sudo` is only invoked if that directory isn't writable). If the install directory isn't already on your `PATH`, the script prints the line to add to your shell profile (`~/.zshrc`, `~/.bashrc`, ...).
+
+Once installed, run `foundry` from any directory to start an interactive session.
+
 ## Status
 
 **Implementation active.** Architecture direction is set; M0 backlog is finalized and executable. Several foundational decisions remain open (governance, the precise center of the domain, replay scope, knowledge migration, and more) and are listed honestly in [docs/00-overview/roadmap.md](docs/00-overview/roadmap.md). Only the language/toolchain decision is accepted ([docs/03-adrs/ADR-0001-language-and-toolchain.md](docs/03-adrs/ADR-0001-language-and-toolchain.md)).
