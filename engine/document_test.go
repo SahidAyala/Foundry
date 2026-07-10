@@ -126,18 +126,29 @@ func TestDecodePipelineDocument_NegativeMaxAttemptsFails(t *testing.T) {
 
 // TestDecodePipelineDocument_MatchesBuiltinDefault pins RFC-0002 §9 Phase
 // 3's compatibility requirement directly against the loader: decoding the
-// same document BuiltinProvider embeds must produce a Pipeline identical
-// to engine.DefaultPipeline(), byte for byte.
+// same document BuiltinProvider embeds for "default" must produce a
+// Pipeline identical to engine.DefaultPipeline(), byte for byte. It finds
+// "default" by name rather than assuming it is the only Pipeline
+// BuiltinProvider loads, so a later built-in Pipeline never breaks this
+// assertion about "default" specifically.
 func TestDecodePipelineDocument_MatchesBuiltinDefault(t *testing.T) {
 	pipelines, err := (engine.BuiltinProvider{}).Load(context.Background())
 	if err != nil {
 		t.Fatalf("BuiltinProvider.Load failed: %v", err)
 	}
-	if len(pipelines) != 1 {
-		t.Fatalf("BuiltinProvider.Load returned %d pipelines, want 1", len(pipelines))
+
+	var got engine.Pipeline
+	found := false
+	for _, p := range pipelines {
+		if p.Name == "default" {
+			got = p
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("BuiltinProvider.Load() = %+v, want it to include a Pipeline named %q", pipelines, "default")
 	}
 
-	got := pipelines[0]
 	want := engine.DefaultPipeline()
 	if got.Name != want.Name {
 		t.Errorf("Name = %q, want %q", got.Name, want.Name)
