@@ -92,6 +92,19 @@ func NewSession(ctx context.Context, root string, in io.Reader, out io.Writer, n
 	}, nil
 }
 
+// ReloadPipelines re-resolves the session's Pipeline registry from disk
+// — built-in plus project-local, via project.ProjectLoader — so a
+// command that changes what a project has authored (/init foremost)
+// takes effect immediately, without restarting the session.
+func (s *Session) ReloadPipelines(ctx context.Context) error {
+	registry, err := (project.ProjectLoader{}).LoadRegistry(ctx, s.Root)
+	if err != nil {
+		return fmt.Errorf("session: reload pipelines: %w", err)
+	}
+	s.registry = registry
+	return nil
+}
+
 // Recorder returns the session's Record, so a CommandHandler can read or
 // write Acts (e.g. a future /history or /show) without Session exposing
 // any other internals.
