@@ -31,6 +31,26 @@ func scriptedExecutor(workspace string) engine.Executor {
 	return executor.NewScriptedExecutor(foundryPatch)
 }
 
+// chdir changes the process's working directory to dir for the duration
+// of the test, restoring the original directory on cleanup. Written by
+// hand rather than using testing.T.Chdir (Go 1.24+) because this
+// module's go.mod declares go 1.21.
+func chdir(t *testing.T, dir string) {
+	t.Helper()
+	original, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd failed: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("os.Chdir(%q) failed: %v", dir, err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(original); err != nil {
+			t.Fatalf("restore os.Chdir(%q) failed: %v", original, err)
+		}
+	})
+}
+
 // initGitRepo creates a temporary git repository with one committed file.
 func initGitRepo(t *testing.T) string {
 	t.Helper()
@@ -186,15 +206,50 @@ func TestRun_LogHelp(t *testing.T) {
 	}
 }
 
-func TestRun_NoArgs(t *testing.T) {
+// TestRun_NoArgs_StartsInteractiveSession pins the product-shape change
+// docs/01-rfcs/RFC-0003-interactive-assistant-and-multi-executor-pipelines.md
+// proposes: `foundry` with no subcommand at all starts an interactive
+// session rooted at the current directory, instead of printing usage
+// and exiting 2. chdir is used (not --repo) because the interactive
+// surface has no --repo flag — the project is always the process's
+// working directory.
+func TestRun_NoArgs_StartsInteractiveSession(t *testing.T) {
+	repo := initGitRepo(t)
+	chdir(t, repo)
+
 	var out bytes.Buffer
-	if code := run(nil, strings.NewReader(""), &out, scriptedExecutor); code != 2 {
-		t.Errorf("run(nil) exit code = %d, want 2", code)
+	code := run(nil, strings.NewReader("/exit\n"), &out, scriptedExecutor)
+	if code != 0 {
+		t.Fatalf("run(nil) exit code = %d, want 0; output:\n%s", code, out.String())
 	}
-	for _, want := range []string{"Usage: foundry <command>", "do ", "log ", "show "} {
-		if !strings.Contains(out.String(), want) {
-			t.Errorf("no-args output missing %q, got:\n%s", want, out.String())
-		}
+	if !strings.Contains(out.String(), "interactive session") {
+		t.Errorf("output missing the session banner, got:\n%s", out.String())
+	}
+}
+
+// TestRun_NoArgs_InitThenFeature exercises the full command wiring for
+// the interactive path the way TestRun_Do_ApprovedAppliesAndRecords
+// already does for the one-shot `do` subcommand: /init scaffolds the
+// project, /feature runs a Pipeline through to approval and recording,
+// /exit ends the session.
+func TestRun_NoArgs_InitThenFeature(t *testing.T) {
+	t.Setenv("USER", "tester")
+	repo := initGitRepo(t)
+	chdir(t, repo)
+
+	var out bytes.Buffer
+	code := run(nil, strings.NewReader("/init\n/feature add x\ny\n/exit\n"), &out, scriptedExecutor)
+	if code != 0 {
+		t.Fatalf("run(nil) exit code = %d, want 0; output:\n%s", code, out.String())
+	}
+	if !strings.Contains(out.String(), "Applied and recorded") {
+		t.Errorf("output missing confirmation, got:\n%s", out.String())
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".foundry", "pipelines", "feature.json")); err != nil {
+		t.Errorf("/init did not scaffold feature.json: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(repo, "FOUNDRY.md")); err != nil {
+		t.Errorf("/feature did not apply the patch to the repo: %v", err)
 	}
 }
 
