@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 
 	"foundry/cli"
@@ -43,7 +42,7 @@ func Do(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, n
 		return 1
 	}
 
-	gate, err := verify.NewGate("all-pass", projectValidators(repoPath)...)
+	gate, err := verify.NewGate("all-pass", verify.DefaultValidators(repoPath)...)
 	if err != nil {
 		fmt.Fprintln(stdout, err)
 		return 1
@@ -72,19 +71,4 @@ func Do(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, n
 		return 1
 	}
 	return 0
-}
-
-// projectValidators picks the checks the Gate runs against the staged,
-// patched repository. A Go module gets its real build and tests; anything
-// else falls back to a repository sanity check. PIC-1 replaces this
-// detection with pinned, project-specific commands once budgets and
-// configuration exist.
-func projectValidators(repoPath string) []*verify.Validator {
-	if _, err := os.Stat(filepath.Join(repoPath, "go.mod")); err == nil {
-		return []*verify.Validator{
-			{Name: "go-build", Cmd: "go build ./..."},
-			{Name: "go-test", Cmd: "go test ./..."},
-		}
-	}
-	return []*verify.Validator{{Name: "repo-sanity", Cmd: "git rev-parse HEAD"}}
 }
