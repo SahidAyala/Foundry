@@ -1,6 +1,7 @@
 package cli_test
 
 import (
+	"bufio"
 	"bytes"
 	"strings"
 	"testing"
@@ -63,6 +64,30 @@ func TestPromptForApproval_EmptyDeclines(t *testing.T) {
 	}
 	if approved {
 		t.Error("approved = true for empty input, want false")
+	}
+}
+
+// TestPromptForApproval_SharedBufioReaderSurvivesMultipleCalls proves a
+// caller that owns one *bufio.Reader for a whole session — an
+// interactive shell issuing more than one approval prompt over the same
+// stdin — gets every decision, not just the first: passing a raw
+// io.Reader would have bufio.NewReader greedily drain everything
+// available on the first call, silently discarding every byte after the
+// first line (see the doc comment on PromptForApproval).
+func TestPromptForApproval_SharedBufioReaderSurvivesMultipleCalls(t *testing.T) {
+	t.Setenv("USER", "alice")
+	shared := bufio.NewReader(strings.NewReader("y\nn\ny\n"))
+	act := &domain.Act{Patch: "p", JudgmentVerdict: "pass"}
+
+	wantApproved := []bool{true, false, true}
+	for i, want := range wantApproved {
+		_, approved, err := cli.PromptForApproval(shared, &bytes.Buffer{}, act)
+		if err != nil {
+			t.Fatalf("call %d: PromptForApproval failed: %v", i, err)
+		}
+		if approved != want {
+			t.Errorf("call %d: approved = %v, want %v", i, approved, want)
+		}
 	}
 }
 
