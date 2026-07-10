@@ -21,8 +21,9 @@ Each owns one or more **compatibility surfaces** (expensive to change after rele
 | Routing & policy | Placement policy and failover over capabilities | Provider independence |
 | Knowledge & semantic store | Knowledge persistence; **Authored-knowledge format stability & migration** | The durability/portability promise (V4) |
 | Extension isolation & contract versioning | The isolation mechanism (deliberately undecided today) and port versioning | Third-party safety & ecosystem |
-| CLI & output contract | The command/flag/output stability policy | Anything scripting Foundry or invoking it in CI |
-| Cost as a first-class constraint | How cost is bounded and weighed | Economic viability |
+| CLI & output contract | The command/flag/output stability policy; now also whether the primary interface is flag-based or an interactive session ([RFC-0003](../01-rfcs/RFC-0003-interactive-assistant-and-multi-executor-pipelines.md)) | Anything scripting Foundry or invoking it in CI |
+| VCS/PR integration & Apply targets | Whether `Apply` may target a remote pull request, not only a local branch; the Authority/accountability model once a commit + PR can happen without a second human review point | The `Apply` trust boundary (I4/I5) the moment Foundry's first action leaves the developer's machine |
+| Cost as a first-class constraint | How cost is bounded and weighed; a multi-Executor Pipeline (Router, RFC-0002 Phase 6+) multiplies per-Act cost and is not yet reflected in Budget's per-attempt-flat charging | Economic viability |
 
 ## Status definitions
 
@@ -30,6 +31,6 @@ Each owns one or more **compatibility surfaces** (expensive to change after rele
 - **Proposed/Backlog** — identified as needed; not yet written or ratified; must not be treated as decided.
 - **Superseded / Rejected** — moved to [../archive/](../archive/); not canonical.
 
-> The backlog above was harvested from a now-archived pre-implementation review ([../archive/reviews/pre-implementation-adr-gate.md](../archive/reviews/pre-implementation-adr-gate.md)) and a freeze review ([../archive/reviews/architecture-freeze-review.md](../archive/reviews/architecture-freeze-review.md)). Those reviews are historical; this index is the canonical statement of what remains to be decided.
+> The backlog above was harvested from a now-archived pre-implementation review ([../archive/reviews/pre-implementation-adr-gate.md](../archive/reviews/pre-implementation-adr-gate.md)) and a freeze review ([../archive/reviews/architecture-freeze-review.md](../archive/reviews/architecture-freeze-review.md)), with one later addition — "VCS/PR integration & Apply targets" — surfaced by [RFC-0003](../01-rfcs/RFC-0003-interactive-assistant-and-multi-executor-pipelines.md) §4.1/§6, not those reviews. Those reviews are historical; this index is the canonical statement of what remains to be decided.
 >
 > **No decisions may be formally ratified until a governance process exists** (see [../00-overview/roadmap.md](../00-overview/roadmap.md), open decision 1).
