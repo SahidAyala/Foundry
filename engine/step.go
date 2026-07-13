@@ -12,22 +12,26 @@ type Step struct {
 	Kind string
 }
 
-// RepairPolicy bounds how many times a Pipeline may be re-run, from its
-// first Step, after its final verify Step's Judgment is "fail". Each re-run
-// is fed the failing Judgment's findings as additional Context. This is
-// today's single bounded repair round (docs/04-guides/M0-IMPLEMENTATION-BACKLOG.md
-// PR-011), expressed as data a Strategy interprets instead of a bespoke Go
-// function.
+// RepairPolicy bounds how many times a Pipeline may be re-run after its
+// final verify Step's Judgment is "fail", and names where each re-run jumps
+// back to. Each re-run is fed the failing Judgment's findings as additional
+// Context. This is today's single bounded repair round
+// (docs/04-guides/M0-IMPLEMENTATION-BACKLOG.md PR-011), expressed as data a
+// Strategy interprets instead of a bespoke Go function.
 //
 // RFC-0002 §4.2 describes a Pipeline's full shape as "an ordered list of
-// Steps plus named backward repair edges." RepairPolicy does not yet name
-// a repair target Step because no Pipeline this build ships needs one:
-// with only Generate and Verify Steps, "restart from the top" and "jump to
-// the named first Step" are the same behavior. A named target belongs here
-// once a Pipeline has more than one plausible repair destination — which
-// arrives with Approve/Apply Steps (RFC-0002 §9 Phase 4), not before.
+// Steps plus named backward repair edges" and §4.3 calls the destination "a
+// named earlier Step." Target is that name.
 type RepairPolicy struct {
 	MaxAttempts int
+
+	// Target is the ID of the Step a repair round jumps back to, re-running
+	// every Step from Target onward (not the whole Pipeline) with the
+	// failing Judgment's findings added to Context. Empty means "restart
+	// from Pipeline.Steps[0]" — the only behavior that existed before this
+	// field did, preserved as the zero value so every Pipeline document
+	// that predates Target keeps its exact current behavior.
+	Target string
 }
 
 // Pipeline is an ordered sequence of Steps a Strategy executes to produce

@@ -24,14 +24,18 @@ type Act struct {
 	Steps           []StepRecord `json:"steps,omitempty"`
 }
 
-// Step kinds a StepRecord may carry today. The full vocabulary proposed in
-// docs/01-rfcs/RFC-0002-pipeline-execution-runtime.md §4.2 also includes
-// "approve", "apply", and "record"; those happen above the Engine (in the
-// CLI) and are added to this set only once that part of the trace is wired
-// up (RFC-0002 §9 Phase 4), not before.
+// Step kinds a StepRecord may carry. RFC-0002 §4.2 closes this vocabulary at
+// five: Generate and Verify are executed by PipelineStrategy today; Approve,
+// Apply, and Record decode and validate (engine/document.go) but are not yet
+// executed by PipelineStrategy — that lands with RFC-0002 §9 Phase 4, which
+// moves approval, applying, and recording out of the CLI and into declared
+// Steps.
 const (
 	StepKindGenerate = "generate"
 	StepKindVerify   = "verify"
+	StepKindApprove  = "approve"
+	StepKindApply    = "apply"
+	StepKindRecord   = "record"
 )
 
 // StepRecord is one recorded attempt at a unit of work within an Act's

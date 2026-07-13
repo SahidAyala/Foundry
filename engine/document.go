@@ -39,22 +39,26 @@ type StepDocument struct {
 }
 
 // RepairPolicyDocument is a Pipeline's declarative repair bound. A document
-// that omits "repair" decodes to the zero value (MaxAttempts: 0 — no
-// repair), matching RepairPolicy's own zero-value default.
+// that omits "repair" decodes to the zero value (MaxAttempts: 0, Target: ""
+// — no repair, restart from the top), matching RepairPolicy's own zero-value
+// default.
 type RepairPolicyDocument struct {
-	MaxAttempts int `json:"max_attempts"`
+	MaxAttempts int    `json:"max_attempts"`
+	Target      string `json:"target"`
 }
 
 // DecodePipelineDocument parses data as a PipelineDocument and translates
 // it into an engine.Pipeline. It is the loader RFC-0002 §9 Phase 3 calls
 // for: the one place a declarative document becomes the data
 // PipelineStrategy walks. Decode validates the document's own shape —
-// required fields present, each Step's Kind one of the closed set
-// PipelineStrategy recognizes (domain.StepKindGenerate,
-// domain.StepKindVerify), RepairPolicy.MaxAttempts non-negative — and
-// returns a clear, named error for the first violation found, rather than
-// handing PipelineStrategy a Pipeline it would only fail on much later, at
-// execution time.
+// required fields present, each Step's Kind one of RFC-0002 §4.2's closed
+// five-kind vocabulary (domain.StepKindGenerate, domain.StepKindVerify,
+// domain.StepKindApprove, domain.StepKindApply, domain.StepKindRecord),
+// RepairPolicy.MaxAttempts non-negative, and a non-empty
+// RepairPolicy.Target naming a Step ID declared somewhere in the same
+// document — and returns a clear, named error for the first violation
+// found, rather than handing PipelineStrategy a Pipeline it would only fail
+// on much later, at execution time.
 func DecodePipelineDocument(data []byte) (Pipeline, error) {
 	var doc PipelineDocument
 	if err := json.Unmarshal(data, &doc); err != nil {
@@ -77,16 +81,21 @@ func (doc PipelineDocument) toPipeline() (Pipeline, error) {
 	}
 
 	steps := make([]Step, len(doc.Steps))
+	ids := make(map[string]bool, len(doc.Steps))
 	for i, s := range doc.Steps {
 		if s.ID == "" {
 			return Pipeline{}, fmt.Errorf("engine: pipeline document %q: step %d: id is required", doc.Name, i)
 		}
 		switch s.Kind {
-		case domain.StepKindGenerate, domain.StepKindVerify:
+		case domain.StepKindGenerate, domain.StepKindVerify, domain.StepKindApprove, domain.StepKindApply, domain.StepKindRecord:
 		default:
 			return Pipeline{}, fmt.Errorf("engine: pipeline document %q: step %q: unrecognized kind %q", doc.Name, s.ID, s.Kind)
 		}
 		steps[i] = Step{ID: s.ID, Kind: s.Kind}
+		ids[s.ID] = true
+	}
+	if doc.Repair.Target != "" && !ids[doc.Repair.Target] {
+		return Pipeline{}, fmt.Errorf("engine: pipeline document %q: repair.target %q does not name any declared step", doc.Name, doc.Repair.Target)
 	}
 
 	return Pipeline{
@@ -94,6 +103,7 @@ func (doc PipelineDocument) toPipeline() (Pipeline, error) {
 		Steps: steps,
 		Repair: RepairPolicy{
 			MaxAttempts: doc.Repair.MaxAttempts,
+			Target:      doc.Repair.Target,
 		},
 	}, nil
 }

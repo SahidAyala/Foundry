@@ -29,11 +29,14 @@ type Strategy interface {
 // call, the workspace to verify against, the Reporter to narrate progress,
 // and the Budget tracker enforcing this Act's ceiling.
 type runContext struct {
-	executor  Executor
-	verifier  Verifier
-	workspace string
-	reporter  Reporter
-	spent     *tracker
+	executor     Executor
+	verifier     Verifier
+	workspace    string
+	reporter     Reporter
+	authority    Authority
+	applier      Applier
+	checkpointer Checkpointer
+	spent        *tracker
 }
 
 // PipelineStrategy produces an Act by walking a Pipeline's Steps in order,
@@ -49,10 +52,14 @@ var _ Strategy = PipelineStrategy{}
 
 // Produce runs s.Pipeline's Steps against act, attempting a repair re-run
 // (bounded by s.Pipeline.Repair.MaxAttempts) whenever a verify Step's
-// Judgment is "fail". A Budget refusal on the first attempt halts: act is
-// marked VerdictBudgetExceeded and the refusal is returned as an error
-// wrapping ErrBudgetExceeded. A Budget refusal on a repair attempt is not
-// an error — the prior attempt's Judgment stands as final.
+// Judgment is "fail". A repair re-run jumps to s.Pipeline.Repair.Target
+// (RFC-0002 §4.3's "named earlier Step") and replays only that Step onward,
+// not the whole Pipeline; an unset Target replays from Pipeline.Steps[0], as
+// every Pipeline did before Target existed. A Budget refusal on the first
+// attempt halts: act is marked VerdictBudgetExceeded and the refusal is
+// returned as an error wrapping ErrBudgetExceeded. A Budget refusal on a
+// repair attempt is not an error — the prior attempt's Judgment stands as
+// final.
 //
 // Produce executes s.Pipeline purely from its Steps and RepairPolicy — any
 // well-formed sequence of generate/verify Steps runs unmodified, with no
@@ -64,6 +71,20 @@ var _ Strategy = PipelineStrategy{}
 // Pipeline violates any of these (docs/01-rfcs/RFC-0002-pipeline-execution-runtime.md
 // §5: Step kinds are "a closed set, extensible only by adding a new kind
 // deliberately, not by the Pipeline document inventing arbitrary behavior").
+// An approve Step calls rc.authority.Decide: on acceptance, act.ApprovedBy/
+// ApprovedAt are set and the Pipeline continues; on rejection, Produce stops
+// immediately with act.JudgmentVerdict set to VerdictRejected — no further
+// Step runs, and no repair is attempted, since a human decision is not
+// something a bounded repair round can fix. An apply Step calls
+// rc.applier.Apply, but only once act.ApprovedBy/ApprovedAt are set by a
+// preceding approve Step — a Pipeline that reaches apply without one
+// declared and accepted is a configuration error, not a silently applied
+// unapproved Outcome. A record Step calls rc.checkpointer.Write to persist
+// act as it stands so far — RFC-0002 §9 Phase 4's last piece. Whenever the
+// most recent Verify Step's Judgment is "fail", the current attempt stops
+// before any approve/apply/record Step (stopsShortOnFailure) — a failing
+// Outcome is never presented for approval, applied, or recorded, whether or
+// not this attempt goes on to repair.
 func (s PipelineStrategy) Produce(ctx context.Context, act *domain.Act, intent *domain.Intent, considered []string, rc runContext) error {
 	var outcome *domain.Outcome
 	var judgment *domain.Judgment
@@ -81,14 +102,22 @@ func (s PipelineStrategy) Produce(ctx context.Context, act *domain.Act, intent *
 			break
 		}
 
+		steps := s.Pipeline.Steps
 		if attempt > 0 {
 			repaired := make([]string, 0, len(considered)+1)
 			repaired = append(repaired, considered...)
 			repaired = append(repaired, repairContext(judgment))
 			considered = repaired
+
+			if idx, ok := stepIndex(s.Pipeline.Steps, s.Pipeline.Repair.Target); ok {
+				steps = s.Pipeline.Steps[idx:]
+			}
 		}
 
-		for _, step := range s.Pipeline.Steps {
+		for _, step := range steps {
+			if judgment != nil && judgment.Verdict == verdictFail && stopsShortOnFailure(step.Kind) {
+				break
+			}
 			switch step.Kind {
 			case domain.StepKindGenerate:
 				rc.reporter.Executing(rc.spent.iterations)
@@ -102,7 +131,7 @@ func (s PipelineStrategy) Produce(ctx context.Context, act *domain.Act, intent *
 				act.Iterations = rc.spent.iterations
 				act.CostEstimateUSD = rc.spent.costUSD
 				act.ConsideredFiles = considered
-				recordStep(act, domain.StepKindGenerate, considered, producedPatch(outcome), nil, "", start)
+				recordStep(act, domain.StepKindGenerate, considered, producedPatch(outcome), nil, "", "", start)
 
 			case domain.StepKindVerify:
 				if outcome == nil {
@@ -116,7 +145,46 @@ func (s PipelineStrategy) Produce(ctx context.Context, act *domain.Act, intent *
 				}
 				judgment = j
 				rc.reporter.Verified(rc.spent.iterations, judgment)
-				recordStep(act, domain.StepKindVerify, nil, nil, judgment.Checked, judgment.Verdict, start)
+				recordStep(act, domain.StepKindVerify, nil, nil, judgment.Checked, judgment.Verdict, "", start)
+
+			case domain.StepKindApprove:
+				if outcome == nil {
+					return fmt.Errorf("engine: pipeline %q step %q: approve has no Outcome to review — no generate step ran before it", s.Pipeline.Name, step.ID)
+				}
+				start := time.Now()
+				authority, approved, err := rc.authority.Decide(ctx, act)
+				if err != nil {
+					return wrapStepError(attempt, "approve", err)
+				}
+				if !approved {
+					recordStep(act, domain.StepKindApprove, nil, nil, nil, stepVerdictReject, "", start)
+					act.JudgmentVerdict = VerdictRejected
+					if judgment != nil {
+						act.CheckedFindings = judgment.Checked
+					}
+					return nil
+				}
+				now := time.Now()
+				act.ApprovedBy = authority
+				act.ApprovedAt = &now
+				recordStep(act, domain.StepKindApprove, nil, nil, nil, stepVerdictAccept, authority, start)
+
+			case domain.StepKindApply:
+				if act.ApprovedAt == nil {
+					return fmt.Errorf("engine: pipeline %q step %q: apply requires an accepted approve step first", s.Pipeline.Name, step.ID)
+				}
+				start := time.Now()
+				if err := rc.applier.Apply(ctx, rc.workspace, act); err != nil {
+					return wrapStepError(attempt, "apply", err)
+				}
+				recordStep(act, domain.StepKindApply, nil, producedPatch(outcome), nil, "", "", start)
+
+			case domain.StepKindRecord:
+				start := time.Now()
+				if err := rc.checkpointer.Write(ctx, act); err != nil {
+					return wrapStepError(attempt, "record", err)
+				}
+				recordStep(act, domain.StepKindRecord, nil, nil, nil, "", "", start)
 
 			default:
 				return fmt.Errorf("engine: pipeline %q step %q: unrecognized step kind %q", s.Pipeline.Name, step.ID, step.Kind)
@@ -135,6 +203,39 @@ func (s PipelineStrategy) Produce(ctx context.Context, act *domain.Act, intent *
 	act.JudgmentVerdict = judgment.Verdict
 	act.CheckedFindings = judgment.Checked
 	return nil
+}
+
+// stopsShortOnFailure reports whether kind is a trust-boundary Step
+// (approve, apply, record) that must never run against a failing Judgment.
+// Generate and Verify Steps always run regardless of an earlier Judgment —
+// review.json's independent, sequential verify Steps rely on exactly that
+// — but a Pipeline must never seek approval for, apply, or record an
+// Outcome its own most recent Verify Step just rejected. Reaching one after
+// a "fail" ends the attempt early; the outer repair-or-finalize decision in
+// Produce is unaffected by whether the loop ran every Step or stopped short.
+func stopsShortOnFailure(kind string) bool {
+	switch kind {
+	case domain.StepKindApprove, domain.StepKindApply, domain.StepKindRecord:
+		return true
+	default:
+		return false
+	}
+}
+
+// stepIndex returns the index of the first Step in steps whose ID is id,
+// and whether one was found. An empty id never matches, so an unset
+// RepairPolicy.Target falls through to Produce's "restart from the top"
+// default rather than needing its own special case at the call site.
+func stepIndex(steps []Step, id string) (int, bool) {
+	if id == "" {
+		return 0, false
+	}
+	for i, step := range steps {
+		if step.ID == id {
+			return i, true
+		}
+	}
+	return 0, false
 }
 
 // wrapStepError renders a Step failure, prefixing it as a repair failure
