@@ -111,6 +111,72 @@ func TestDecodePipelineDocument_UnrecognizedStepKindFails(t *testing.T) {
 	}
 }
 
+func TestDecodePipelineDocument_ApproveApplyRecordKindsDecode(t *testing.T) {
+	data := []byte(`{
+		"name": "rich",
+		"steps": [
+			{"id": "generate", "kind": "generate"},
+			{"id": "approve", "kind": "approve"},
+			{"id": "verify", "kind": "verify"},
+			{"id": "apply", "kind": "apply"},
+			{"id": "record", "kind": "record"}
+		]
+	}`)
+
+	got, err := engine.DecodePipelineDocument(data)
+	if err != nil {
+		t.Fatalf("DecodePipelineDocument failed: %v", err)
+	}
+	wantKinds := []string{
+		domain.StepKindGenerate, domain.StepKindApprove, domain.StepKindVerify,
+		domain.StepKindApply, domain.StepKindRecord,
+	}
+	if len(got.Steps) != len(wantKinds) {
+		t.Fatalf("Steps = %+v, want %d entries", got.Steps, len(wantKinds))
+	}
+	for i, want := range wantKinds {
+		if got.Steps[i].Kind != want {
+			t.Errorf("Steps[%d].Kind = %q, want %q", i, got.Steps[i].Kind, want)
+		}
+	}
+}
+
+func TestDecodePipelineDocument_RepairTargetNamingDeclaredStepDecodes(t *testing.T) {
+	data := []byte(`{
+		"name": "feature",
+		"steps": [
+			{"id": "plan", "kind": "generate"},
+			{"id": "implement", "kind": "generate"},
+			{"id": "verify", "kind": "verify"}
+		],
+		"repair": {"max_attempts": 1, "target": "implement"}
+	}`)
+
+	got, err := engine.DecodePipelineDocument(data)
+	if err != nil {
+		t.Fatalf("DecodePipelineDocument failed: %v", err)
+	}
+	if got.Repair.Target != "implement" {
+		t.Errorf("Repair.Target = %q, want %q", got.Repair.Target, "implement")
+	}
+}
+
+func TestDecodePipelineDocument_RepairTargetNamingUndeclaredStepFails(t *testing.T) {
+	data := []byte(`{
+		"name": "bad",
+		"steps": [{"id": "generate", "kind": "generate"}],
+		"repair": {"max_attempts": 1, "target": "nonexistent"}
+	}`)
+
+	_, err := engine.DecodePipelineDocument(data)
+	if err == nil {
+		t.Fatal("DecodePipelineDocument with repair.target naming an undeclared step returned nil error")
+	}
+	if !strings.Contains(err.Error(), "nonexistent") {
+		t.Errorf("error = %q, want it to name the undeclared target %q", err.Error(), "nonexistent")
+	}
+}
+
 func TestDecodePipelineDocument_NegativeMaxAttemptsFails(t *testing.T) {
 	data := []byte(`{
 		"name": "bad",
