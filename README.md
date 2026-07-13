@@ -28,7 +28,7 @@ docs/
   01-rfcs/           foundational decisions & reasoning
   02-architecture/   domain · execution · knowledge · trust · extensibility · system-context
   03-adrs/           accepted decisions (+ the backlog of open ones)
-  04-guides/         contributing · development · documentation · release
+  04-guides/         contributing · development · documentation · pipelines · release
   05-reference/      terminology (canonical) · concepts (+ maturity index) · invariants
   06-open-questions/ unresolved architecture — NON-CANONICAL deliberation
   archive/           historical only — obsolete docs, reviews, rejected RFCs
