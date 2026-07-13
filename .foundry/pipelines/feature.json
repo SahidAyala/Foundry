@@ -1,0 +1,16 @@
+{
+  "name": "feature",
+  "steps": [
+    { "id": "plan", "kind": "generate" },
+    { "id": "approve-plan", "kind": "approve" },
+    { "id": "implement", "kind": "generate" },
+    { "id": "verify", "kind": "verify" },
+    { "id": "approve-outcome", "kind": "approve" },
+    { "id": "apply", "kind": "apply" },
+    { "id": "record", "kind": "record" }
+  ],
+  "repair": {
+    "max_attempts": 2,
+    "target": "implement"
+  }
+}
