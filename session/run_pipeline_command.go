@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"foundry/cli"
+	"foundry/workspace"
 )
 
 // RunPipelineCommand is the one CommandHandler backing every slash
@@ -40,6 +41,9 @@ func (cmd RunPipelineCommand) Run(ctx context.Context, s *Session, args string) 
 		return err
 	}
 	eng.SetReporter(cli.NewProgressReporter(s.Out))
+	eng.SetAuthority(cli.InteractiveAuthority{In: s.In, Out: s.Out})
+	eng.SetApplier(workspace.GitApplier{})
+	eng.SetCheckpointer(s.Recorder())
 
 	c := cli.NewCLI(eng, s.Recorder(), s.In, s.Out)
 	return c.Do(ctx, args, s.Root)

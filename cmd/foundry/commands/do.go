@@ -64,6 +64,9 @@ func Do(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, n
 
 	eng := engine.NewEngine(gatherer.NewNaiveGatherer(repoPath), newExecutor(repoPath), verifier, repoPath, pipeline)
 	eng.SetReporter(cli.NewProgressReporter(stdout))
+	eng.SetAuthority(cli.InteractiveAuthority{In: stdin, Out: stdout})
+	eng.SetApplier(workspace.GitApplier{})
+	eng.SetCheckpointer(store)
 	c := cli.NewCLI(eng, store, stdin, stdout)
 
 	if err := c.Do(ctx, intent, repoPath); err != nil {
