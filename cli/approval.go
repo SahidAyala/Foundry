@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"strings"
 
 	"foundry/domain"
+	"foundry/engine"
 )
 
 // PromptForApproval shows act's proposed patch and machine verdict on out,
@@ -51,6 +53,22 @@ func PromptForApproval(in io.Reader, out io.Writer, act *domain.Act) (authority 
 		return "", false, nil
 	}
 }
+
+// InteractiveAuthority implements engine.Authority by prompting a human on
+// Out and reading their decision from In — the same PromptForApproval CLI.Do
+// already used after Engine.Run returned, now callable from inside a
+// Pipeline run so an approve Step can seek approval mid-run instead of only
+// at the very end (RFC-0002 §9 Phase 4).
+type InteractiveAuthority struct {
+	In  io.Reader
+	Out io.Writer
+}
+
+func (a InteractiveAuthority) Decide(ctx context.Context, act *domain.Act) (string, bool, error) {
+	return PromptForApproval(a.In, a.Out, act)
+}
+
+var _ engine.Authority = InteractiveAuthority{}
 
 // currentUser identifies the accountable Authority: the USER environment
 // variable, falling back to the `whoami` command.

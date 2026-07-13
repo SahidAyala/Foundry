@@ -17,6 +17,7 @@ import (
 	"foundry/executor"
 	"foundry/record"
 	"foundry/verify"
+	"foundry/workspace"
 )
 
 type emptyGatherer struct{}
@@ -231,6 +232,233 @@ func TestCLI_Do_ShowsPatchAndVerdict(t *testing.T) {
 		if !strings.Contains(output, want) {
 			t.Errorf("output missing %q, got:\n%s", want, output)
 		}
+	}
+}
+
+// stubAuthority returns a canned decision without ever touching In/Out —
+// used to prove CLI.Do never falls back to its own prompt once a
+// Pipeline's own approve Step has already decided.
+type stubAuthority struct {
+	authority string
+	approved  bool
+}
+
+func (a stubAuthority) Decide(ctx context.Context, act *domain.Act) (string, bool, error) {
+	return a.authority, a.approved, nil
+}
+
+// newCLIWithApprovePipeline wires a CLI over a Pipeline that declares its
+// own approve Step (generate → verify → approve), decided by authority
+// before Do ever runs. It hands Do an empty stdin: if Do fell back to its
+// own PromptForApproval anyway, reading that empty stream would hit EOF and
+// silently decline, which the tests below would catch as a failure.
+func newCLIWithApprovePipeline(t *testing.T, repoPath, patch, validatorCmd string, authority stubAuthority, out *bytes.Buffer) (*cli.CLI, *record.FileStore) {
+	t.Helper()
+
+	store, err := record.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("record.NewFileStore failed: %v", err)
+	}
+	gate, err := verify.NewGate("all-pass", &verify.Validator{Name: "check", Cmd: validatorCmd})
+	if err != nil {
+		t.Fatalf("verify.NewGate failed: %v", err)
+	}
+	pipeline := engine.Pipeline{
+		Name: "feature",
+		Steps: []engine.Step{
+			{ID: "generate", Kind: domain.StepKindGenerate},
+			{ID: "verify", Kind: domain.StepKindVerify},
+			{ID: "approve", Kind: domain.StepKindApprove},
+		},
+	}
+	eng := engine.NewEngine(emptyGatherer{}, executor.NewScriptedExecutor(patch), gate, repoPath, pipeline)
+	eng.SetAuthority(authority)
+	return cli.NewCLI(eng, store, strings.NewReader(""), out), store
+}
+
+func TestCLI_Do_PipelineApprovedNeverPrompts(t *testing.T) {
+	repo := initGitRepo(t)
+
+	var out bytes.Buffer
+	c, store := newCLIWithApprovePipeline(t, repo, newFilePatch("APPLIED.md"), "exit 0",
+		stubAuthority{authority: "policy-bot", approved: true}, &out)
+
+	if err := c.Do(context.Background(), "add a feature", repo); err != nil {
+		t.Fatalf("Do failed: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(repo, "APPLIED.md")); err != nil {
+		t.Errorf("patch was not applied to the repo: %v", err)
+	}
+	acts, err := store.List(context.Background())
+	if err != nil {
+		t.Fatalf("store.List failed: %v", err)
+	}
+	if len(acts) != 1 {
+		t.Fatalf("store has %d acts, want 1", len(acts))
+	}
+	if acts[0].ApprovedBy != "policy-bot" {
+		t.Errorf("recorded ApprovedBy = %q, want %q", acts[0].ApprovedBy, "policy-bot")
+	}
+	if strings.Contains(out.String(), "Approve and apply?") {
+		t.Errorf("Do prompted for approval even though the Pipeline's own approve Step already decided, got:\n%s", out.String())
+	}
+}
+
+func TestCLI_Do_PipelineRejectedNeverPromptsAndAppliesNothing(t *testing.T) {
+	repo := initGitRepo(t)
+
+	var out bytes.Buffer
+	c, store := newCLIWithApprovePipeline(t, repo, newFilePatch("APPLIED.md"), "exit 0",
+		stubAuthority{approved: false}, &out)
+
+	if err := c.Do(context.Background(), "add a feature", repo); err != nil {
+		t.Fatalf("Do failed: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(repo, "APPLIED.md")); !os.IsNotExist(err) {
+		t.Error("rejected Act applied its patch to the repo")
+	}
+	acts, err := store.List(context.Background())
+	if err != nil {
+		t.Fatalf("store.List failed: %v", err)
+	}
+	if len(acts) != 0 {
+		t.Errorf("rejected Act was recorded (%d acts), want 0", len(acts))
+	}
+	if !strings.Contains(out.String(), "Declined") {
+		t.Errorf("output missing decline message, got:\n%s", out.String())
+	}
+	if strings.Contains(out.String(), "Approve and apply?") {
+		t.Errorf("Do prompted for approval even though the Pipeline's own approve Step already decided, got:\n%s", out.String())
+	}
+}
+
+// newCLIWithApplyPipeline is newCLIWithApprovePipeline plus an apply Step,
+// wired to the real workspace.GitApplier — proving the Step actually
+// mutates repoPath, not a fake standing in for it.
+func newCLIWithApplyPipeline(t *testing.T, repoPath, patch, validatorCmd string, authority stubAuthority, out *bytes.Buffer) (*cli.CLI, *record.FileStore) {
+	t.Helper()
+
+	store, err := record.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("record.NewFileStore failed: %v", err)
+	}
+	gate, err := verify.NewGate("all-pass", &verify.Validator{Name: "check", Cmd: validatorCmd})
+	if err != nil {
+		t.Fatalf("verify.NewGate failed: %v", err)
+	}
+	pipeline := engine.Pipeline{
+		Name: "feature",
+		Steps: []engine.Step{
+			{ID: "generate", Kind: domain.StepKindGenerate},
+			{ID: "verify", Kind: domain.StepKindVerify},
+			{ID: "approve", Kind: domain.StepKindApprove},
+			{ID: "apply", Kind: domain.StepKindApply},
+		},
+	}
+	eng := engine.NewEngine(emptyGatherer{}, executor.NewScriptedExecutor(patch), gate, repoPath, pipeline)
+	eng.SetAuthority(authority)
+	eng.SetApplier(workspace.GitApplier{})
+	return cli.NewCLI(eng, store, strings.NewReader(""), out), store
+}
+
+// TestCLI_Do_PipelineAppliedInsideEngineIsNotAppliedAgain verifies a
+// Pipeline whose own apply Step already applied the patch (via
+// workspace.GitApplier) is never re-applied by Do itself — a double-apply
+// would fail outright (git apply refuses an already-applied patch), so this
+// test would surface that as a Do error, not silently pass.
+func TestCLI_Do_PipelineAppliedInsideEngineIsNotAppliedAgain(t *testing.T) {
+	repo := initGitRepo(t)
+
+	var out bytes.Buffer
+	c, store := newCLIWithApplyPipeline(t, repo, newFilePatch("APPLIED.md"), "exit 0",
+		stubAuthority{authority: "policy-bot", approved: true}, &out)
+
+	if err := c.Do(context.Background(), "add a feature", repo); err != nil {
+		t.Fatalf("Do failed: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(repo, "APPLIED.md")); err != nil {
+		t.Errorf("patch was not applied to the repo: %v", err)
+	}
+	acts, err := store.List(context.Background())
+	if err != nil {
+		t.Fatalf("store.List failed: %v", err)
+	}
+	if len(acts) != 1 {
+		t.Fatalf("store has %d acts, want 1", len(acts))
+	}
+
+	// A successfully applied Act must never leave the developer's repo on a
+	// throwaway branch, nor leave that branch lying around.
+	branch := gitOutput(t, repo, "rev-parse", "--abbrev-ref", "HEAD")
+	if branch != "main" {
+		t.Errorf("repo left on branch %q, want %q", branch, "main")
+	}
+	if list := gitOutput(t, repo, "branch", "--list", "foundry/act-*"); list != "" {
+		t.Errorf("throwaway branch left behind: %q", list)
+	}
+}
+
+// newCLIWithRecordPipeline is newCLIWithApplyPipeline plus a record Step,
+// wired to the same *record.FileStore Do itself uses as its Recorder.
+// record.FileStore.Write is write-once (record.ErrAlreadyExists on a second
+// call for the same Act ID), so a double-write bug here would surface as a
+// Do error, not silently pass.
+func newCLIWithRecordPipeline(t *testing.T, repoPath, patch, validatorCmd string, authority stubAuthority, out *bytes.Buffer) (*cli.CLI, *record.FileStore) {
+	t.Helper()
+
+	store, err := record.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("record.NewFileStore failed: %v", err)
+	}
+	gate, err := verify.NewGate("all-pass", &verify.Validator{Name: "check", Cmd: validatorCmd})
+	if err != nil {
+		t.Fatalf("verify.NewGate failed: %v", err)
+	}
+	pipeline := engine.Pipeline{
+		Name: "feature",
+		Steps: []engine.Step{
+			{ID: "generate", Kind: domain.StepKindGenerate},
+			{ID: "verify", Kind: domain.StepKindVerify},
+			{ID: "approve", Kind: domain.StepKindApprove},
+			{ID: "apply", Kind: domain.StepKindApply},
+			{ID: "record", Kind: domain.StepKindRecord},
+		},
+	}
+	eng := engine.NewEngine(emptyGatherer{}, executor.NewScriptedExecutor(patch), gate, repoPath, pipeline)
+	eng.SetAuthority(authority)
+	eng.SetApplier(workspace.GitApplier{})
+	eng.SetCheckpointer(store)
+	return cli.NewCLI(eng, store, strings.NewReader(""), out), store
+}
+
+// TestCLI_Do_PipelineRecordedInsideEngineIsNotRecordedAgain verifies a
+// Pipeline whose own record Step already persisted the Act is never
+// recorded again by Do itself — a double-write would fail outright
+// (record.FileStore.Write refuses an already-recorded Act ID), so this test
+// would surface that as a Do error, not silently pass.
+func TestCLI_Do_PipelineRecordedInsideEngineIsNotRecordedAgain(t *testing.T) {
+	repo := initGitRepo(t)
+
+	var out bytes.Buffer
+	c, store := newCLIWithRecordPipeline(t, repo, newFilePatch("APPLIED.md"), "exit 0",
+		stubAuthority{authority: "policy-bot", approved: true}, &out)
+
+	if err := c.Do(context.Background(), "add a feature", repo); err != nil {
+		t.Fatalf("Do failed: %v", err)
+	}
+
+	acts, err := store.List(context.Background())
+	if err != nil {
+		t.Fatalf("store.List failed: %v", err)
+	}
+	if len(acts) != 1 {
+		t.Fatalf("store has %d acts, want 1", len(acts))
+	}
+	if !strings.Contains(out.String(), "Applied and recorded") {
+		t.Errorf("output missing confirmation, got:\n%s", out.String())
 	}
 }
 

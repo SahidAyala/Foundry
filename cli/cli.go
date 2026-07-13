@@ -56,6 +56,15 @@ func NewCLI(eng *engine.Engine, rec record.Recorder, in io.Reader, out io.Writer
 // accepted — applies the patch to the repository and records the Act. A
 // declined Act is neither applied nor recorded (recording rejections is
 // deferred to M0.2).
+//
+// A Pipeline that declares its own approve/apply/record Steps (RFC-0002 §9
+// Phase 4) has already sought approval, applied the patch, and persisted the
+// Act inside c.engine.Run, via whatever Authority/Applier/Checkpointer the
+// caller gave the Engine (typically an InteractiveAuthority wrapping this
+// same package's PromptForApproval, and a workspace.GitApplier) — Do detects
+// each of those from the returned Act (hasStepKind) and never repeats the
+// work. A Pipeline that declares none of them behaves exactly as before
+// RFC-0002 §9 Phase 4 existed: Do prompts, applies, and records itself.
 func (c *CLI) Do(ctx context.Context, intent string, repoPath string) error {
 	info, err := os.Stat(repoPath)
 	if err != nil {
@@ -74,27 +83,51 @@ func (c *CLI) Do(ctx context.Context, intent string, repoPath string) error {
 	fmt.Fprintf(c.out, "Repo:    %s\n", repoPath)
 	fmt.Fprintf(c.out, "Intent:  %s\n", act.Intent)
 
-	authority, approved, err := PromptForApproval(c.in, c.out, act)
-	if err != nil {
-		return err
+	approved := false
+	switch {
+	case act.ApprovedAt != nil:
+		// An approve Step inside the Pipeline already accepted.
+		approved = true
+	case act.JudgmentVerdict == engine.VerdictRejected:
+		// An approve Step inside the Pipeline already declined.
+		approved = false
+	default:
+		// No approve Step ran — this Pipeline still relies on Do's own prompt.
+		authority, ok, err := PromptForApproval(c.in, c.out, act)
+		if err != nil {
+			return err
+		}
+		approved = ok
+		if approved {
+			now := time.Now()
+			act.ApprovedBy = authority
+			act.ApprovedAt = &now
+		}
 	}
+
 	if !approved {
 		fmt.Fprintln(c.out, "Declined; nothing was applied or recorded.")
 		return nil
 	}
 
-	now := time.Now()
-	act.ApprovedBy = authority
-	act.ApprovedAt = &now
-
-	if err := applyPatch(ctx, repoPath, act); err != nil {
-		return fmt.Errorf("cli: apply: %w", err)
+	if !hasStepKind(act, domain.StepKindApply) {
+		// No apply Step ran inside the Pipeline — this Pipeline still
+		// relies on Do's own apply, exactly as before RFC-0002 §9 Phase 4
+		// existed.
+		if err := workspace.ApplyAct(ctx, repoPath, act); err != nil {
+			return fmt.Errorf("cli: apply: %w", err)
+		}
 	}
-	if err := c.recorder.Write(ctx, act); err != nil {
-		return fmt.Errorf("cli: record: %w", err)
+	if !hasStepKind(act, domain.StepKindRecord) {
+		// No record Step ran inside the Pipeline — this Pipeline still
+		// relies on Do's own recording, exactly as before RFC-0002 §9 Phase
+		// 4 existed.
+		if err := c.recorder.Write(ctx, act); err != nil {
+			return fmt.Errorf("cli: record: %w", err)
+		}
 	}
 
-	fmt.Fprintf(c.out, "Applied and recorded Act %s (approved by %s).\n", act.ID, authority)
+	fmt.Fprintf(c.out, "Applied and recorded Act %s (approved by %s).\n", act.ID, act.ApprovedBy)
 	return nil
 }
 
@@ -188,19 +221,17 @@ func firstLine(s string) string {
 	return head
 }
 
-// applyPatch applies act's patch to repoPath on an isolated branch named for
-// the Act, then lands it back on the branch the developer was on: a
-// throwaway `foundry/act-<id>` branch must never be left behind for a
-// successfully applied Act.
-func applyPatch(ctx context.Context, repoPath string, act *domain.Act) error {
-	ws, err := workspace.NewWorkspace(repoPath, "foundry/act-"+act.ID)
-	if err != nil {
-		return err
+// hasStepKind reports whether act's recorded trace already contains a
+// StepRecord of the given kind — used to tell whether an apply (or, later,
+// record) Step already ran inside the Pipeline itself, so Do never repeats
+// work a Step already did.
+func hasStepKind(act *domain.Act, kind string) bool {
+	for _, step := range act.Steps {
+		if step.Kind == kind {
+			return true
+		}
 	}
-	if err := ws.Apply(ctx, act.Patch); err != nil {
-		return err
-	}
-	return ws.Land(ctx)
+	return false
 }
 
 // ParseArgs parses arguments for the `do` command: a required positional
