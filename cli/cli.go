@@ -80,6 +80,43 @@ func (c *CLI) Do(ctx context.Context, intent string, repoPath string) error {
 		return fmt.Errorf("cli: run: %w", err)
 	}
 
+	return c.finalize(ctx, act, repoPath)
+}
+
+// checkpointLoader is the one method Resume needs from a
+// record.CheckpointStore — a small local interface so cli does not need a
+// hard dependency on that concrete type, matching how Replay takes its
+// engine.Verifier as a plain parameter instead of a CLI field.
+type checkpointLoader interface {
+	Load(ctx context.Context, actID string) (*domain.Act, error)
+}
+
+// Resume continues the Act checkpointed under actID — left behind by an
+// attempt that was interrupted before reaching a terminal Judgment — via
+// c.engine.Resume, then drives the same trust boundary Do does: approval,
+// apply, and recording, whichever of those a Pipeline's own declared Steps
+// did not already handle inside Resume.
+func (c *CLI) Resume(ctx context.Context, actID string, checkpoints checkpointLoader, repoPath string) error {
+	act, err := checkpoints.Load(ctx, actID)
+	if err != nil {
+		return fmt.Errorf("cli: resume: %w", err)
+	}
+
+	act, err = c.engine.Resume(ctx, act)
+	if err != nil {
+		return fmt.Errorf("cli: resume: %w", err)
+	}
+
+	return c.finalize(ctx, act, repoPath)
+}
+
+// finalize drives an Act across the human trust boundary once its Outcome
+// and Judgment are produced: seek approval (unless a Pipeline-declared
+// approve Step already captured a decision), apply, and record — whichever
+// of those a Pipeline's own declared Steps did not already do. Do and
+// Resume both call this once c.engine has finished producing act, so the
+// trust-boundary logic exists in exactly one place.
+func (c *CLI) finalize(ctx context.Context, act *domain.Act, repoPath string) error {
 	fmt.Fprintf(c.out, "Act ID:  %s\n", act.ID)
 	fmt.Fprintf(c.out, "Repo:    %s\n", repoPath)
 	fmt.Fprintf(c.out, "Intent:  %s\n", act.Intent)
@@ -93,7 +130,8 @@ func (c *CLI) Do(ctx context.Context, intent string, repoPath string) error {
 		// An approve Step inside the Pipeline already declined.
 		approved = false
 	default:
-		// No approve Step ran — this Pipeline still relies on Do's own prompt.
+		// No approve Step ran — this Pipeline still relies on the CLI's
+		// own prompt.
 		authority, ok, err := PromptForApproval(c.in, c.out, act)
 		if err != nil {
 			return err
@@ -113,16 +151,16 @@ func (c *CLI) Do(ctx context.Context, intent string, repoPath string) error {
 
 	if !hasStepKind(act, domain.StepKindApply) {
 		// No apply Step ran inside the Pipeline — this Pipeline still
-		// relies on Do's own apply, exactly as before RFC-0002 §9 Phase 4
-		// existed.
+		// relies on the CLI's own apply, exactly as before RFC-0002 §9
+		// Phase 4 existed.
 		if err := workspace.ApplyAct(ctx, repoPath, act); err != nil {
 			return fmt.Errorf("cli: apply: %w", err)
 		}
 	}
 	if !hasStepKind(act, domain.StepKindRecord) {
 		// No record Step ran inside the Pipeline — this Pipeline still
-		// relies on Do's own recording, exactly as before RFC-0002 §9 Phase
-		// 4 existed.
+		// relies on the CLI's own recording, exactly as before RFC-0002 §9
+		// Phase 4 existed.
 		if err := c.recorder.Write(ctx, act); err != nil {
 			return fmt.Errorf("cli: record: %w", err)
 		}
