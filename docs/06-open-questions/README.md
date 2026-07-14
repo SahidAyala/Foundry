@@ -19,6 +19,7 @@ The first-pass refactor archived eight Architecture Review Board reviews. Their 
 | [OQ-005](OQ-005-extension-isolation.md) | How are third-party extensions isolated and versioned? | Undecided — requirements only | OPEN |
 | [OQ-006](OQ-006-governance-model.md) | How are decisions ratified? | Lightweight maintainer-led process first | OPEN |
 | [OQ-007](OQ-007-canonical-terminology.md) | Is the proposed vocabulary (Act/Engine/Strategy/…) the right one? | Adopt provisionally, revisit at first implementation | OPEN |
+| [OQ-008](OQ-008-in-progress-act-persistence.md) | Where does an interrupted Act's in-progress state live, given the Record is write-once? | Separate mutable checkpoint store, deleted on terminal Judgment | OPEN |
 
 ## Relationship to other tiers
 
