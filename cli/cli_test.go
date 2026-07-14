@@ -178,6 +178,72 @@ func TestCLI_Do_ApprovedAppliesAndRecords(t *testing.T) {
 	}
 }
 
+func TestCLI_Replay_ReproducesRecordedVerification(t *testing.T) {
+	t.Setenv("USER", "tester")
+	repo := initGitRepo(t)
+
+	var out bytes.Buffer
+	c, store := newCLI(t, repo, newFilePatch("APPLIED.md"), "exit 0", "y\n", &out)
+	if err := c.Do(context.Background(), "add a feature", repo); err != nil {
+		t.Fatalf("Do failed: %v", err)
+	}
+
+	acts, err := store.List(context.Background())
+	if err != nil || len(acts) != 1 {
+		t.Fatalf("store.List() = %+v, %v, want 1 act", acts, err)
+	}
+	actID := acts[0].ID
+
+	gate, err := verify.NewGate("all-pass", &verify.Validator{Name: "check", Cmd: "exit 0"})
+	if err != nil {
+		t.Fatalf("verify.NewGate failed: %v", err)
+	}
+	verifier := workspace.NewStagedVerifier(gate)
+
+	var replayOut bytes.Buffer
+	replayCLI := cli.NewCLI(nil, store, strings.NewReader(""), &replayOut)
+	if err := replayCLI.Replay(context.Background(), actID, verifier, repo); err != nil {
+		t.Fatalf("Replay failed: %v", err)
+	}
+	if !strings.Contains(replayOut.String(), "reproduced") {
+		t.Errorf("output missing reproduced confirmation, got:\n%s", replayOut.String())
+	}
+}
+
+func TestCLI_Replay_ReportsDivergenceWhenVerificationNowFails(t *testing.T) {
+	t.Setenv("USER", "tester")
+	repo := initGitRepo(t)
+
+	var out bytes.Buffer
+	c, store := newCLI(t, repo, newFilePatch("APPLIED.md"), "exit 0", "y\n", &out)
+	if err := c.Do(context.Background(), "add a feature", repo); err != nil {
+		t.Fatalf("Do failed: %v", err)
+	}
+
+	acts, err := store.List(context.Background())
+	if err != nil || len(acts) != 1 {
+		t.Fatalf("store.List() = %+v, %v, want 1 act", acts, err)
+	}
+	actID := acts[0].ID
+
+	// Replay against a verifier that now fails everything — proving Replay
+	// really re-executes verification, not just echoes the recorded verdict.
+	gate, err := verify.NewGate("all-pass", &verify.Validator{Name: "check", Cmd: "exit 1"})
+	if err != nil {
+		t.Fatalf("verify.NewGate failed: %v", err)
+	}
+	verifier := workspace.NewStagedVerifier(gate)
+
+	var replayOut bytes.Buffer
+	replayCLI := cli.NewCLI(nil, store, strings.NewReader(""), &replayOut)
+	if err := replayCLI.Replay(context.Background(), actID, verifier, repo); err != nil {
+		t.Fatalf("Replay failed: %v", err)
+	}
+	if !strings.Contains(replayOut.String(), "diverged") {
+		t.Errorf("output missing divergence report, got:\n%s", replayOut.String())
+	}
+}
+
 // gitOutput runs git with args in dir and returns its trimmed output,
 // failing the test on error.
 func gitOutput(t *testing.T, dir string, args ...string) string {
