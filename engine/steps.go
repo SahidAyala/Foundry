@@ -37,3 +37,24 @@ func producedPatch(outcome *domain.Outcome) []string {
 	}
 	return []string{outcome.Patch}
 }
+
+// lastOutcomeAndJudgment reconstructs the Outcome and Judgment an
+// interrupted attempt held in memory, by scanning steps for the most
+// recent generate and verify StepRecords — the same technique
+// replay/replay.go's Verify uses for its lastPatch. Engine.Resume uses this
+// to seed runSteps exactly as if the attempt had never stopped.
+func lastOutcomeAndJudgment(steps []domain.StepRecord) (*domain.Outcome, *domain.Judgment) {
+	var outcome *domain.Outcome
+	var judgment *domain.Judgment
+	for _, step := range steps {
+		switch step.Kind {
+		case domain.StepKindGenerate:
+			if len(step.Produced) > 0 {
+				outcome = &domain.Outcome{Patch: step.Produced[0]}
+			}
+		case domain.StepKindVerify:
+			judgment = &domain.Judgment{Verdict: step.JudgmentVerdict, Checked: step.Checked}
+		}
+	}
+	return outcome, judgment
+}

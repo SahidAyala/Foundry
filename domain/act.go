@@ -10,8 +10,12 @@ import (
 // It carries an Intent, accumulates Evidence, yields an Outcome, and passes a Judgment.
 // Once recorded to durable storage, an Act is never modified.
 type Act struct {
-	ID              string       `json:"id"`
-	Intent          string       `json:"intent"`
+	ID     string `json:"id"`
+	Intent string `json:"intent"`
+	// Pipeline is the name of the Pipeline that produced this Act — set
+	// once, at Engine.RunBudgeted. Resume (engine/engine.go) needs it to
+	// look up the same declared Steps an interrupted attempt was running.
+	Pipeline        string       `json:"pipeline,omitempty"`
 	CreatedAt       time.Time    `json:"created_at"`
 	ConsideredFiles []string     `json:"considered_files"`
 	CheckedFindings []string     `json:"checked_findings"`

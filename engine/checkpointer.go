@@ -39,3 +39,24 @@ func (noCheckpointer) Write(ctx context.Context, act *domain.Act) error {
 }
 
 var _ Checkpointer = noCheckpointer{}
+
+// CheckpointSaver persists an Act's in-progress trace after every Step —
+// no Pipeline declaration required, unlike Checkpointer — so a crash or
+// kill mid-Pipeline leaves state a later `foundry resume` can continue
+// (docs/06-open-questions/OQ-008-in-progress-act-persistence.md). Its
+// writes are overwritable, and Delete marks an Act as no longer
+// interrupted once it reaches a real terminal disposition.
+type CheckpointSaver interface {
+	Save(ctx context.Context, act *domain.Act) error
+	Delete(ctx context.Context, actID string) error
+}
+
+// noCheckpointSaver is the Engine's default CheckpointSaver: both methods
+// no-op, so an Engine that never calls SetCheckpointSaver behaves exactly
+// as it did before resume existed — no checkpoint file, and no error.
+type noCheckpointSaver struct{}
+
+func (noCheckpointSaver) Save(ctx context.Context, act *domain.Act) error { return nil }
+func (noCheckpointSaver) Delete(ctx context.Context, actID string) error  { return nil }
+
+var _ CheckpointSaver = noCheckpointSaver{}
