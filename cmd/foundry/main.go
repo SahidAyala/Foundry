@@ -42,6 +42,8 @@ func run(args []string, stdin io.Reader, stdout io.Writer, newExecutor func(work
 		return commands.Show(context.Background(), args[1:], stdout)
 	case "replay":
 		return commands.Replay(context.Background(), args[1:], stdout)
+	case "resume":
+		return commands.Resume(context.Background(), args[1:], stdin, stdout, newExecutor)
 	default:
 		fmt.Fprintf(stdout, "foundry: unknown command %q\n\n", args[0])
 		fmt.Fprint(stdout, usage())
@@ -88,6 +90,7 @@ Commands:
   log     List recorded Acts for a repository
   show    Show one recorded Act in full
   replay  Re-run verification against a recorded Act and report reproducibility
+  resume  Continue an Act interrupted mid-Pipeline, or list interrupted acts
 
 Run 'foundry <command> --help' for details on a specific command.
 `

@@ -226,6 +226,42 @@ func TestRun_ReplayHelp(t *testing.T) {
 	}
 }
 
+func TestRun_ResumeHelp(t *testing.T) {
+	var out bytes.Buffer
+	if code := run([]string{"resume", "--help"}, strings.NewReader(""), &out, scriptedExecutor); code != 0 {
+		t.Errorf("resume --help exit code = %d, want 0", code)
+	}
+	if !strings.Contains(out.String(), "Usage: foundry resume") {
+		t.Errorf("resume help missing usage, got:\n%s", out.String())
+	}
+}
+
+func TestRun_ResumeListingWithNoInterruptedActs(t *testing.T) {
+	repo := initGitRepo(t)
+
+	var out bytes.Buffer
+	if code := run([]string{"resume", "--repo", repo}, strings.NewReader(""), &out, scriptedExecutor); code != 0 {
+		t.Fatalf("resume exit code = %d, want 0; output:\n%s", code, out.String())
+	}
+	if !strings.Contains(out.String(), "No interrupted acts.") {
+		t.Errorf("resume output = %q, want 'No interrupted acts.'", out.String())
+	}
+}
+
+func TestRun_ResumeUnknownActIDFails(t *testing.T) {
+	repo := initGitRepo(t)
+
+	var doOut bytes.Buffer
+	if code := run([]string{"do", "add a feature", "--repo", repo}, strings.NewReader("y\n"), &doOut, scriptedExecutor); code != 0 {
+		t.Fatalf("do exit code = %d, want 0; output:\n%s", code, doOut.String())
+	}
+
+	var out bytes.Buffer
+	if code := run([]string{"resume", "deadbeef", "--repo", repo}, strings.NewReader(""), &out, scriptedExecutor); code != 1 {
+		t.Fatalf("resume exit code = %d, want 1; output:\n%s", code, out.String())
+	}
+}
+
 // TestRun_NoArgs_StartsInteractiveSession pins the product-shape change
 // docs/01-rfcs/RFC-0003-interactive-assistant-and-multi-executor-pipelines.md
 // proposes: `foundry` with no subcommand at all starts an interactive
