@@ -141,7 +141,7 @@ func recordedActID(t *testing.T, repo string) string {
 	return entries[0].Name()
 }
 
-func TestRun_LogAndShowAfterRecordedAct(t *testing.T) {
+func TestRun_LogShowAndReplayAfterRecordedAct(t *testing.T) {
 	t.Setenv("USER", "tester")
 	repo := initGitRepo(t)
 
@@ -168,6 +168,16 @@ func TestRun_LogAndShowAfterRecordedAct(t *testing.T) {
 	for _, want := range []string{"Act:        " + actID, "Intent:     add a feature", "FOUNDRY.md", "Approved:   by tester"} {
 		if !strings.Contains(showOut.String(), want) {
 			t.Errorf("show output missing %q:\n%s", want, showOut.String())
+		}
+	}
+
+	var replayOut bytes.Buffer
+	if code := run([]string{"replay", actID, "--repo", repo}, strings.NewReader(""), &replayOut, scriptedExecutor); code != 0 {
+		t.Fatalf("replay exit code = %d, want 0; output:\n%s", code, replayOut.String())
+	}
+	for _, want := range []string{"Act:     " + actID, "reproduced"} {
+		if !strings.Contains(replayOut.String(), want) {
+			t.Errorf("replay output missing %q:\n%s", want, replayOut.String())
 		}
 	}
 }
@@ -203,6 +213,16 @@ func TestRun_LogHelp(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "Usage: foundry log") {
 		t.Errorf("log help missing usage, got:\n%s", out.String())
+	}
+}
+
+func TestRun_ReplayHelp(t *testing.T) {
+	var out bytes.Buffer
+	if code := run([]string{"replay", "--help"}, strings.NewReader(""), &out, scriptedExecutor); code != 0 {
+		t.Errorf("replay --help exit code = %d, want 0", code)
+	}
+	if !strings.Contains(out.String(), "Usage: foundry replay") {
+		t.Errorf("replay help missing usage, got:\n%s", out.String())
 	}
 }
 

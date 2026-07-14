@@ -40,6 +40,8 @@ func run(args []string, stdin io.Reader, stdout io.Writer, newExecutor func(work
 		return commands.Log(context.Background(), args[1:], stdout)
 	case "show":
 		return commands.Show(context.Background(), args[1:], stdout)
+	case "replay":
+		return commands.Replay(context.Background(), args[1:], stdout)
 	default:
 		fmt.Fprintf(stdout, "foundry: unknown command %q\n\n", args[0])
 		fmt.Fprint(stdout, usage())
@@ -82,9 +84,10 @@ func usage() string {
 	return `Usage: foundry <command> [arguments]
 
 Commands:
-  do    Run the Act lifecycle for an Intent against a repository
-  log   List recorded Acts for a repository
-  show  Show one recorded Act in full
+  do      Run the Act lifecycle for an Intent against a repository
+  log     List recorded Acts for a repository
+  show    Show one recorded Act in full
+  replay  Re-run verification against a recorded Act and report reproducibility
 
 Run 'foundry <command> --help' for details on a specific command.
 `
