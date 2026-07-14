@@ -1,8 +1,15 @@
-// Package gatherer assembles the considered Context for an Act. The M0
-// implementation is naive by design: it extracts file names mentioned in the
-// Intent's text and returns their contents from the repository, bounded in
-// total size. Semantic retrieval and Knowledge-based context are deferred
-// (docs/04-guides/M0-IMPLEMENTATION-BACKLOG.md, M0.1).
+// Package gatherer assembles the considered Context for an Act. NaiveGatherer
+// resolves context in three bounded phases: files named in the Intent's
+// text; if none resolve, files whose content mentions a capitalized
+// identifier the Intent named instead; then supplementary context (the
+// repository's README and files sharing a directory with whatever
+// resolved), priority-ordered so budget truncation drops code before docs
+// and docs before config. It is "naive" only in the sense that it has no
+// semantic index: name- and content-matching over the filesystem directly,
+// no embeddings or ranking model. Knowledge-based context (durable,
+// project-level context assembled from accumulated Knowledge rather than
+// re-derived per Act) is a distinct, unbuilt concern — M4 in
+// docs/00-overview/roadmap.md — not a gap in what this package does today.
 package gatherer
 
 import (
