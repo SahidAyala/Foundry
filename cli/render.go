@@ -1,9 +1,12 @@
 package cli
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"strings"
+
+	"foundry/replay"
 )
 
 const (
@@ -65,4 +68,42 @@ func renderDiff(patch string, color bool) string {
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+// formatReplayResult renders a replay.Result for human review: one line per
+// verify Step comparing its recorded and replayed verdict, then an overall
+// reproduced/diverged summary. This is a same-version replay report
+// (replay/replay.go's package doc) — it says nothing about a future Engine
+// version.
+func formatReplayResult(result replay.Result, color bool) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Act:     %s\n", result.ActID)
+
+	if len(result.Steps) == 0 {
+		b.WriteString("No verify Steps recorded for this Act — nothing to replay.\n")
+		return b.String()
+	}
+
+	b.WriteString("\nVerify Steps:\n")
+	for _, step := range result.Steps {
+		mark := "✓ reproduced"
+		tint := ansiGreen
+		if !step.Reproduced {
+			mark = "✗ diverged"
+			tint = ansiRed
+		}
+		if color {
+			mark = tint + mark + ansiReset
+		}
+		fmt.Fprintf(&b, "  %-8s %s  (recorded: %s, replayed: %s)\n",
+			step.StepID, mark, step.RecordedVerdict, step.ReplayedVerdict)
+	}
+
+	b.WriteString("\n")
+	if result.Reproduced() {
+		fmt.Fprintln(&b, renderVerdict("pass", color)+" — verification reproduced under this Engine build")
+	} else {
+		fmt.Fprintln(&b, renderVerdict("fail", color)+" — verification diverged from the recorded Act; see Verify Steps above")
+	}
+	return b.String()
 }

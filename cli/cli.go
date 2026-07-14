@@ -16,6 +16,7 @@ import (
 	"foundry/domain"
 	"foundry/engine"
 	"foundry/record"
+	"foundry/replay"
 	"foundry/workspace"
 )
 
@@ -165,6 +166,24 @@ func (c *CLI) Show(ctx context.Context, actID string) error {
 		return fmt.Errorf("cli: show: %w", err)
 	}
 	fmt.Fprint(c.out, formatAct(act))
+	return nil
+}
+
+// Replay re-runs verifier against the recorded Act identified by actID —
+// never calling an Executor again — and writes whether each verify Step
+// reproduces its recorded Judgment. This is read-only, like Show and Log:
+// it never mutates the Record, and it is a same-version replay guarantee
+// only (replay/replay.go's package doc).
+func (c *CLI) Replay(ctx context.Context, actID string, verifier engine.Verifier, workspacePath string) error {
+	act, err := c.recorder.Read(ctx, actID)
+	if err != nil {
+		return fmt.Errorf("cli: replay: %w", err)
+	}
+	result, err := replay.Verify(ctx, act, verifier, workspacePath)
+	if err != nil {
+		return fmt.Errorf("cli: replay: %w", err)
+	}
+	fmt.Fprint(c.out, formatReplayResult(result, colorEnabled(c.out)))
 	return nil
 }
 
