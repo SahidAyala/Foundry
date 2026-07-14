@@ -36,7 +36,9 @@ type Engine struct {
 	authority    Authority
 	applier      Applier
 	checkpointer Checkpointer
+	checkpoints  CheckpointSaver
 	strategy     Strategy
+	pipelineName string
 }
 
 // NewEngine wires the ports an Engine needs to produce an Act, using
@@ -57,7 +59,9 @@ func NewEngine(gatherer Gatherer, executor Executor, verifier Verifier, workspac
 		authority:    noAuthority{},
 		applier:      noApplier{},
 		checkpointer: noCheckpointer{},
+		checkpoints:  noCheckpointSaver{},
 		strategy:     PipelineStrategy{Pipeline: pipeline},
+		pipelineName: pipeline.Name,
 	}
 }
 
@@ -92,6 +96,15 @@ func (e *Engine) SetCheckpointer(c Checkpointer) {
 	e.checkpointer = c
 }
 
+// SetCheckpointSaver attaches c as the Engine's in-progress checkpoint
+// sink, replacing the default noCheckpointSaver. Unlike SetCheckpointer
+// (which only a declared record Step calls), the Engine calls c after
+// every Step of every Pipeline, so a crash mid-Pipeline leaves state
+// `foundry resume` can continue (docs/06-open-questions/OQ-008-in-progress-act-persistence.md).
+func (e *Engine) SetCheckpointSaver(c CheckpointSaver) {
+	e.checkpoints = c
+}
+
 // Run gathers context, executes the work, and verifies the outcome under
 // the default M0.1 Budget, returning an Act with its considered context,
 // proposed patch, and machine verdict. A Pipeline that declares approve,
@@ -114,6 +127,7 @@ func (e *Engine) Run(ctx context.Context, intent *domain.Intent) (*domain.Act, e
 // This is the one case where both return values are non-nil.
 func (e *Engine) RunBudgeted(ctx context.Context, intent *domain.Intent, budget *domain.Budget) (*domain.Act, error) {
 	act := domain.NewAct(intent.Text)
+	act.Pipeline = e.pipelineName
 	spent := &tracker{budget: budget}
 
 	e.reporter.Gathering()
@@ -131,6 +145,7 @@ func (e *Engine) RunBudgeted(ctx context.Context, intent *domain.Intent, budget 
 		authority:    e.authority,
 		applier:      e.applier,
 		checkpointer: e.checkpointer,
+		checkpoints:  e.checkpoints,
 		spent:        spent,
 	}
 	if err := e.strategy.Produce(ctx, act, intent, considered, rc); err != nil {
@@ -138,6 +153,73 @@ func (e *Engine) RunBudgeted(ctx context.Context, intent *domain.Intent, budget 
 			return act, err
 		}
 		return nil, err
+	}
+	return act, nil
+}
+
+// ErrCannotResume names why Resume refused to continue an Act.
+var ErrCannotResume = errors.New("engine: cannot resume")
+
+// Resume continues act — a checkpoint loaded from record.CheckpointStore,
+// left behind by an attempt that was interrupted (crashed or killed)
+// before reaching a terminal Judgment — from its first not-yet-completed
+// Step, using the same runSteps logic Produce's first attempt used
+// (docs/06-open-questions/OQ-008-in-progress-act-persistence.md). It does
+// not re-gather Context (act.ConsideredFiles already holds what the
+// original attempt gathered) and does not re-charge Budget for Steps that
+// already ran.
+//
+// Resume is inherently Pipeline-shaped — "continue from Step N" only makes
+// sense for a Strategy walking a declared Steps sequence — so it requires
+// this Engine's configured Strategy to be a PipelineStrategy, wrapping
+// ErrCannotResume with a clear reason otherwise. Resuming across a repair
+// boundary is out of scope: if the interrupted Step was a failed verify
+// Step that would have earned a repair round, Resume's runSteps call simply
+// re-confirms that failing verdict via stopsShortOnFailure, exactly as
+// Produce's own attempt would, rather than attempting a fresh repair round.
+func (e *Engine) Resume(ctx context.Context, act *domain.Act) (*domain.Act, error) {
+	strategy, ok := e.strategy.(PipelineStrategy)
+	if !ok {
+		return nil, fmt.Errorf("%w: act %s: Engine's Strategy is not a PipelineStrategy", ErrCannotResume, act.ID)
+	}
+
+	startIdx := len(act.Steps)
+	if startIdx >= len(strategy.Pipeline.Steps) {
+		return nil, fmt.Errorf("%w: act %s: already reached its last declared step — nothing to resume", ErrCannotResume, act.ID)
+	}
+
+	spent := &tracker{budget: DefaultBudget(), iterations: act.Iterations, costUSD: act.CostEstimateUSD}
+	rc := runContext{
+		executor:     e.executor,
+		verifier:     e.verifier,
+		workspace:    e.workspace,
+		reporter:     e.reporter,
+		authority:    e.authority,
+		applier:      e.applier,
+		checkpointer: e.checkpointer,
+		checkpoints:  e.checkpoints,
+		spent:        spent,
+	}
+
+	outcome, judgment := lastOutcomeAndJudgment(act.Steps)
+	intent := &domain.Intent{Text: act.Intent}
+
+	o, j, terminal, err := runSteps(ctx, strategy.Pipeline.Name, act, intent, strategy.Pipeline.Steps[startIdx:], act.ConsideredFiles, outcome, judgment, 0, rc)
+	outcome, judgment = o, j
+	if err != nil {
+		return nil, err
+	}
+	if terminal {
+		return act, nil
+	}
+
+	if judgment == nil {
+		return nil, fmt.Errorf("engine: pipeline %q declares no verify step: it can never produce a Judgment", strategy.Pipeline.Name)
+	}
+	act.JudgmentVerdict = judgment.Verdict
+	act.CheckedFindings = judgment.Checked
+	if err := rc.checkpoints.Delete(ctx, act.ID); err != nil {
+		return nil, fmt.Errorf("engine: checkpoint delete: %w", err)
 	}
 	return act, nil
 }

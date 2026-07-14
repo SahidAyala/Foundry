@@ -36,6 +36,7 @@ type runContext struct {
 	authority    Authority
 	applier      Applier
 	checkpointer Checkpointer
+	checkpoints  CheckpointSaver
 	spent        *tracker
 }
 
@@ -85,6 +86,16 @@ var _ Strategy = PipelineStrategy{}
 // before any approve/apply/record Step (stopsShortOnFailure) — a failing
 // Outcome is never presented for approval, applied, or recorded, whether or
 // not this attempt goes on to repair.
+//
+// The actual per-Step work is runSteps, below. Produce's attempt loop is
+// the only caller today, but Engine.Resume (engine.go) is a second: it
+// seeds runSteps with the Outcome/Judgment an interrupted attempt held in
+// memory and continues from the first not-yet-completed Step, so a crash
+// mid-Pipeline resumes through identical logic to a first attempt
+// (docs/06-open-questions/OQ-008-in-progress-act-persistence.md). Every
+// completed Step is checkpointed via rc.checkpoints.Save; once Produce (or
+// Resume) reaches a genuine terminal disposition, the checkpoint is
+// deleted — it exists only to survive an interruption, never past one.
 func (s PipelineStrategy) Produce(ctx context.Context, act *domain.Act, intent *domain.Intent, considered []string, rc runContext) error {
 	var outcome *domain.Outcome
 	var judgment *domain.Judgment
@@ -114,81 +125,13 @@ func (s PipelineStrategy) Produce(ctx context.Context, act *domain.Act, intent *
 			}
 		}
 
-		for _, step := range steps {
-			if judgment != nil && judgment.Verdict == verdictFail && stopsShortOnFailure(step.Kind) {
-				break
-			}
-			switch step.Kind {
-			case domain.StepKindGenerate:
-				rc.reporter.Executing(rc.spent.iterations)
-				start := time.Now()
-				o, err := rc.executor.Execute(ctx, intent, considered)
-				if err != nil {
-					return wrapStepError(attempt, "execute", err)
-				}
-				outcome = o
-				act.Patch = outcome.Patch
-				act.Iterations = rc.spent.iterations
-				act.CostEstimateUSD = rc.spent.costUSD
-				act.ConsideredFiles = considered
-				recordStep(act, domain.StepKindGenerate, considered, producedPatch(outcome), nil, "", "", start)
-
-			case domain.StepKindVerify:
-				if outcome == nil {
-					return fmt.Errorf("engine: pipeline %q step %q: verify has no Outcome to check — no generate step ran before it", s.Pipeline.Name, step.ID)
-				}
-				rc.reporter.Verifying(rc.spent.iterations)
-				start := time.Now()
-				j, err := rc.verifier.Verify(ctx, outcome, rc.workspace)
-				if err != nil {
-					return wrapStepError(attempt, "verify", err)
-				}
-				judgment = j
-				rc.reporter.Verified(rc.spent.iterations, judgment)
-				recordStep(act, domain.StepKindVerify, nil, nil, judgment.Checked, judgment.Verdict, "", start)
-
-			case domain.StepKindApprove:
-				if outcome == nil {
-					return fmt.Errorf("engine: pipeline %q step %q: approve has no Outcome to review — no generate step ran before it", s.Pipeline.Name, step.ID)
-				}
-				start := time.Now()
-				authority, approved, err := rc.authority.Decide(ctx, act)
-				if err != nil {
-					return wrapStepError(attempt, "approve", err)
-				}
-				if !approved {
-					recordStep(act, domain.StepKindApprove, nil, nil, nil, stepVerdictReject, "", start)
-					act.JudgmentVerdict = VerdictRejected
-					if judgment != nil {
-						act.CheckedFindings = judgment.Checked
-					}
-					return nil
-				}
-				now := time.Now()
-				act.ApprovedBy = authority
-				act.ApprovedAt = &now
-				recordStep(act, domain.StepKindApprove, nil, nil, nil, stepVerdictAccept, authority, start)
-
-			case domain.StepKindApply:
-				if act.ApprovedAt == nil {
-					return fmt.Errorf("engine: pipeline %q step %q: apply requires an accepted approve step first", s.Pipeline.Name, step.ID)
-				}
-				start := time.Now()
-				if err := rc.applier.Apply(ctx, rc.workspace, act); err != nil {
-					return wrapStepError(attempt, "apply", err)
-				}
-				recordStep(act, domain.StepKindApply, nil, producedPatch(outcome), nil, "", "", start)
-
-			case domain.StepKindRecord:
-				start := time.Now()
-				if err := rc.checkpointer.Write(ctx, act); err != nil {
-					return wrapStepError(attempt, "record", err)
-				}
-				recordStep(act, domain.StepKindRecord, nil, nil, nil, "", "", start)
-
-			default:
-				return fmt.Errorf("engine: pipeline %q step %q: unrecognized step kind %q", s.Pipeline.Name, step.ID, step.Kind)
-			}
+		o, j, terminal, err := runSteps(ctx, s.Pipeline.Name, act, intent, steps, considered, outcome, judgment, attempt, rc)
+		outcome, judgment = o, j
+		if err != nil {
+			return err
+		}
+		if terminal {
+			return nil
 		}
 
 		if judgment == nil {
@@ -202,7 +145,123 @@ func (s PipelineStrategy) Produce(ctx context.Context, act *domain.Act, intent *
 
 	act.JudgmentVerdict = judgment.Verdict
 	act.CheckedFindings = judgment.Checked
+	if err := rc.checkpoints.Delete(ctx, act.ID); err != nil {
+		return fmt.Errorf("engine: checkpoint delete: %w", err)
+	}
 	return nil
+}
+
+// runSteps executes steps against act in order, threading outcome and
+// judgment through Generate and Verify Steps exactly as Produce's attempt
+// loop always has, and is the one place a Step actually runs — both
+// Produce and Engine.Resume call it, so an interrupted attempt resumes
+// through identical logic to a first attempt, checkpoint saves and
+// stopsShortOnFailure guard included.
+//
+// It returns the updated outcome/judgment and, if an approve Step is
+// declined, terminal=true: act.JudgmentVerdict and its checkpoint are
+// already finalized in that case (a human decision is not something a
+// bounded repair round, or a resume, can revisit), and the caller must
+// simply return nil rather than process act any further. A non-nil error
+// means a Step itself failed — the checkpoint saved by the last
+// successfully completed Step survives on disk, exactly the state
+// `foundry resume` needs.
+func runSteps(ctx context.Context, pipelineName string, act *domain.Act, intent *domain.Intent, steps []Step, considered []string, outcome *domain.Outcome, judgment *domain.Judgment, attempt int, rc runContext) (*domain.Outcome, *domain.Judgment, bool, error) {
+	for _, step := range steps {
+		if judgment != nil && judgment.Verdict == verdictFail && stopsShortOnFailure(step.Kind) {
+			break
+		}
+		switch step.Kind {
+		case domain.StepKindGenerate:
+			rc.reporter.Executing(rc.spent.iterations)
+			start := time.Now()
+			o, err := rc.executor.Execute(ctx, intent, considered)
+			if err != nil {
+				return outcome, judgment, false, wrapStepError(attempt, "execute", err)
+			}
+			outcome = o
+			act.Patch = outcome.Patch
+			act.Iterations = rc.spent.iterations
+			act.CostEstimateUSD = rc.spent.costUSD
+			act.ConsideredFiles = considered
+			recordStep(act, domain.StepKindGenerate, considered, producedPatch(outcome), nil, "", "", start)
+			if err := rc.checkpoints.Save(ctx, act); err != nil {
+				return outcome, judgment, false, wrapStepError(attempt, "checkpoint", err)
+			}
+
+		case domain.StepKindVerify:
+			if outcome == nil {
+				return outcome, judgment, false, fmt.Errorf("engine: pipeline %q step %q: verify has no Outcome to check — no generate step ran before it", pipelineName, step.ID)
+			}
+			rc.reporter.Verifying(rc.spent.iterations)
+			start := time.Now()
+			j, err := rc.verifier.Verify(ctx, outcome, rc.workspace)
+			if err != nil {
+				return outcome, judgment, false, wrapStepError(attempt, "verify", err)
+			}
+			judgment = j
+			rc.reporter.Verified(rc.spent.iterations, judgment)
+			recordStep(act, domain.StepKindVerify, nil, nil, judgment.Checked, judgment.Verdict, "", start)
+			if err := rc.checkpoints.Save(ctx, act); err != nil {
+				return outcome, judgment, false, wrapStepError(attempt, "checkpoint", err)
+			}
+
+		case domain.StepKindApprove:
+			if outcome == nil {
+				return outcome, judgment, false, fmt.Errorf("engine: pipeline %q step %q: approve has no Outcome to review — no generate step ran before it", pipelineName, step.ID)
+			}
+			start := time.Now()
+			authority, approved, err := rc.authority.Decide(ctx, act)
+			if err != nil {
+				return outcome, judgment, false, wrapStepError(attempt, "approve", err)
+			}
+			if !approved {
+				recordStep(act, domain.StepKindApprove, nil, nil, nil, stepVerdictReject, "", start)
+				act.JudgmentVerdict = VerdictRejected
+				if judgment != nil {
+					act.CheckedFindings = judgment.Checked
+				}
+				if err := rc.checkpoints.Delete(ctx, act.ID); err != nil {
+					return outcome, judgment, false, fmt.Errorf("engine: checkpoint delete: %w", err)
+				}
+				return outcome, judgment, true, nil
+			}
+			now := time.Now()
+			act.ApprovedBy = authority
+			act.ApprovedAt = &now
+			recordStep(act, domain.StepKindApprove, nil, nil, nil, stepVerdictAccept, authority, start)
+			if err := rc.checkpoints.Save(ctx, act); err != nil {
+				return outcome, judgment, false, wrapStepError(attempt, "checkpoint", err)
+			}
+
+		case domain.StepKindApply:
+			if act.ApprovedAt == nil {
+				return outcome, judgment, false, fmt.Errorf("engine: pipeline %q step %q: apply requires an accepted approve step first", pipelineName, step.ID)
+			}
+			start := time.Now()
+			if err := rc.applier.Apply(ctx, rc.workspace, act); err != nil {
+				return outcome, judgment, false, wrapStepError(attempt, "apply", err)
+			}
+			recordStep(act, domain.StepKindApply, nil, producedPatch(outcome), nil, "", "", start)
+			if err := rc.checkpoints.Save(ctx, act); err != nil {
+				return outcome, judgment, false, wrapStepError(attempt, "checkpoint", err)
+			}
+
+		case domain.StepKindRecord:
+			start := time.Now()
+			if err := rc.checkpointer.Write(ctx, act); err != nil {
+				return outcome, judgment, false, wrapStepError(attempt, "record", err)
+			}
+			recordStep(act, domain.StepKindRecord, nil, nil, nil, "", "", start)
+			if err := rc.checkpoints.Save(ctx, act); err != nil {
+				return outcome, judgment, false, wrapStepError(attempt, "checkpoint", err)
+			}
+
+		default:
+			return outcome, judgment, false, fmt.Errorf("engine: pipeline %q step %q: unrecognized step kind %q", pipelineName, step.ID, step.Kind)
+		}
+	}
+	return outcome, judgment, false, nil
 }
 
 // stopsShortOnFailure reports whether kind is a trust-boundary Step
