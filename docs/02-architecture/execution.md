@@ -42,6 +42,6 @@ All Strategies emit the same thing — an Act with Evidence, an Outcome, and a J
 ## Determinism and replay
 
 - **Control flow is owned by the Engine**, never by a model.
-- **Replay re-derives the deterministic and replays the recorded:** units of work declared deterministic are re-executed and must reproduce identical Artifacts; non-deterministic Executor outputs are replayed from the Record, never re-derived for the identity guarantee. This is *process* determinism, not output determinism.
+- **Replay re-derives the deterministic and replays the recorded:** units of work declared deterministic are re-executed and must reproduce identical Artifacts; non-deterministic Executor outputs are replayed from the Record, never re-derived for the identity guarantee. This is *process* determinism, not output determinism. `foundry replay <act-id>` (`replay/replay.go`) implements the narrow, **same-version** slice of this today: it re-executes Verify against each recorded generate Step's Produced patch and reports whether the Judgment reproduces, per [OQ-003](../06-open-questions/OQ-003-replay-across-versions.md)'s current recommendation. It says nothing about a future Engine version.
 
 > **Unresolved (human decision required):** the *cross-version* scope of the replay guarantee — whether an Act replays identically under a future Engine version — is not yet decided. Tracked in [../00-overview/roadmap.md](../00-overview/roadmap.md) and gated by a pending ADR (see [../03-adrs/README.md](../03-adrs/README.md)).
