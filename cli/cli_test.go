@@ -3,6 +3,7 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -241,6 +242,147 @@ func TestCLI_Replay_ReportsDivergenceWhenVerificationNowFails(t *testing.T) {
 	}
 	if !strings.Contains(replayOut.String(), "diverged") {
 		t.Errorf("output missing divergence report, got:\n%s", replayOut.String())
+	}
+}
+
+// fakeVerifier always returns the same Judgment, unconditionally.
+type fakeVerifier struct {
+	verdict string
+}
+
+func (v *fakeVerifier) Verify(ctx context.Context, outcome *domain.Outcome, workspace string) (*domain.Judgment, error) {
+	return &domain.Judgment{Verdict: v.verdict}, nil
+}
+
+// erroringOnceVerifier fails its first Verify call with a real Go error —
+// simulating a crash mid-Pipeline, not a "fail" Judgment — then returns
+// verdict on every call after.
+type erroringOnceVerifier struct {
+	err     error
+	verdict string
+	calls   int
+}
+
+func (v *erroringOnceVerifier) Verify(ctx context.Context, outcome *domain.Outcome, workspace string) (*domain.Judgment, error) {
+	v.calls++
+	if v.calls == 1 {
+		return nil, v.err
+	}
+	return &domain.Judgment{Verdict: v.verdict}, nil
+}
+
+// fakeCheckpointStore is an in-memory stand-in for record.CheckpointStore:
+// it satisfies both engine.CheckpointSaver (Save/Delete, wired into the
+// Engine) and cli's checkpointLoader (Load, passed to CLI.Resume), so a
+// test can drive an interrupted-then-resumed Act without touching the
+// filesystem.
+type fakeCheckpointStore struct {
+	saved map[string]*domain.Act
+}
+
+func newFakeCheckpointStore() *fakeCheckpointStore {
+	return &fakeCheckpointStore{saved: map[string]*domain.Act{}}
+}
+
+func (f *fakeCheckpointStore) Save(ctx context.Context, act *domain.Act) error {
+	cp := *act
+	cp.Steps = append([]domain.StepRecord(nil), act.Steps...)
+	f.saved[act.ID] = &cp
+	return nil
+}
+
+func (f *fakeCheckpointStore) Delete(ctx context.Context, actID string) error {
+	delete(f.saved, actID)
+	return nil
+}
+
+func (f *fakeCheckpointStore) Load(ctx context.Context, actID string) (*domain.Act, error) {
+	act, ok := f.saved[actID]
+	if !ok {
+		return nil, fmt.Errorf("fakeCheckpointStore: no checkpoint for act: %s", actID)
+	}
+	return act, nil
+}
+
+// TestCLI_Resume_ContinuesAfterInterruption proves Resume picks up an Act a
+// Verifier error left interrupted mid-Pipeline (after generate, before
+// verify completed) and carries it through the same apply/record tail Do
+// uses, rather than re-running the already-completed generate Step.
+func TestCLI_Resume_ContinuesAfterInterruption(t *testing.T) {
+	t.Setenv("USER", "tester")
+	repo := initGitRepo(t)
+	checkpoints := newFakeCheckpointStore()
+
+	verifier := &erroringOnceVerifier{err: errors.New("verify boom"), verdict: "pass"}
+	exec := executor.NewScriptedExecutor(newFilePatch("APPLIED.md"))
+	eng := engine.NewEngine(emptyGatherer{}, exec, verifier, repo, engine.DefaultPipeline())
+	eng.SetCheckpointSaver(checkpoints)
+
+	store, err := record.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("record.NewFileStore failed: %v", err)
+	}
+
+	var doOut bytes.Buffer
+	c := cli.NewCLI(eng, store, strings.NewReader("y\n"), &doOut)
+	if err := c.Do(context.Background(), "add a feature", repo); err == nil {
+		t.Fatal("Do with a Verifier that errors returned nil error")
+	}
+
+	if len(checkpoints.saved) != 1 {
+		t.Fatalf("checkpoints.saved = %+v, want exactly 1 interrupted Act", checkpoints.saved)
+	}
+	var actID string
+	for id := range checkpoints.saved {
+		actID = id
+	}
+
+	var resumeOut bytes.Buffer
+	resumeCLI := cli.NewCLI(eng, store, strings.NewReader("y\n"), &resumeOut)
+	if err := resumeCLI.Resume(context.Background(), actID, checkpoints, repo); err != nil {
+		t.Fatalf("Resume failed: %v", err)
+	}
+	if !strings.Contains(resumeOut.String(), "Applied and recorded") {
+		t.Errorf("output missing apply/record confirmation, got:\n%s", resumeOut.String())
+	}
+
+	acts, err := store.List(context.Background())
+	if err != nil || len(acts) != 1 {
+		t.Fatalf("store.List() = %+v, %v, want 1 recorded act", acts, err)
+	}
+	if len(acts[0].Steps) != 2 {
+		t.Errorf("recorded Steps = %+v, want 2 entries (generate once, verify once)", acts[0].Steps)
+	}
+}
+
+// TestCLI_Resume_NothingToResumeIsAClearError verifies Resume surfaces
+// engine.ErrCannotResume rather than silently doing nothing when the
+// checkpoint it loads has already reached the end of its Pipeline.
+func TestCLI_Resume_NothingToResumeIsAClearError(t *testing.T) {
+	repo := initGitRepo(t)
+	checkpoints := newFakeCheckpointStore()
+	checkpoints.saved["already-done"] = &domain.Act{
+		ID:     "already-done",
+		Intent: "add a feature",
+		Steps: []domain.StepRecord{
+			{StepID: "1", Kind: domain.StepKindGenerate, Produced: []string{newFilePatch("APPLIED.md")}},
+			{StepID: "2", Kind: domain.StepKindVerify, JudgmentVerdict: "pass"},
+		},
+	}
+
+	verifier := &fakeVerifier{verdict: "pass"}
+	exec := executor.NewScriptedExecutor(newFilePatch("APPLIED.md"))
+	eng := engine.NewEngine(emptyGatherer{}, exec, verifier, repo, engine.DefaultPipeline())
+
+	store, err := record.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("record.NewFileStore failed: %v", err)
+	}
+
+	var out bytes.Buffer
+	c := cli.NewCLI(eng, store, strings.NewReader(""), &out)
+	if err := c.Resume(context.Background(), "already-done", checkpoints, repo); !errors.Is(err, engine.ErrCannotResume) {
+		t.Fatalf("error = %v, want engine.ErrCannotResume", err)
 	}
 }
 
