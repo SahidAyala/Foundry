@@ -8,26 +8,44 @@ package engine
 // a repair target "a named earlier Step", and ID is that name — no
 // separate label field is needed.
 //
-// Capability, Executor, and FeedsForward are RFC-0004 §2's Router
-// groundwork (docs/04-guides/multi-executor-router-implementation-plan.md
-// Piece 1): all three are additive and zero-valued by default, so a Step
-// literal or PipelineDocument written before they existed keeps its exact
-// current behavior. Capability is carried but not yet interpreted by any
-// Router policy — Piece 1's Router (router.go) is explicit-pin-only;
+// Capability, Executor, FeedsForward, and Target are RFC-0004 §2's Router
+// and Knowledge-lite-capture groundwork
+// (docs/04-guides/multi-executor-router-implementation-plan.md Pieces 1 and
+// 4): all four are additive and zero-valued by default, so a Step literal
+// or PipelineDocument written before they existed keeps its exact current
+// behavior. Capability is carried but not yet interpreted by any Router
+// policy — Piece 1's Router (router.go) is explicit-pin-only;
 // capability-based negotiation is RFC-0002 §7 layer 2, out of scope until a
 // real multi-Executor Pipeline motivates it. Executor is the explicit pin a
 // Router resolves against an ExecutorRegistry; empty means "the Engine's
 // default Executor," exactly what every Step meant before Executor existed.
 // FeedsForward, when true, has runSteps append the immediately-preceding
 // Step's recorded output to this Step's Context — never an arbitrarily
-// named earlier Step, per RFC-0004 §3.
+// named earlier Step, per RFC-0004 §3. Target is meaningful only for a
+// domain.StepKindApply Step: which Applier resolves it — ApplyTargetLocal
+// (the empty string, the default, today's only behavior — the Engine's
+// single configured Applier) or a name registered in an ApplierRegistry
+// (ApplyTargetKnowledgeNote, ApplyTargetProjectDoc — RFC-0004 §2.6).
 type Step struct {
 	ID           string
 	Kind         string
 	Capability   map[string]string
 	Executor     string
 	FeedsForward bool
+	Target       string
 }
+
+// Apply Step target names RFC-0004 §2.6's Knowledge-lite capture defines,
+// resolved by runContext.resolveApplier (strategy.go) against an
+// ApplierRegistry. ApplyTargetLocal is never actually registered in one —
+// it, and the empty string a Step predating Target always has, both mean
+// "use the Engine's single configured Applier directly," exactly what every
+// apply Step meant before Target existed.
+const (
+	ApplyTargetLocal         = "local"
+	ApplyTargetKnowledgeNote = "knowledge-note"
+	ApplyTargetProjectDoc    = "project-doc"
+)
 
 // RepairPolicy bounds how many times a Pipeline may be re-run after its
 // final verify Step's Judgment is "fail", and names where each re-run jumps

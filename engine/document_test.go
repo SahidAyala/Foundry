@@ -162,6 +162,9 @@ func TestDecodePipelineDocument_OmittedRouterFieldsDecodeToZeroValues(t *testing
 	if step.FeedsForward {
 		t.Error("FeedsForward = true, want false")
 	}
+	if step.Target != "" {
+		t.Errorf("Target = %q, want empty string", step.Target)
+	}
 }
 
 func TestDecodePipelineDocument_CapabilityExecutorFeedsForwardDecode(t *testing.T) {
@@ -192,6 +195,27 @@ func TestDecodePipelineDocument_CapabilityExecutorFeedsForwardDecode(t *testing.
 	}
 	if !step.FeedsForward {
 		t.Error("FeedsForward = false, want true")
+	}
+}
+
+func TestDecodePipelineDocument_ApplyTargetDecode(t *testing.T) {
+	data := []byte(`{
+		"name": "knowledge-capture",
+		"steps": [
+			{
+				"id": "note",
+				"kind": "apply",
+				"target": "knowledge-note"
+			}
+		]
+	}`)
+
+	got, err := engine.DecodePipelineDocument(data)
+	if err != nil {
+		t.Fatalf("DecodePipelineDocument failed: %v", err)
+	}
+	if got.Steps[0].Target != "knowledge-note" {
+		t.Errorf("Target = %q, want %q", got.Steps[0].Target, "knowledge-note")
 	}
 }
 
