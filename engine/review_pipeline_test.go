@@ -2,6 +2,7 @@ package engine_test
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"foundry/domain"
@@ -84,7 +85,7 @@ func TestBuiltinProvider_ReviewDocumentMatchesProvenShape(t *testing.T) {
 		t.Fatalf("Steps = %+v, want %+v", got.Steps, want.Steps)
 	}
 	for i, w := range want.Steps {
-		if got.Steps[i] != w {
+		if !reflect.DeepEqual(got.Steps[i], w) {
 			t.Errorf("Steps[%d] = %+v, want %+v", i, got.Steps[i], w)
 		}
 	}
@@ -284,7 +285,7 @@ func pipelinesEqual(a, b engine.Pipeline) bool {
 		return false
 	}
 	for i := range a.Steps {
-		if a.Steps[i] != b.Steps[i] {
+		if !reflect.DeepEqual(a.Steps[i], b.Steps[i]) {
 			return false
 		}
 	}

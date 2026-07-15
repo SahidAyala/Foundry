@@ -7,9 +7,26 @@ package engine
 // vocabulary. ID doubles as Step's human-readable name: RFC-0002 §4.3 calls
 // a repair target "a named earlier Step", and ID is that name — no
 // separate label field is needed.
+//
+// Capability, Executor, and FeedsForward are RFC-0004 §2's Router
+// groundwork (docs/04-guides/multi-executor-router-implementation-plan.md
+// Piece 1): all three are additive and zero-valued by default, so a Step
+// literal or PipelineDocument written before they existed keeps its exact
+// current behavior. Capability is carried but not yet interpreted by any
+// Router policy — Piece 1's Router (router.go) is explicit-pin-only;
+// capability-based negotiation is RFC-0002 §7 layer 2, out of scope until a
+// real multi-Executor Pipeline motivates it. Executor is the explicit pin a
+// Router resolves against an ExecutorRegistry; empty means "the Engine's
+// default Executor," exactly what every Step meant before Executor existed.
+// FeedsForward, when true, has runSteps append the immediately-preceding
+// Step's recorded output to this Step's Context — never an arbitrarily
+// named earlier Step, per RFC-0004 §3.
 type Step struct {
-	ID   string
-	Kind string
+	ID           string
+	Kind         string
+	Capability   map[string]string
+	Executor     string
+	FeedsForward bool
 }
 
 // RepairPolicy bounds how many times a Pipeline may be re-run after its

@@ -2,6 +2,7 @@ package engine_test
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -305,7 +306,7 @@ func TestNewDefaultRegistry_RegistersDefaultPipeline(t *testing.T) {
 		t.Fatalf("Steps = %v, want %v", got.Steps, want.Steps)
 	}
 	for i := range got.Steps {
-		if got.Steps[i] != want.Steps[i] {
+		if !reflect.DeepEqual(got.Steps[i], want.Steps[i]) {
 			t.Errorf("Steps[%d] = %+v, want %+v", i, got.Steps[i], want.Steps[i])
 		}
 	}
