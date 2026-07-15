@@ -70,7 +70,8 @@ func Do(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, n
 // Executor configuration (project.BuildExecutorRegistry, .foundry/executors.json)
 // into a Router, falling back to newExecutor's default Executor — a project
 // with no such file sees byte-for-byte the same routing as before this
-// existed.
+// existed. buildApplierRegistry similarly registers repoPath's Knowledge-lite
+// capture apply targets (RFC-0004 §2.6) into an ApplierRegistry.
 func wireEngine(repoPath string, stdin io.Reader, stdout io.Writer, newExecutor func(workspace string) engine.Executor, newNamedExecutor project.ExecutorConstructor, pipelineName string) (*engine.Engine, *record.FileStore, *record.CheckpointStore, error) {
 	actsDir := filepath.Join(repoPath, ".foundry", "acts")
 
@@ -106,6 +107,12 @@ func wireEngine(repoPath string, stdin io.Reader, stdout io.Writer, newExecutor 
 	}
 	eng.SetRouter(engine.NewRouter(registry, def))
 
+	appliers, err := buildApplierRegistry(repoPath)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	eng.SetApplierRegistry(appliers)
+
 	eng.SetReporter(cli.NewProgressReporter(stdout))
 	eng.SetAuthority(cli.InteractiveAuthority{In: stdin, Out: stdout})
 	eng.SetApplier(workspace.GitApplier{})
@@ -113,4 +120,28 @@ func wireEngine(repoPath string, stdin io.Reader, stdout io.Writer, newExecutor 
 	eng.SetCheckpointSaver(checkpoints)
 
 	return eng, store, checkpoints, nil
+}
+
+// buildApplierRegistry registers repoPath's Knowledge-lite capture apply
+// targets (RFC-0004 §2.6, Piece 4 of
+// docs/04-guides/multi-executor-router-implementation-plan.md):
+// ApplyTargetKnowledgeNote unconditionally, and ApplyTargetProjectDoc only
+// if repoPath's .foundry/config.json names a docs_path — a project that
+// never opts in registers neither and sees no change, exactly as an apply
+// Step with no Target already behaves.
+func buildApplierRegistry(repoPath string) (*engine.ApplierRegistry, error) {
+	cfg, err := project.LoadConfig(repoPath)
+	if err != nil {
+		return nil, err
+	}
+	appliers := engine.NewApplierRegistry()
+	if err := appliers.Register(engine.ApplyTargetKnowledgeNote, workspace.KnowledgeNoteApplier{}); err != nil {
+		return nil, err
+	}
+	if cfg.DocsPath != "" {
+		if err := appliers.Register(engine.ApplyTargetProjectDoc, workspace.ProjectDocApplier{DocsPath: cfg.DocsPath}); err != nil {
+			return nil, err
+		}
+	}
+	return appliers, nil
 }

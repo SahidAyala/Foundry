@@ -60,6 +60,7 @@ type Session struct {
 	verifier  engine.Verifier
 	executor  engine.Executor
 	executors *engine.ExecutorRegistry
+	appliers  *engine.ApplierRegistry
 }
 
 // NewSession resolves root's full Pipeline registry (built-in plus
@@ -98,6 +99,11 @@ func NewSession(ctx context.Context, root string, in io.Reader, out io.Writer, n
 		return nil, fmt.Errorf("session: build executor registry: %w", err)
 	}
 
+	appliers, err := buildApplierRegistry(root)
+	if err != nil {
+		return nil, fmt.Errorf("session: build applier registry: %w", err)
+	}
+
 	return &Session{
 		Root:      root,
 		In:        bufio.NewReader(in),
@@ -108,7 +114,33 @@ func NewSession(ctx context.Context, root string, in io.Reader, out io.Writer, n
 		verifier:  workspace.NewStagedVerifier(gate),
 		executor:  newExecutor(root),
 		executors: executors,
+		appliers:  appliers,
 	}, nil
+}
+
+// buildApplierRegistry registers root's Knowledge-lite capture apply
+// targets (RFC-0004 §2.6, Piece 4 of
+// docs/04-guides/multi-executor-router-implementation-plan.md):
+// ApplyTargetKnowledgeNote unconditionally, and ApplyTargetProjectDoc only
+// if root's .foundry/config.json names a docs_path — a project that never
+// opts in registers neither and sees no change, exactly as an apply Step
+// with no Target already behaves. Mirrors
+// cmd/foundry/commands/do.go's own buildApplierRegistry.
+func buildApplierRegistry(root string) (*engine.ApplierRegistry, error) {
+	cfg, err := project.LoadConfig(root)
+	if err != nil {
+		return nil, err
+	}
+	appliers := engine.NewApplierRegistry()
+	if err := appliers.Register(engine.ApplyTargetKnowledgeNote, workspace.KnowledgeNoteApplier{}); err != nil {
+		return nil, err
+	}
+	if cfg.DocsPath != "" {
+		if err := appliers.Register(engine.ApplyTargetProjectDoc, workspace.ProjectDocApplier{DocsPath: cfg.DocsPath}); err != nil {
+			return nil, err
+		}
+	}
+	return appliers, nil
 }
 
 // ReloadPipelines re-resolves the session's Pipeline registry from disk
@@ -143,5 +175,6 @@ func (s *Session) Engine(pipelineName string) (*engine.Engine, error) {
 	}
 	eng := engine.NewEngine(s.gatherer, s.executor, s.verifier, s.Root, pipeline)
 	eng.SetRouter(engine.NewRouter(s.executors, s.executor))
+	eng.SetApplierRegistry(s.appliers)
 	return eng, nil
 }
