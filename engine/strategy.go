@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -56,11 +57,15 @@ var _ Strategy = PipelineStrategy{}
 // Judgment is "fail". A repair re-run jumps to s.Pipeline.Repair.Target
 // (RFC-0002 §4.3's "named earlier Step") and replays only that Step onward,
 // not the whole Pipeline; an unset Target replays from Pipeline.Steps[0], as
-// every Pipeline did before Target existed. A Budget refusal on the first
-// attempt halts: act is marked VerdictBudgetExceeded and the refusal is
-// returned as an error wrapping ErrBudgetExceeded. A Budget refusal on a
-// repair attempt is not an error — the prior attempt's Judgment stands as
-// final.
+// every Pipeline did before Target existed. Budget is charged per generate
+// Step as runSteps executes it (RFC-0004 §2.7, Piece 5 of
+// docs/04-guides/multi-executor-router-implementation-plan.md), not once
+// per attempt — a Pipeline with more than one generate Step per attempt
+// (e.g. feature.json's plan + implement) is charged for every Executor call
+// it actually makes. A Budget refusal anywhere in the first attempt halts:
+// act is marked VerdictBudgetExceeded and the refusal is returned as an
+// error wrapping ErrBudgetExceeded. A Budget refusal anywhere in a repair
+// attempt is not an error — the prior attempt's Judgment stands as final.
 //
 // Produce executes s.Pipeline purely from its Steps and RepairPolicy — any
 // well-formed sequence of generate/verify Steps runs unmodified, with no
@@ -101,18 +106,6 @@ func (s PipelineStrategy) Produce(ctx context.Context, act *domain.Act, intent *
 	var judgment *domain.Judgment
 
 	for attempt := 0; ; attempt++ {
-		if err := rc.spent.charge(executeCostEstimateUSD); err != nil {
-			if attempt == 0 {
-				rc.reporter.BudgetExceeded(err.Error())
-				act.JudgmentVerdict = VerdictBudgetExceeded
-				act.Iterations = rc.spent.iterations
-				act.CostEstimateUSD = rc.spent.costUSD
-				return err
-			}
-			rc.reporter.RepairSkipped(err.Error())
-			break
-		}
-
 		steps := s.Pipeline.Steps
 		if attempt > 0 {
 			repaired := make([]string, 0, len(considered)+1)
@@ -128,6 +121,17 @@ func (s PipelineStrategy) Produce(ctx context.Context, act *domain.Act, intent *
 		o, j, terminal, err := runSteps(ctx, s.Pipeline.Name, act, intent, steps, considered, outcome, judgment, attempt, rc)
 		outcome, judgment = o, j
 		if err != nil {
+			if errors.Is(err, ErrBudgetExceeded) {
+				if attempt == 0 {
+					rc.reporter.BudgetExceeded(err.Error())
+					act.JudgmentVerdict = VerdictBudgetExceeded
+					act.Iterations = rc.spent.iterations
+					act.CostEstimateUSD = rc.spent.costUSD
+					return err
+				}
+				rc.reporter.RepairSkipped(err.Error())
+				break
+			}
 			return err
 		}
 		if terminal {
@@ -173,8 +177,6 @@ func runSteps(ctx context.Context, pipelineName string, act *domain.Act, intent 
 		}
 		switch step.Kind {
 		case domain.StepKindGenerate:
-			rc.reporter.Executing(rc.spent.iterations)
-			start := time.Now()
 			stepConsidered := considered
 			if step.FeedsForward && len(act.Steps) > 0 {
 				stepConsidered = appendFeedsForward(considered, act.Steps[len(act.Steps)-1])
@@ -183,6 +185,21 @@ func runSteps(ctx context.Context, pipelineName string, act *domain.Act, intent 
 			if err != nil {
 				return outcome, judgment, false, wrapStepError(attempt, "route", err)
 			}
+			estimate, err := estimateExecuteCostUSD(ctx, resolved, intent, stepConsidered)
+			if err != nil {
+				return outcome, judgment, false, wrapStepError(attempt, "estimate", err)
+			}
+			if err := rc.spent.charge(estimate); err != nil {
+				// Not wrapStepError: Produce reports this verbatim via
+				// reporter.BudgetExceeded/RepairSkipped, and charge's own
+				// message ("budget exceeded: ...") is already the whole
+				// story — an "engine: execute:"-style prefix would be
+				// redundant in that narration, unlike a genuine Step
+				// failure.
+				return outcome, judgment, false, err
+			}
+			rc.reporter.Executing(attempt + 1)
+			start := time.Now()
 			o, err := resolved.Execute(ctx, intent, stepConsidered)
 			if err != nil {
 				return outcome, judgment, false, wrapStepError(attempt, "execute", err)
@@ -201,14 +218,14 @@ func runSteps(ctx context.Context, pipelineName string, act *domain.Act, intent 
 			if outcome == nil {
 				return outcome, judgment, false, fmt.Errorf("engine: pipeline %q step %q: verify has no Outcome to check — no generate step ran before it", pipelineName, step.ID)
 			}
-			rc.reporter.Verifying(rc.spent.iterations)
+			rc.reporter.Verifying(attempt + 1)
 			start := time.Now()
 			j, err := rc.verifier.Verify(ctx, outcome, rc.workspace)
 			if err != nil {
 				return outcome, judgment, false, wrapStepError(attempt, "verify", err)
 			}
 			judgment = j
-			rc.reporter.Verified(rc.spent.iterations, judgment)
+			rc.reporter.Verified(attempt+1, judgment)
 			recordStep(act, domain.StepKindVerify, nil, nil, judgment.Checked, judgment.Verdict, "", start)
 			if err := rc.checkpoints.Save(ctx, act); err != nil {
 				return outcome, judgment, false, wrapStepError(attempt, "checkpoint", err)

@@ -9,11 +9,11 @@ import (
 
 func TestDefaultBudget(t *testing.T) {
 	b := DefaultBudget()
-	if b.MaxIterations != 2 {
-		t.Errorf("MaxIterations = %d, want 2", b.MaxIterations)
+	if b.MaxIterations != 4 {
+		t.Errorf("MaxIterations = %d, want 4", b.MaxIterations)
 	}
-	if b.MaxCostUSD != 1.00 {
-		t.Errorf("MaxCostUSD = %v, want 1.00", b.MaxCostUSD)
+	if b.MaxCostUSD != 2.00 {
+		t.Errorf("MaxCostUSD = %v, want 2.00", b.MaxCostUSD)
 	}
 }
 

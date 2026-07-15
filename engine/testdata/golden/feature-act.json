@@ -12,8 +12,8 @@
   "judgment_verdict": "pass",
   "approved_by": "sahid.ayala@vtwo.co",
   "approved_at": "2026-01-01T00:05:30Z",
-  "iterations": 2,
-  "cost_estimate_usd": 0.24,
+  "iterations": 3,
+  "cost_estimate_usd": 0.36,
   "steps": [
     {
       "step_id": "1",
