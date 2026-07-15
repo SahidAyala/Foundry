@@ -175,11 +175,15 @@ func runSteps(ctx context.Context, pipelineName string, act *domain.Act, intent 
 		case domain.StepKindGenerate:
 			rc.reporter.Executing(rc.spent.iterations)
 			start := time.Now()
+			stepConsidered := considered
+			if step.FeedsForward && len(act.Steps) > 0 {
+				stepConsidered = appendFeedsForward(considered, act.Steps[len(act.Steps)-1])
+			}
 			resolved, err := rc.router.Resolve(step)
 			if err != nil {
 				return outcome, judgment, false, wrapStepError(attempt, "route", err)
 			}
-			o, err := resolved.Execute(ctx, intent, considered)
+			o, err := resolved.Execute(ctx, intent, stepConsidered)
 			if err != nil {
 				return outcome, judgment, false, wrapStepError(attempt, "execute", err)
 			}
@@ -187,8 +191,8 @@ func runSteps(ctx context.Context, pipelineName string, act *domain.Act, intent 
 			act.Patch = outcome.Patch
 			act.Iterations = rc.spent.iterations
 			act.CostEstimateUSD = rc.spent.costUSD
-			act.ConsideredFiles = considered
-			recordStep(act, domain.StepKindGenerate, considered, producedPatch(outcome), nil, "", "", start)
+			act.ConsideredFiles = stepConsidered
+			recordStep(act, domain.StepKindGenerate, stepConsidered, producedPatch(outcome), nil, "", "", start)
 			if err := rc.checkpoints.Save(ctx, act); err != nil {
 				return outcome, judgment, false, wrapStepError(attempt, "checkpoint", err)
 			}
@@ -316,6 +320,36 @@ func wrapStepError(attempt int, op string, err error) error {
 // considered-context entry, so the Executor sees what failed on the
 // previous attempt and the Act's Evidence records what the repair saw.
 func repairContext(judgment *domain.Judgment) string {
-	return "verification findings from the failed previous attempt:\n" +
-		strings.Join(judgment.Checked, "\n")
+	return renderStepRecord("verification findings from the failed previous attempt", domain.StepRecord{Checked: judgment.Checked})
+}
+
+// renderStepRecord renders step's most relevant recorded output — its
+// Produced patch, if it generated one, otherwise its Checked verification
+// findings — as one considered-context entry prefixed by label. It is the
+// one rendering repairContext (repair-only, attempt > 0) and feeds_forward
+// threading (runSteps' StepKindGenerate case, below) both reuse
+// (RFC-0004 §3, docs/04-guides/multi-executor-router-implementation-plan.md
+// Piece 1, Commit 5).
+func renderStepRecord(label string, step domain.StepRecord) string {
+	if len(step.Produced) > 0 {
+		return label + ":\n" + strings.Join(step.Produced, "\n")
+	}
+	return label + ":\n" + strings.Join(step.Checked, "\n")
+}
+
+// feedsForwardLabel prefixes the rendering a FeedsForward Step's
+// immediately preceding StepRecord gets, distinguishing it from a repair
+// round's "verification findings from the failed previous attempt" in any
+// considered-context list that contains both.
+const feedsForwardLabel = "output from the immediately preceding step"
+
+// appendFeedsForward returns a new slice holding considered's entries plus
+// prev rendered as one more entry, leaving considered itself untouched —
+// the augmentation is scoped to the one Step that declared
+// FeedsForward: true, not threaded into any later Step's Context
+// (RFC-0004 §3: "the one immediately before," applied once).
+func appendFeedsForward(considered []string, prev domain.StepRecord) []string {
+	augmented := make([]string, len(considered), len(considered)+1)
+	copy(augmented, considered)
+	return append(augmented, renderStepRecord(feedsForwardLabel, prev))
 }
