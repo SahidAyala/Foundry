@@ -33,16 +33,18 @@ type PipelineDocument struct {
 }
 
 // StepDocument is one Step's declarative shape within a PipelineDocument.
-// Capability, Executor, and FeedsForward are optional (RFC-0004 §2, Piece 1
-// of docs/04-guides/multi-executor-router-implementation-plan.md): a
-// document that omits them decodes to Step's zero values for all three,
-// identical to every document written before they existed.
+// Capability, Executor, FeedsForward, and Target are optional (RFC-0004 §2
+// and §2.6, Pieces 1 and 4 of
+// docs/04-guides/multi-executor-router-implementation-plan.md): a document
+// that omits them decodes to Step's zero values for all four, identical to
+// every document written before they existed.
 type StepDocument struct {
 	ID           string            `json:"id"`
 	Kind         string            `json:"kind"`
 	Capability   map[string]string `json:"capability,omitempty"`
 	Executor     string            `json:"executor,omitempty"`
 	FeedsForward bool              `json:"feeds_forward,omitempty"`
+	Target       string            `json:"target,omitempty"`
 }
 
 // RepairPolicyDocument is a Pipeline's declarative repair bound. A document
@@ -104,6 +106,7 @@ func (doc PipelineDocument) toPipeline() (Pipeline, error) {
 			Capability:   s.Capability,
 			Executor:     s.Executor,
 			FeedsForward: s.FeedsForward,
+			Target:       s.Target,
 		}
 		ids[s.ID] = true
 	}

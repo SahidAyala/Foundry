@@ -28,17 +28,18 @@ import (
 
 // Engine produces machine-judged Acts.
 type Engine struct {
-	gatherer     Gatherer
-	verifier     Verifier
-	workspace    string // directory the Verifier checks
-	reporter     Reporter
-	authority    Authority
-	applier      Applier
-	checkpointer Checkpointer
-	checkpoints  CheckpointSaver
-	strategy     Strategy
-	pipelineName string
-	router       Router
+	gatherer        Gatherer
+	verifier        Verifier
+	workspace       string // directory the Verifier checks
+	reporter        Reporter
+	authority       Authority
+	applier         Applier
+	checkpointer    Checkpointer
+	checkpoints     CheckpointSaver
+	strategy        Strategy
+	pipelineName    string
+	router          Router
+	applierRegistry *ApplierRegistry
 }
 
 // NewEngine wires the ports an Engine needs to produce an Act, using
@@ -51,17 +52,18 @@ type Engine struct {
 // checks; for M0.0 this is the repository path.
 func NewEngine(gatherer Gatherer, executor Executor, verifier Verifier, workspace string, pipeline Pipeline) *Engine {
 	return &Engine{
-		gatherer:     gatherer,
-		verifier:     verifier,
-		workspace:    workspace,
-		reporter:     noopReporter{},
-		authority:    noAuthority{},
-		applier:      noApplier{},
-		checkpointer: noCheckpointer{},
-		checkpoints:  noCheckpointSaver{},
-		strategy:     PipelineStrategy{Pipeline: pipeline},
-		pipelineName: pipeline.Name,
-		router:       NewRouter(NewExecutorRegistry(), executor),
+		gatherer:        gatherer,
+		verifier:        verifier,
+		workspace:       workspace,
+		reporter:        noopReporter{},
+		authority:       noAuthority{},
+		applier:         noApplier{},
+		checkpointer:    noCheckpointer{},
+		checkpoints:     noCheckpointSaver{},
+		strategy:        PipelineStrategy{Pipeline: pipeline},
+		pipelineName:    pipeline.Name,
+		router:          NewRouter(NewExecutorRegistry(), executor),
+		applierRegistry: NewApplierRegistry(),
 	}
 }
 
@@ -97,6 +99,18 @@ func (e *Engine) SetAuthority(a Authority) {
 // SetApplier is called.
 func (e *Engine) SetApplier(a Applier) {
 	e.applier = a
+}
+
+// SetApplierRegistry attaches r as the Engine's named apply Target
+// resolver, replacing the default empty ApplierRegistry NewEngine builds
+// (RFC-0004 §2.6, Piece 4 of
+// docs/04-guides/multi-executor-router-implementation-plan.md). Only an
+// apply Step whose Target is neither empty nor ApplyTargetLocal ever
+// consults it — every Pipeline that predates Target, and any apply Step
+// that still declares none, keeps resolving to e.applier directly, whether
+// or not SetApplierRegistry is ever called.
+func (e *Engine) SetApplierRegistry(r *ApplierRegistry) {
+	e.applierRegistry = r
 }
 
 // SetCheckpointer attaches c as the Engine's record Step mechanism,
@@ -149,15 +163,16 @@ func (e *Engine) RunBudgeted(ctx context.Context, intent *domain.Intent, budget 
 	act.ConsideredFiles = considered
 
 	rc := runContext{
-		router:       e.router,
-		verifier:     e.verifier,
-		workspace:    e.workspace,
-		reporter:     e.reporter,
-		authority:    e.authority,
-		applier:      e.applier,
-		checkpointer: e.checkpointer,
-		checkpoints:  e.checkpoints,
-		spent:        spent,
+		router:          e.router,
+		verifier:        e.verifier,
+		workspace:       e.workspace,
+		reporter:        e.reporter,
+		authority:       e.authority,
+		applier:         e.applier,
+		applierRegistry: e.applierRegistry,
+		checkpointer:    e.checkpointer,
+		checkpoints:     e.checkpoints,
+		spent:           spent,
 	}
 	if err := e.strategy.Produce(ctx, act, intent, considered, rc); err != nil {
 		if errors.Is(err, ErrBudgetExceeded) {
@@ -201,15 +216,16 @@ func (e *Engine) Resume(ctx context.Context, act *domain.Act) (*domain.Act, erro
 
 	spent := &tracker{budget: DefaultBudget(), iterations: act.Iterations, costUSD: act.CostEstimateUSD}
 	rc := runContext{
-		router:       e.router,
-		verifier:     e.verifier,
-		workspace:    e.workspace,
-		reporter:     e.reporter,
-		authority:    e.authority,
-		applier:      e.applier,
-		checkpointer: e.checkpointer,
-		checkpoints:  e.checkpoints,
-		spent:        spent,
+		router:          e.router,
+		verifier:        e.verifier,
+		workspace:       e.workspace,
+		reporter:        e.reporter,
+		authority:       e.authority,
+		applier:         e.applier,
+		applierRegistry: e.applierRegistry,
+		checkpointer:    e.checkpointer,
+		checkpoints:     e.checkpoints,
+		spent:           spent,
 	}
 
 	outcome, judgment := lastOutcomeAndJudgment(act.Steps)

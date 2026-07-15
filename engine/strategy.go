@@ -30,15 +30,30 @@ type Strategy interface {
 // call, the workspace to verify against, the Reporter to narrate progress,
 // and the Budget tracker enforcing this Act's ceiling.
 type runContext struct {
-	router       Router
-	verifier     Verifier
-	workspace    string
-	reporter     Reporter
-	authority    Authority
-	applier      Applier
-	checkpointer Checkpointer
-	checkpoints  CheckpointSaver
-	spent        *tracker
+	router          Router
+	verifier        Verifier
+	workspace       string
+	reporter        Reporter
+	authority       Authority
+	applier         Applier
+	applierRegistry *ApplierRegistry
+	checkpointer    Checkpointer
+	checkpoints     CheckpointSaver
+	spent           *tracker
+}
+
+// resolveApplier returns the Applier a Step's apply Target names:
+// rc.applier — the Engine's single configured Applier — if target is empty
+// or ApplyTargetLocal (every apply Step before Target existed, and every
+// one that still declares none), or the named Applier from
+// rc.applierRegistry otherwise, erroring clearly if that target isn't
+// registered (mirrors Router.Resolve's unresolved-pin behavior: a Target
+// that can't be honored is never silently ignored in favor of the default).
+func (rc runContext) resolveApplier(target string) (Applier, error) {
+	if target == "" || target == ApplyTargetLocal {
+		return rc.applier, nil
+	}
+	return rc.applierRegistry.Get(target)
 }
 
 // PipelineStrategy produces an Act by walking a Pipeline's Steps in order,
@@ -264,7 +279,11 @@ func runSteps(ctx context.Context, pipelineName string, act *domain.Act, intent 
 				return outcome, judgment, false, fmt.Errorf("engine: pipeline %q step %q: apply requires an accepted approve step first", pipelineName, step.ID)
 			}
 			start := time.Now()
-			if err := rc.applier.Apply(ctx, rc.workspace, act); err != nil {
+			applier, err := rc.resolveApplier(step.Target)
+			if err != nil {
+				return outcome, judgment, false, wrapStepError(attempt, "route", err)
+			}
+			if err := applier.Apply(ctx, rc.workspace, act); err != nil {
 				return outcome, judgment, false, wrapStepError(attempt, "apply", err)
 			}
 			recordStep(act, domain.StepKindApply, nil, producedPatch(outcome), nil, "", "", start)
