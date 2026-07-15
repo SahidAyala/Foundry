@@ -29,7 +29,7 @@ type Strategy interface {
 // call, the workspace to verify against, the Reporter to narrate progress,
 // and the Budget tracker enforcing this Act's ceiling.
 type runContext struct {
-	executor     Executor
+	router       Router
 	verifier     Verifier
 	workspace    string
 	reporter     Reporter
@@ -175,7 +175,11 @@ func runSteps(ctx context.Context, pipelineName string, act *domain.Act, intent 
 		case domain.StepKindGenerate:
 			rc.reporter.Executing(rc.spent.iterations)
 			start := time.Now()
-			o, err := rc.executor.Execute(ctx, intent, considered)
+			resolved, err := rc.router.Resolve(step)
+			if err != nil {
+				return outcome, judgment, false, wrapStepError(attempt, "route", err)
+			}
+			o, err := resolved.Execute(ctx, intent, considered)
 			if err != nil {
 				return outcome, judgment, false, wrapStepError(attempt, "execute", err)
 			}

@@ -29,7 +29,6 @@ import (
 // Engine produces machine-judged Acts.
 type Engine struct {
 	gatherer     Gatherer
-	executor     Executor
 	verifier     Verifier
 	workspace    string // directory the Verifier checks
 	reporter     Reporter
@@ -39,6 +38,7 @@ type Engine struct {
 	checkpoints  CheckpointSaver
 	strategy     Strategy
 	pipelineName string
+	router       Router
 }
 
 // NewEngine wires the ports an Engine needs to produce an Act, using
@@ -52,7 +52,6 @@ type Engine struct {
 func NewEngine(gatherer Gatherer, executor Executor, verifier Verifier, workspace string, pipeline Pipeline) *Engine {
 	return &Engine{
 		gatherer:     gatherer,
-		executor:     executor,
 		verifier:     verifier,
 		workspace:    workspace,
 		reporter:     noopReporter{},
@@ -62,7 +61,19 @@ func NewEngine(gatherer Gatherer, executor Executor, verifier Verifier, workspac
 		checkpoints:  noCheckpointSaver{},
 		strategy:     PipelineStrategy{Pipeline: pipeline},
 		pipelineName: pipeline.Name,
+		router:       NewRouter(NewExecutorRegistry(), executor),
 	}
+}
+
+// SetRouter attaches r as the Engine's Generate-Step Executor resolver,
+// replacing the default Router NewEngine builds (an empty ExecutorRegistry
+// falling back to executor, NewEngine's own parameter — every Step's
+// Executor pin is empty until a Pipeline document declares one, so this
+// default reproduces the exact single-Executor behavior every Pipeline had
+// before Router existed). A Pipeline that pins no Step's executor behaves
+// identically whether or not SetRouter is ever called.
+func (e *Engine) SetRouter(r Router) {
+	e.router = r
 }
 
 // SetReporter attaches r as the Engine's progress observer, replacing the
@@ -138,7 +149,7 @@ func (e *Engine) RunBudgeted(ctx context.Context, intent *domain.Intent, budget 
 	act.ConsideredFiles = considered
 
 	rc := runContext{
-		executor:     e.executor,
+		router:       e.router,
 		verifier:     e.verifier,
 		workspace:    e.workspace,
 		reporter:     e.reporter,
@@ -190,7 +201,7 @@ func (e *Engine) Resume(ctx context.Context, act *domain.Act) (*domain.Act, erro
 
 	spent := &tracker{budget: DefaultBudget(), iterations: act.Iterations, costUSD: act.CostEstimateUSD}
 	rc := runContext{
-		executor:     e.executor,
+		router:       e.router,
 		verifier:     e.verifier,
 		workspace:    e.workspace,
 		reporter:     e.reporter,
