@@ -15,20 +15,30 @@ var ErrBudgetExceeded = errors.New("budget exceeded")
 // because its Budget was exhausted.
 const VerdictBudgetExceeded = "budget-exceeded"
 
-// M0.1 budget policy: hardcoded until budgets become configurable (M0.3).
+// Hardcoded until budgets become configurable (roadmap.md open decision 9,
+// "cost as a first-class constraint"). Sized to cover a Pipeline with more
+// than one generate Step per attempt now that Budget charges per Step, not
+// per attempt (RFC-0004 §2.7): feature.json's worst case is plan +
+// implement + two repair rounds of implement — 4 Executor calls — which
+// must all fit under these ceilings at the flat executeCostEstimateUSD rate
+// for the repair capability it declares (repair.max_attempts: 2) to ever be
+// reachable.
 const (
-	defaultMaxIterations = 2
-	defaultMaxCostUSD    = 1.00
+	defaultMaxIterations = 4
+	defaultMaxCostUSD    = 2.00
 
-	// executeCostEstimateUSD is charged against Budget.MaxCostUSD for each
-	// Executor.Execute call. The Claude Code subprocess exposes no real cost
-	// signal, so a flat conservative estimate keeps the cap enforceable
-	// until Executors report actual cost.
+	// executeCostEstimateUSD is the fallback charged against
+	// Budget.MaxCostUSD for an Executor.Execute call whose Executor does
+	// not implement CostEstimator (estimateExecuteCostUSD,
+	// cost_estimator.go) — today, executor/claude.ClaudeExecutor and
+	// executor.ScriptedExecutor. The Claude Code subprocess exposes no real
+	// cost signal, so a flat conservative estimate keeps the cap
+	// enforceable until it does.
 	executeCostEstimateUSD = 0.50
 )
 
-// DefaultBudget returns the hardcoded M0.1 Budget: at most 2 Executor
-// iterations and $1.00 of estimated cost per Act.
+// DefaultBudget returns the hardcoded default Budget: at most 4 Executor
+// calls and $2.00 of estimated cost per Act.
 func DefaultBudget() *domain.Budget {
 	return &domain.Budget{
 		MaxIterations: defaultMaxIterations,

@@ -113,8 +113,8 @@ func TestGoldenFeaturePipeline_ExecutesFullLifecycleWithOneRepairRound(t *testin
 	if act.ApprovedAt == nil {
 		t.Error("ApprovedAt is nil, want a timestamp")
 	}
-	if act.Iterations != 2 {
-		t.Errorf("Iterations = %d, want 2 (one repair round)", act.Iterations)
+	if act.Iterations != 3 {
+		t.Errorf("Iterations = %d, want 3 (plan, implement, implement repaired — Budget charges per generate Step, RFC-0004 §2.7)", act.Iterations)
 	}
 	if len(exec.calls) != 3 {
 		t.Fatalf("Executor called %d times, want 3 (plan, implement attempt 1, implement attempt 2)", len(exec.calls))

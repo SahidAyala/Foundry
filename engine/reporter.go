@@ -10,13 +10,15 @@ type Reporter interface {
 	// Gathering is called once, before the Gatherer runs.
 	Gathering()
 	// Executing is called before an Executor.Execute call. iteration is
-	// 1 for the first attempt, 2 for the bounded repair.
+	// 1 for the first attempt, 2 for the bounded repair — the Pipeline
+	// attempt number, not a count of Executor calls (a single attempt may
+	// call Execute more than once, e.g. feature.json's plan + implement).
 	Executing(iteration int)
 	// Verifying is called before a Verifier.Verify call for the same
-	// iteration just executed.
+	// attempt just executed.
 	Verifying(iteration int)
-	// Verified is called with the Judgment Verify returned for iteration
-	// — including its Checked findings, so a caller can show why a
+	// Verified is called with the Judgment Verify returned for the same
+	// attempt — including its Checked findings, so a caller can show why a
 	// verdict failed, not only that it did.
 	Verified(iteration int, judgment *domain.Judgment)
 	// Repairing is called once, when a failed first verification earns
