@@ -13,6 +13,7 @@ import (
 	"foundry/gatherer"
 	"foundry/project"
 	"foundry/record"
+	"foundry/vcs"
 	"foundry/verify"
 	"foundry/workspace"
 )
@@ -71,7 +72,17 @@ func Do(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, n
 // into a Router, falling back to newExecutor's default Executor — a project
 // with no such file sees byte-for-byte the same routing as before this
 // existed. buildApplierRegistry similarly registers repoPath's Knowledge-lite
-// capture apply targets (RFC-0004 §2.6) into an ApplierRegistry.
+// capture and VCS/PR apply targets (RFC-0004 §2.6, ADR-0010) into an
+// ApplierRegistry.
+//
+// wireEngine never calls engine.PipelineRegistry.SetPublishPolicy: pipeline
+// is resolved from engine.NewDefaultRegistry(), which loads only Foundry's
+// built-in Pipelines (default, review) — neither declares an apply Step at
+// all, so there is nothing yet for that policy to enforce here. It becomes
+// relevant only if `foundry do` ever gains project-local Pipeline support
+// (today, project-authored Pipelines with a "remote-pr" apply target run
+// only through the interactive session, session.NewSession, which does set
+// it).
 func wireEngine(repoPath string, stdin io.Reader, stdout io.Writer, newExecutor func(workspace string) engine.Executor, newNamedExecutor project.ExecutorConstructor, pipelineName string) (*engine.Engine, *record.FileStore, *record.CheckpointStore, error) {
 	actsDir := filepath.Join(repoPath, ".foundry", "acts")
 
@@ -107,7 +118,11 @@ func wireEngine(repoPath string, stdin io.Reader, stdout io.Writer, newExecutor 
 	}
 	eng.SetRouter(engine.NewRouter(registry, def))
 
-	appliers, err := buildApplierRegistry(repoPath)
+	cfg, err := project.LoadConfig(repoPath)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	appliers, err := buildApplierRegistry(cfg)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -122,24 +137,26 @@ func wireEngine(repoPath string, stdin io.Reader, stdout io.Writer, newExecutor 
 	return eng, store, checkpoints, nil
 }
 
-// buildApplierRegistry registers repoPath's Knowledge-lite capture apply
-// targets (RFC-0004 §2.6, Piece 4 of
+// buildApplierRegistry registers cfg's Knowledge-lite capture and VCS/PR
+// apply targets (RFC-0004 §2.6, Piece 4; ADR-0010, Piece 6 — both of
 // docs/04-guides/multi-executor-router-implementation-plan.md):
-// ApplyTargetKnowledgeNote unconditionally, and ApplyTargetProjectDoc only
-// if repoPath's .foundry/config.json names a docs_path — a project that
-// never opts in registers neither and sees no change, exactly as an apply
-// Step with no Target already behaves.
-func buildApplierRegistry(repoPath string) (*engine.ApplierRegistry, error) {
-	cfg, err := project.LoadConfig(repoPath)
-	if err != nil {
-		return nil, err
-	}
+// ApplyTargetKnowledgeNote unconditionally, ApplyTargetProjectDoc only if
+// cfg names a DocsPath, and ApplyTargetRemotePR only if cfg names a
+// RemotePublishTokenEnv — a project that never opts in registers none of
+// the last two and sees no change, exactly as an apply Step with no Target
+// already behaves. Mirrors session.Session's own buildApplierRegistry.
+func buildApplierRegistry(cfg project.Config) (*engine.ApplierRegistry, error) {
 	appliers := engine.NewApplierRegistry()
 	if err := appliers.Register(engine.ApplyTargetKnowledgeNote, workspace.KnowledgeNoteApplier{}); err != nil {
 		return nil, err
 	}
 	if cfg.DocsPath != "" {
 		if err := appliers.Register(engine.ApplyTargetProjectDoc, workspace.ProjectDocApplier{DocsPath: cfg.DocsPath}); err != nil {
+			return nil, err
+		}
+	}
+	if cfg.RemotePublishTokenEnv != "" {
+		if err := appliers.Register(engine.ApplyTargetRemotePR, vcs.GitHubPRApplier{TokenEnv: cfg.RemotePublishTokenEnv}); err != nil {
 			return nil, err
 		}
 	}
