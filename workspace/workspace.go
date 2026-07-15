@@ -97,6 +97,41 @@ func (w *Workspace) Land(ctx context.Context) error {
 	return nil
 }
 
+// BranchName returns the throwaway branch NewWorkspace created — the name
+// a caller pushing this workspace to a remote (Push) needs to name as the
+// pushed ref (ADR-0010, docs/03-adrs/ADR-0010-vcs-pr-integration-and-apply-targets.md).
+func (w *Workspace) BranchName() string {
+	return w.branchName
+}
+
+// Commit stages every change in the workspace's branch (from a prior
+// Apply) and commits it with message. Unlike Land, which never commits and
+// instead carries an uncommitted working-tree diff back onto the
+// developer's own branch, a remote apply target (vcs.GitHubPRApplier)
+// needs a real commit to push — nothing to push a diff to otherwise.
+func (w *Workspace) Commit(ctx context.Context, message string) error {
+	if _, err := gitOutput(ctx, w.repoPath, "add", "-A"); err != nil {
+		return fmt.Errorf("workspace: stage changes: %w", err)
+	}
+	if _, err := gitOutput(ctx, w.repoPath, "commit", "-m", message); err != nil {
+		return fmt.Errorf("workspace: commit: %w", err)
+	}
+	return nil
+}
+
+// Push pushes the workspace's branch to remote, creating the matching
+// remote-tracking branch. It requires the repository's own remote and
+// credentials to already be configured for pushing (e.g. an SSH key, or a
+// credential helper `gh auth login` sets up) — Foundry does not manage git
+// push authentication separately from whatever the developer's checkout
+// already has configured.
+func (w *Workspace) Push(ctx context.Context, remote string) error {
+	if _, err := gitOutput(ctx, w.repoPath, "push", "-u", remote, w.branchName); err != nil {
+		return fmt.Errorf("workspace: push %q to %q: %w", w.branchName, remote, err)
+	}
+	return nil
+}
+
 // Clean discards any changes made in the workspace's branch, checks the
 // repository back out to the branch it was on before NewWorkspace, and
 // deletes the throwaway branch.
