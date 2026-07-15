@@ -2,6 +2,7 @@ package engine_test
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -351,5 +352,76 @@ func TestNewDefaultRegistry_EngineBehaviorUnchanged(t *testing.T) {
 	}
 	if len(viaRegistry.Steps) != len(viaDirect.Steps) {
 		t.Errorf("Steps = %v, want %v", viaRegistry.Steps, viaDirect.Steps)
+	}
+}
+
+// remotePRPipeline returns a Pipeline declaring one apply Step targeting
+// engine.ApplyTargetRemotePR, with an approve Step either present or
+// absent before it, for exercising SetPublishPolicy's registration-time
+// check (ADR-0010 Decision 3).
+func remotePRPipeline(name string, withApprove bool) engine.Pipeline {
+	steps := []engine.Step{
+		{ID: "generate", Kind: domain.StepKindGenerate},
+		{ID: "verify", Kind: domain.StepKindVerify},
+	}
+	if withApprove {
+		steps = append(steps, engine.Step{ID: "approve", Kind: domain.StepKindApprove})
+	}
+	steps = append(steps, engine.Step{ID: "publish", Kind: domain.StepKindApply, Target: engine.ApplyTargetRemotePR})
+	return engine.Pipeline{Name: name, Steps: steps}
+}
+
+func TestPipelineRegistry_PublishPolicyUnsetAllowsRemotePRWithoutApprove(t *testing.T) {
+	registry := engine.NewPipelineRegistry()
+
+	if err := registry.Register(remotePRPipeline("publish", false)); err != nil {
+		t.Fatalf("Register failed: %v (SetPublishPolicy was never called, so nothing should be enforced)", err)
+	}
+}
+
+func TestPipelineRegistry_PublishPolicyRequiredRefusesRemotePRWithoutApprove(t *testing.T) {
+	registry := engine.NewPipelineRegistry()
+	registry.SetPublishPolicy(true)
+
+	err := registry.Register(remotePRPipeline("publish", false))
+	if !errors.Is(err, engine.ErrRemotePublishRequiresApproval) {
+		t.Fatalf("err = %v, want it to wrap ErrRemotePublishRequiresApproval", err)
+	}
+
+	if _, getErr := registry.Get("publish"); getErr == nil {
+		t.Error("Get(\"publish\") succeeded; a refused Register must leave the registry unchanged")
+	}
+}
+
+func TestPipelineRegistry_PublishPolicyRequiredAllowsRemotePRWithApprove(t *testing.T) {
+	registry := engine.NewPipelineRegistry()
+	registry.SetPublishPolicy(true)
+
+	if err := registry.Register(remotePRPipeline("publish", true)); err != nil {
+		t.Fatalf("Register failed: %v (an approve Step precedes the remote-pr apply Step)", err)
+	}
+	if _, err := registry.Get("publish"); err != nil {
+		t.Errorf("Get(\"publish\") failed after a successful Register: %v", err)
+	}
+}
+
+// TestPipelineRegistry_PublishPolicyDoesNotAffectLocalOrOtherTargets
+// verifies SetPublishPolicy(true) only constrains ApplyTargetRemotePR --
+// an apply Step targeting "local" (or no Target at all) with no approve
+// Step is unaffected, exactly as it behaved before this policy existed.
+func TestPipelineRegistry_PublishPolicyDoesNotAffectLocalOrOtherTargets(t *testing.T) {
+	registry := engine.NewPipelineRegistry()
+	registry.SetPublishPolicy(true)
+
+	local := engine.Pipeline{
+		Name: "local-only",
+		Steps: []engine.Step{
+			{ID: "generate", Kind: domain.StepKindGenerate},
+			{ID: "verify", Kind: domain.StepKindVerify},
+			{ID: "apply", Kind: domain.StepKindApply},
+		},
+	}
+	if err := registry.Register(local); err != nil {
+		t.Errorf("Register failed for a local-target Pipeline: %v", err)
 	}
 }

@@ -2,7 +2,10 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
+
+	"foundry/domain"
 )
 
 // PipelineRegistry holds named Pipeline definitions so Pipeline uniqueness
@@ -21,6 +24,13 @@ import (
 // registry, or anything that looks a Pipeline up by name, changing at all.
 type PipelineRegistry struct {
 	pipelines map[string]Pipeline
+
+	// requireApprovalBeforeRemotePublish mirrors .foundry/config.json's
+	// require_approval_before_remote_publish (ADR-0010,
+	// docs/03-adrs/ADR-0010-vcs-pr-integration-and-apply-targets.md
+	// Decision 2). Set via SetPublishPolicy; the zero value (false, never
+	// called) enforces nothing — exactly today's behavior.
+	requireApprovalBeforeRemotePublish bool
 }
 
 // NewPipelineRegistry returns an empty PipelineRegistry.
@@ -51,13 +61,63 @@ func NewDefaultRegistry() *PipelineRegistry {
 	return registry
 }
 
+// SetPublishPolicy configures whether Register/RegisterMany require an
+// approve Step somewhere before any apply Step targeting
+// ApplyTargetRemotePR (ADR-0010 Decision 3). Never calling it — the zero
+// value — enforces nothing, exactly today's behavior and exactly what an
+// absent .foundry/config.json (or one that omits
+// require_approval_before_remote_publish) means. Call it before any
+// RegisterMany that might contain a project-authored Pipeline declaring
+// remote-pr — a policy set afterward does not retroactively re-check
+// Pipelines already registered.
+func (r *PipelineRegistry) SetPublishPolicy(requireApprovalBeforeRemotePublish bool) {
+	r.requireApprovalBeforeRemotePublish = requireApprovalBeforeRemotePublish
+}
+
+// ErrRemotePublishRequiresApproval reports that a Pipeline declares an
+// apply Step targeting ApplyTargetRemotePR with no approve Step earlier in
+// its Steps sequence, while the registry's publish policy
+// (SetPublishPolicy) requires one (ADR-0010 Decision 3). Register refuses
+// to register such a Pipeline at all — a load-time configuration error a
+// human sees immediately, never a bypass discovered only after an Act
+// already ran and spent Budget.
+var ErrRemotePublishRequiresApproval = errors.New("engine: remote-pr apply step requires a preceding approve step")
+
 // Register adds p under p.Name. It returns an error, leaving the registry
-// unchanged, if a Pipeline is already registered under that name.
+// unchanged, if a Pipeline is already registered under that name, or —
+// when SetPublishPolicy has required it — if p declares an apply Step
+// targeting ApplyTargetRemotePR with no approve Step earlier in its Steps
+// sequence (wrapping ErrRemotePublishRequiresApproval).
 func (r *PipelineRegistry) Register(p Pipeline) error {
 	if _, exists := r.pipelines[p.Name]; exists {
 		return fmt.Errorf("engine: pipeline %q is already registered", p.Name)
 	}
+	if r.requireApprovalBeforeRemotePublish {
+		if err := validateRemotePublishRequiresApproval(p); err != nil {
+			return err
+		}
+	}
 	r.pipelines[p.Name] = clonePipeline(p)
+	return nil
+}
+
+// validateRemotePublishRequiresApproval walks p.Steps in order, refusing
+// with ErrRemotePublishRequiresApproval the first apply Step targeting
+// ApplyTargetRemotePR that is not preceded by an approve Step somewhere
+// earlier in the same sequence — mirroring runSteps' own
+// act.ApprovedAt != nil runtime check (strategy.go), checked here at
+// registration time instead so a misconfigured Pipeline never reaches an
+// Act at all.
+func validateRemotePublishRequiresApproval(p Pipeline) error {
+	approved := false
+	for _, step := range p.Steps {
+		if step.Kind == domain.StepKindApprove {
+			approved = true
+		}
+		if step.Kind == domain.StepKindApply && step.Target == ApplyTargetRemotePR && !approved {
+			return fmt.Errorf("%w: pipeline %q step %q", ErrRemotePublishRequiresApproval, p.Name, step.ID)
+		}
+	}
 	return nil
 }
 
