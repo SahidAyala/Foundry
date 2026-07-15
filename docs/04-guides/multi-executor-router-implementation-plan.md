@@ -76,8 +76,10 @@ New file in the existing `project` package. Reads a flat JSON map of name → `{
 
 ## Pieces 2–6 — component-level design only (each gets its own commit plan when its turn comes)
 
-### Piece 2 — Write the "Executor contract & capability model" ADR
+### Piece 2 — Write the "Executor contract & capability model" ADR — **drafted**
 Documentation only, no code. Resolves, before Piece 3's adapter is written: how a vendor's invocation shape (subprocess CLI vs. pure API), cost/telemetry reporting, and capability-truthfulness are normalized across `Executor` implementations (RFC-0004 §2.3).
+
+Drafted as [ADR-0005](../03-adrs/ADR-0005-executor-contract-and-capability-model.md) — **Status: Proposed, not ratified** (no governance process exists yet, [OQ-006](../06-open-questions/OQ-006-governance-model.md)). It keeps `engine.Executor.Execute` unchanged, adds an optional `CostEstimator` interface Piece 5 can type-assert for, and rules that Capability truthfulness stays declared-not-verified while routing is explicit-pin-only. Piece 3 may proceed against this proposed shape; ratifying it is a separate, still-blocked step.
 
 ### Piece 3 — One additional real vendor `Executor`
 New package, e.g. `executor/openai` (RFC-0004 §2.3's recommendation: a clean-API vendor before a literal Copilot adapter). Satisfies the unchanged `engine.Executor` interface; constructed from `LoadExecutorConfig`'s decoded entries (Piece 1, Commit 6); registered into an `ExecutorRegistry` at the composition root (`cmd/foundry/commands/do.go`'s `wireEngine`, and `session.Session`), the same place `claude.NewClaudeExecutor` is wired today.
