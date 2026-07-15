@@ -11,6 +11,7 @@ import (
 	"foundry/cli"
 	"foundry/engine"
 	"foundry/gatherer"
+	"foundry/knowledge"
 	"foundry/project"
 	"foundry/record"
 	"foundry/vcs"
@@ -73,7 +74,11 @@ func Do(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, n
 // with no such file sees byte-for-byte the same routing as before this
 // existed. buildApplierRegistry similarly registers repoPath's Knowledge-lite
 // capture and VCS/PR apply targets (RFC-0004 §2.6, ADR-0010) into an
-// ApplierRegistry.
+// ApplierRegistry. The Engine's Gatherer is gatherer.Compose'd from
+// NaiveGatherer (repository files) and knowledge.Gatherer (Authored
+// Knowledge notes under .foundry/knowledge/, RFC-0005) — a project with no
+// such directory yet sees byte-for-byte the same considered Context as
+// before this existed.
 //
 // wireEngine never calls engine.PipelineRegistry.SetPublishPolicy: pipeline
 // is resolved from engine.NewDefaultRegistry(), which loads only Foundry's
@@ -110,7 +115,8 @@ func wireEngine(repoPath string, stdin io.Reader, stdout io.Writer, newExecutor 
 	}
 
 	def := newExecutor(repoPath)
-	eng := engine.NewEngine(gatherer.NewNaiveGatherer(repoPath), def, verifier, repoPath, pipeline)
+	repoGatherer := gatherer.Compose(gatherer.NewNaiveGatherer(repoPath), knowledge.NewGatherer(repoPath))
+	eng := engine.NewEngine(repoGatherer, def, verifier, repoPath, pipeline)
 
 	registry, err := project.BuildExecutorRegistry(repoPath, newNamedExecutor)
 	if err != nil {

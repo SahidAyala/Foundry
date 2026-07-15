@@ -9,6 +9,7 @@ import (
 
 	"foundry/engine"
 	"foundry/gatherer"
+	"foundry/knowledge"
 	"foundry/project"
 	"foundry/record"
 	"foundry/vcs"
@@ -117,7 +118,7 @@ func NewSession(ctx context.Context, root string, in io.Reader, out io.Writer, n
 		Out:       out,
 		registry:  registry,
 		recorder:  recorder,
-		gatherer:  gatherer.NewNaiveGatherer(root),
+		gatherer:  gatherer.Compose(gatherer.NewNaiveGatherer(root), knowledge.NewGatherer(root)),
 		verifier:  workspace.NewStagedVerifier(gate),
 		executor:  newExecutor(root),
 		executors: executors,
