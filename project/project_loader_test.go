@@ -19,7 +19,7 @@ func writeDocument(dir, name, content string) error {
 }
 
 func TestProjectLoader_LoadRegistry_OnlyBuiltinsWhenNoProjectDir(t *testing.T) {
-	registry, err := project.ProjectLoader{}.LoadRegistry(context.Background(), t.TempDir())
+	registry, err := project.ProjectLoader{}.LoadRegistry(context.Background(), t.TempDir(), project.Config{})
 	if err != nil {
 		t.Fatalf("LoadRegistry failed: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestProjectLoader_LoadRegistry_IncludesProjectLocalPipelines(t *testing.T) 
 		t.Fatalf("writeDocument failed: %v", err)
 	}
 
-	registry, err := project.ProjectLoader{}.LoadRegistry(context.Background(), root)
+	registry, err := project.ProjectLoader{}.LoadRegistry(context.Background(), root, project.Config{})
 	if err != nil {
 		t.Fatalf("LoadRegistry failed: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestProjectLoader_Scaffold_CreatesStarterDocuments(t *testing.T) {
 		t.Fatalf("Scaffold failed: %v", err)
 	}
 
-	registry, err := project.ProjectLoader{}.LoadRegistry(context.Background(), root)
+	registry, err := project.ProjectLoader{}.LoadRegistry(context.Background(), root, project.Config{})
 	if err != nil {
 		t.Fatalf("LoadRegistry after Scaffold failed: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestProjectLoader_Scaffold_NeverOverwritesAnExistingFile(t *testing.T) {
 		t.Fatalf("Scaffold failed: %v", err)
 	}
 
-	registry, err := project.ProjectLoader{}.LoadRegistry(context.Background(), root)
+	registry, err := project.ProjectLoader{}.LoadRegistry(context.Background(), root, project.Config{})
 	if err != nil {
 		t.Fatalf("LoadRegistry failed: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestProjectLoader_LoadRegistry_NameCollisionWithBuiltinFails(t *testing.T) 
 		t.Fatalf("writeDocument failed: %v", err)
 	}
 
-	_, err := project.ProjectLoader{}.LoadRegistry(context.Background(), root)
+	_, err := project.ProjectLoader{}.LoadRegistry(context.Background(), root, project.Config{})
 	if err == nil {
 		t.Fatal("LoadRegistry with a project pipeline named \"default\" returned nil error")
 	}

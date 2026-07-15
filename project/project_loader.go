@@ -31,8 +31,17 @@ type ProjectLoader struct{}
 // project-local Pipeline whose name collides with a built-in surfaces
 // PipelineRegistry.RegisterMany's existing duplicate-name error; a
 // collision is never silently resolved in either direction.
-func (ProjectLoader) LoadRegistry(ctx context.Context, root string) (*engine.PipelineRegistry, error) {
+//
+// cfg's RequireApprovalBeforeRemotePublish is applied via
+// PipelineRegistry.SetPublishPolicy before either provider's Pipelines are
+// registered (ADR-0010,
+// docs/03-adrs/ADR-0010-vcs-pr-integration-and-apply-targets.md Decision
+// 3) — this is the one place a project-authored Pipeline declaring a
+// "remote-pr" apply Step is registered at all, so it is the one place that
+// policy can take effect.
+func (ProjectLoader) LoadRegistry(ctx context.Context, root string, cfg Config) (*engine.PipelineRegistry, error) {
 	registry := engine.NewPipelineRegistry()
+	registry.SetPublishPolicy(cfg.RequireApprovalBeforeRemotePublish)
 
 	builtins, err := engine.BuiltinProvider{}.Load(ctx)
 	if err != nil {

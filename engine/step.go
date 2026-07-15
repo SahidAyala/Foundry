@@ -35,16 +35,21 @@ type Step struct {
 	Target       string
 }
 
-// Apply Step target names RFC-0004 §2.6's Knowledge-lite capture defines,
-// resolved by runContext.resolveApplier (strategy.go) against an
-// ApplierRegistry. ApplyTargetLocal is never actually registered in one —
-// it, and the empty string a Step predating Target always has, both mean
-// "use the Engine's single configured Applier directly," exactly what every
-// apply Step meant before Target existed.
+// Apply Step target names RFC-0004 §2.6's Knowledge-lite capture and
+// ADR-0010's VCS/PR integration define, resolved by
+// runContext.resolveApplier (strategy.go) against an ApplierRegistry.
+// ApplyTargetLocal is never actually registered in one — it, and the empty
+// string a Step predating Target always has, both mean "use the Engine's
+// single configured Applier directly," exactly what every apply Step meant
+// before Target existed. ApplyTargetRemotePR is additionally subject to
+// PipelineRegistry.SetPublishPolicy's load-time approval check
+// (registry.go, ADR-0010 Decision 3) — Foundry's first apply target that
+// leaves the developer's own machine.
 const (
 	ApplyTargetLocal         = "local"
 	ApplyTargetKnowledgeNote = "knowledge-note"
 	ApplyTargetProjectDoc    = "project-doc"
+	ApplyTargetRemotePR      = "remote-pr"
 )
 
 // RepairPolicy bounds how many times a Pipeline may be re-run after its
