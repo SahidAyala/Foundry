@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"foundry/engine"
 )
 
 // ExecutorsFile is the conventional location, relative to a project root,
@@ -48,4 +50,49 @@ func LoadExecutorConfig(root string) (map[string]ExecutorConfig, error) {
 		return nil, fmt.Errorf("project: decode executor config %q: %w", path, err)
 	}
 	return config, nil
+}
+
+// ExecutorConstructor constructs a real vendor Executor from its decoded
+// ExecutorConfig — the vendor-dispatch seam a composition root supplies
+// (ADR-0005 Decision 5,
+// docs/03-adrs/ADR-0005-executor-contract-and-capability-model.md),
+// mirroring how a plain func(workspace string) engine.Executor already
+// supplies the single default Executor. Only cmd/foundry/main.go —
+// Foundry's true composition root — knows which concrete vendor packages
+// (executor/claude, executor/openai, ...) exist; project stays
+// vendor-agnostic and only calls whatever ExecutorConstructor it is
+// handed.
+type ExecutorConstructor func(cfg ExecutorConfig) (engine.Executor, error)
+
+// BuildExecutorRegistry reads root's ExecutorsFile (via LoadExecutorConfig)
+// and constructs an engine.ExecutorRegistry from it, calling construct once
+// per named entry. A missing or empty file returns an empty registry
+// regardless of construct — a project that never opts in to a project-local
+// Executor sees no change, exactly as LoadExecutorConfig's own doc comment
+// promises. construct may be nil, meaning "this caller supports
+// constructing no named vendor Executors"; a *non-empty* executors.json in
+// that case is a clear, named configuration error rather than a silently
+// ignored one.
+func BuildExecutorRegistry(root string, construct ExecutorConstructor) (*engine.ExecutorRegistry, error) {
+	config, err := LoadExecutorConfig(root)
+	if err != nil {
+		return nil, err
+	}
+	registry := engine.NewExecutorRegistry()
+	if len(config) == 0 {
+		return registry, nil
+	}
+	if construct == nil {
+		return nil, fmt.Errorf("project: %s declares %d executor(s), but this caller supports constructing none", ExecutorsFile, len(config))
+	}
+	for name, cfg := range config {
+		exec, err := construct(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("project: build executor %q: %w", name, err)
+		}
+		if err := registry.Register(name, exec); err != nil {
+			return nil, err
+		}
+	}
+	return registry, nil
 }
