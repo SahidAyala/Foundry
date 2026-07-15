@@ -11,6 +11,7 @@ import (
 
 	"foundry/cli"
 	"foundry/engine"
+	"foundry/project"
 	"foundry/record"
 )
 
@@ -37,7 +38,11 @@ Flags:
 // Resume implements the `foundry resume [<act-id>]` command: with an act
 // ID, continue an interrupted Act; without one, list every Act a
 // checkpoint survives for.
-func Resume(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, newExecutor func(workspace string) engine.Executor) int {
+//
+// newNamedExecutor is the same vendor-dispatch seam Do accepts (see its own
+// doc comment) — passed through to wireEngine so a resumed Act's Router is
+// wired identically to a fresh one's.
+func Resume(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, newExecutor func(workspace string) engine.Executor, newNamedExecutor project.ExecutorConstructor) int {
 	actID, repoPath, err := parseResumeArgs(args)
 	if err != nil {
 		if errors.Is(err, cli.ErrHelp) {
@@ -69,7 +74,7 @@ func Resume(ctx context.Context, args []string, stdin io.Reader, stdout io.Write
 		return 1
 	}
 
-	eng, store, _, err := wireEngine(repoPath, stdin, stdout, newExecutor, checkpointed.Pipeline)
+	eng, store, _, err := wireEngine(repoPath, stdin, stdout, newExecutor, newNamedExecutor, checkpointed.Pipeline)
 	if err != nil {
 		fmt.Fprintln(stdout, err)
 		return 1

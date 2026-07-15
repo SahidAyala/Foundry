@@ -54,17 +54,26 @@ type Session struct {
 	In  *bufio.Reader
 	Out io.Writer
 
-	registry *engine.PipelineRegistry
-	recorder record.Recorder
-	gatherer engine.Gatherer
-	verifier engine.Verifier
-	executor engine.Executor
+	registry  *engine.PipelineRegistry
+	recorder  record.Recorder
+	gatherer  engine.Gatherer
+	verifier  engine.Verifier
+	executor  engine.Executor
+	executors *engine.ExecutorRegistry
 }
 
 // NewSession resolves root's full Pipeline registry (built-in plus
 // project-local, via project.ProjectLoader) and wires the Engine
 // dependencies every slash command shares for the rest of the process.
-func NewSession(ctx context.Context, root string, in io.Reader, out io.Writer, newExecutor NewExecutor) (*Session, error) {
+//
+// newNamedExecutor is the vendor-dispatch seam a composition root
+// (cmd/foundry/main.go) may supply to construct named, project-configured
+// Executors from root's .foundry/executors.json (ADR-0005 Decision 5,
+// docs/03-adrs/ADR-0005-executor-contract-and-capability-model.md) — it is
+// variadic and optional (pass zero or one) so every existing caller that
+// never configures a named Executor keeps compiling and behaving
+// identically.
+func NewSession(ctx context.Context, root string, in io.Reader, out io.Writer, newExecutor NewExecutor, newNamedExecutor ...project.ExecutorConstructor) (*Session, error) {
 	registry, err := (project.ProjectLoader{}).LoadRegistry(ctx, root)
 	if err != nil {
 		return nil, fmt.Errorf("session: load pipelines: %w", err)
@@ -80,15 +89,25 @@ func NewSession(ctx context.Context, root string, in io.Reader, out io.Writer, n
 		return nil, fmt.Errorf("session: build verification gate: %w", err)
 	}
 
+	var construct project.ExecutorConstructor
+	if len(newNamedExecutor) > 0 {
+		construct = newNamedExecutor[0]
+	}
+	executors, err := project.BuildExecutorRegistry(root, construct)
+	if err != nil {
+		return nil, fmt.Errorf("session: build executor registry: %w", err)
+	}
+
 	return &Session{
-		Root:     root,
-		In:       bufio.NewReader(in),
-		Out:      out,
-		registry: registry,
-		recorder: recorder,
-		gatherer: gatherer.NewNaiveGatherer(root),
-		verifier: workspace.NewStagedVerifier(gate),
-		executor: newExecutor(root),
+		Root:      root,
+		In:        bufio.NewReader(in),
+		Out:       out,
+		registry:  registry,
+		recorder:  recorder,
+		gatherer:  gatherer.NewNaiveGatherer(root),
+		verifier:  workspace.NewStagedVerifier(gate),
+		executor:  newExecutor(root),
+		executors: executors,
 	}, nil
 }
 
@@ -122,5 +141,7 @@ func (s *Session) Engine(pipelineName string) (*engine.Engine, error) {
 	if err != nil {
 		return nil, fmt.Errorf("session: %w (run /init to scaffold a starter, or check %s)", err, project.PipelinesDir)
 	}
-	return engine.NewEngine(s.gatherer, s.executor, s.verifier, s.Root, pipeline), nil
+	eng := engine.NewEngine(s.gatherer, s.executor, s.verifier, s.Root, pipeline)
+	eng.SetRouter(engine.NewRouter(s.executors, s.executor))
+	return eng, nil
 }

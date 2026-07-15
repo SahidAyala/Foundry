@@ -11,6 +11,7 @@ import (
 	"foundry/cli"
 	"foundry/engine"
 	"foundry/gatherer"
+	"foundry/project"
 	"foundry/record"
 	"foundry/verify"
 	"foundry/workspace"
@@ -24,7 +25,13 @@ import (
 // injects the Claude Code executor; the deterministic golden/integration
 // tests inject a scripted fixture, so this command never requires Claude Code
 // to be present under test.
-func Do(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, newExecutor func(workspace string) engine.Executor) int {
+//
+// newNamedExecutor constructs a named, project-configured Executor from a
+// decoded project.ExecutorConfig — the vendor-dispatch seam Do's caller
+// (cmd/foundry/main.go, Foundry's true composition root) supplies, so this
+// package stays vendor-agnostic (ADR-0005 Decision 5,
+// docs/03-adrs/ADR-0005-executor-contract-and-capability-model.md).
+func Do(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, newExecutor func(workspace string) engine.Executor, newNamedExecutor project.ExecutorConstructor) int {
 	intent, repoPath, err := cli.ParseArgs(args)
 	if err != nil {
 		if errors.Is(err, cli.ErrHelp) {
@@ -40,7 +47,7 @@ func Do(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, n
 	// runs. It is hardcoded today; a future --pipeline flag replaces this
 	// literal with a parsed value — no change to engine.go required.
 	const pipelineName = "default"
-	eng, store, _, err := wireEngine(repoPath, stdin, stdout, newExecutor, pipelineName)
+	eng, store, _, err := wireEngine(repoPath, stdin, stdout, newExecutor, newNamedExecutor, pipelineName)
 	if err != nil {
 		fmt.Fprintln(stdout, err)
 		return 1
@@ -59,8 +66,12 @@ func Do(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, n
 // a staged Gate-backed Verifier, the named Pipeline, and every port an
 // interactive run drives (Reporter, Authority, Applier, Checkpointer, and
 // CheckpointSaver — the last so a crash mid-Pipeline leaves a checkpoint
-// `foundry resume` can continue).
-func wireEngine(repoPath string, stdin io.Reader, stdout io.Writer, newExecutor func(workspace string) engine.Executor, pipelineName string) (*engine.Engine, *record.FileStore, *record.CheckpointStore, error) {
+// `foundry resume` can continue). It also registers repoPath's project-local
+// Executor configuration (project.BuildExecutorRegistry, .foundry/executors.json)
+// into a Router, falling back to newExecutor's default Executor — a project
+// with no such file sees byte-for-byte the same routing as before this
+// existed.
+func wireEngine(repoPath string, stdin io.Reader, stdout io.Writer, newExecutor func(workspace string) engine.Executor, newNamedExecutor project.ExecutorConstructor, pipelineName string) (*engine.Engine, *record.FileStore, *record.CheckpointStore, error) {
 	actsDir := filepath.Join(repoPath, ".foundry", "acts")
 
 	store, err := record.NewFileStore(actsDir)
@@ -86,7 +97,15 @@ func wireEngine(repoPath string, stdin io.Reader, stdout io.Writer, newExecutor 
 		return nil, nil, nil, err
 	}
 
-	eng := engine.NewEngine(gatherer.NewNaiveGatherer(repoPath), newExecutor(repoPath), verifier, repoPath, pipeline)
+	def := newExecutor(repoPath)
+	eng := engine.NewEngine(gatherer.NewNaiveGatherer(repoPath), def, verifier, repoPath, pipeline)
+
+	registry, err := project.BuildExecutorRegistry(repoPath, newNamedExecutor)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	eng.SetRouter(engine.NewRouter(registry, def))
+
 	eng.SetReporter(cli.NewProgressReporter(stdout))
 	eng.SetAuthority(cli.InteractiveAuthority{In: stdin, Out: stdout})
 	eng.SetApplier(workspace.GitApplier{})

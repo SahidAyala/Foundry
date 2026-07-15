@@ -10,11 +10,13 @@ import (
 	"foundry/cmd/foundry/commands"
 	"foundry/engine"
 	"foundry/executor/claude"
+	"foundry/executor/openai"
+	"foundry/project"
 	"foundry/session"
 )
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, claudeExecutor))
+	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, claudeExecutor, namedExecutor))
 }
 
 // claudeExecutor is the production Executor factory: it invokes the Claude
@@ -25,9 +27,37 @@ func claudeExecutor(workspace string) engine.Executor {
 	return claude.NewClaudeExecutor(workspace)
 }
 
-func run(args []string, stdin io.Reader, stdout io.Writer, newExecutor func(workspace string) engine.Executor) int {
+// namedExecutor is the production vendor-dispatch factory (ADR-0005
+// Decision 5, docs/03-adrs/ADR-0005-executor-contract-and-capability-model.md):
+// it constructs a named, project-configured Executor from a
+// project.ExecutorConfig decoded out of a project's .foundry/executors.json.
+// This is the one place in the whole binary that knows executor/openai
+// exists — project, session, and cmd/foundry/commands stay vendor-agnostic,
+// calling only this function through the project.ExecutorConstructor seam.
+// "openai" is the only supported vendor today (RFC-0004 §2.3's recommended
+// second vendor); an unrecognized vendor is a clear, named configuration
+// error rather than a silent no-op.
+func namedExecutor(cfg project.ExecutorConfig) (engine.Executor, error) {
+	switch cfg.Vendor {
+	case "openai":
+		return openai.NewExecutor(cfg.Model, os.Getenv(cfg.APIKeyEnv)), nil
+	default:
+		return nil, fmt.Errorf("foundry: unsupported executor vendor %q (only %q is supported today)", cfg.Vendor, "openai")
+	}
+}
+
+// run's newNamedExecutor is variadic (pass zero or one) so every existing
+// caller — production and test — that never configures a named Executor
+// keeps compiling and behaving identically; only main's own call above
+// passes the real dispatch.
+func run(args []string, stdin io.Reader, stdout io.Writer, newExecutor func(workspace string) engine.Executor, newNamedExecutor ...project.ExecutorConstructor) int {
+	var construct project.ExecutorConstructor
+	if len(newNamedExecutor) > 0 {
+		construct = newNamedExecutor[0]
+	}
+
 	if len(args) == 0 {
-		return runSession(context.Background(), stdin, stdout, newExecutor)
+		return runSession(context.Background(), stdin, stdout, newExecutor, construct)
 	}
 
 	switch args[0] {
@@ -35,7 +65,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer, newExecutor func(work
 		fmt.Fprint(stdout, usage())
 		return 0
 	case "do":
-		return commands.Do(context.Background(), args[1:], stdin, stdout, newExecutor)
+		return commands.Do(context.Background(), args[1:], stdin, stdout, newExecutor, construct)
 	case "log":
 		return commands.Log(context.Background(), args[1:], stdout)
 	case "show":
@@ -43,7 +73,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer, newExecutor func(work
 	case "replay":
 		return commands.Replay(context.Background(), args[1:], stdout)
 	case "resume":
-		return commands.Resume(context.Background(), args[1:], stdin, stdout, newExecutor)
+		return commands.Resume(context.Background(), args[1:], stdin, stdout, newExecutor, construct)
 	default:
 		fmt.Fprintf(stdout, "foundry: unknown command %q\n\n", args[0])
 		fmt.Fprint(stdout, usage())
@@ -59,14 +89,14 @@ func run(args []string, stdin io.Reader, stdout io.Writer, newExecutor func(work
 // replacement
 // (docs/01-rfcs/RFC-0003-interactive-assistant-and-multi-executor-pipelines.md
 // §3.1).
-func runSession(ctx context.Context, stdin io.Reader, stdout io.Writer, newExecutor func(workspace string) engine.Executor) int {
+func runSession(ctx context.Context, stdin io.Reader, stdout io.Writer, newExecutor func(workspace string) engine.Executor, newNamedExecutor project.ExecutorConstructor) int {
 	root, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintln(stdout, err)
 		return 1
 	}
 
-	s, err := session.NewSession(ctx, root, stdin, stdout, newExecutor)
+	s, err := session.NewSession(ctx, root, stdin, stdout, newExecutor, newNamedExecutor)
 	if err != nil {
 		fmt.Fprintln(stdout, err)
 		return 1
