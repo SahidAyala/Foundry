@@ -3,6 +3,7 @@ package engine_test
 import (
 	"context"
 	"os"
+	"reflect"
 	"testing"
 
 	"foundry/domain"
@@ -46,7 +47,7 @@ func TestGoldenFeaturePipeline_Decodes(t *testing.T) {
 		t.Fatalf("Steps = %+v, want %d entries", got.Steps, len(wantSteps))
 	}
 	for i, want := range wantSteps {
-		if got.Steps[i] != want {
+		if !reflect.DeepEqual(got.Steps[i], want) {
 			t.Errorf("Steps[%d] = %+v, want %+v", i, got.Steps[i], want)
 		}
 	}

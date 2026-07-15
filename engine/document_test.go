@@ -2,6 +2,7 @@ package engine_test
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -35,7 +36,7 @@ func TestDecodePipelineDocument_ValidDocument(t *testing.T) {
 		t.Fatalf("Steps = %v, want %v", got.Steps, wantSteps)
 	}
 	for i, want := range wantSteps {
-		if got.Steps[i] != want {
+		if !reflect.DeepEqual(got.Steps[i], want) {
 			t.Errorf("Steps[%d] = %+v, want %+v", i, got.Steps[i], want)
 		}
 	}
@@ -141,6 +142,59 @@ func TestDecodePipelineDocument_ApproveApplyRecordKindsDecode(t *testing.T) {
 	}
 }
 
+func TestDecodePipelineDocument_OmittedRouterFieldsDecodeToZeroValues(t *testing.T) {
+	data := []byte(`{
+		"name": "no-router-fields",
+		"steps": [{"id": "generate", "kind": "generate"}]
+	}`)
+
+	got, err := engine.DecodePipelineDocument(data)
+	if err != nil {
+		t.Fatalf("DecodePipelineDocument failed: %v", err)
+	}
+	step := got.Steps[0]
+	if step.Capability != nil {
+		t.Errorf("Capability = %#v, want nil", step.Capability)
+	}
+	if step.Executor != "" {
+		t.Errorf("Executor = %q, want empty string", step.Executor)
+	}
+	if step.FeedsForward {
+		t.Error("FeedsForward = true, want false")
+	}
+}
+
+func TestDecodePipelineDocument_CapabilityExecutorFeedsForwardDecode(t *testing.T) {
+	data := []byte(`{
+		"name": "routed",
+		"steps": [
+			{
+				"id": "generate",
+				"kind": "generate",
+				"capability": {"vendor": "openai"},
+				"executor": "openai-gpt5",
+				"feeds_forward": true
+			}
+		]
+	}`)
+
+	got, err := engine.DecodePipelineDocument(data)
+	if err != nil {
+		t.Fatalf("DecodePipelineDocument failed: %v", err)
+	}
+	step := got.Steps[0]
+	wantCapability := map[string]string{"vendor": "openai"}
+	if !reflect.DeepEqual(step.Capability, wantCapability) {
+		t.Errorf("Capability = %#v, want %#v", step.Capability, wantCapability)
+	}
+	if step.Executor != "openai-gpt5" {
+		t.Errorf("Executor = %q, want %q", step.Executor, "openai-gpt5")
+	}
+	if !step.FeedsForward {
+		t.Error("FeedsForward = false, want true")
+	}
+}
+
 func TestDecodePipelineDocument_RepairTargetNamingDeclaredStepDecodes(t *testing.T) {
 	data := []byte(`{
 		"name": "feature",
@@ -223,7 +277,7 @@ func TestDecodePipelineDocument_MatchesBuiltinDefault(t *testing.T) {
 		t.Fatalf("Steps = %v, want %v", got.Steps, want.Steps)
 	}
 	for i := range want.Steps {
-		if got.Steps[i] != want.Steps[i] {
+		if !reflect.DeepEqual(got.Steps[i], want.Steps[i]) {
 			t.Errorf("Steps[%d] = %+v, want %+v", i, got.Steps[i], want.Steps[i])
 		}
 	}
