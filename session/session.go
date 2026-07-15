@@ -11,6 +11,7 @@ import (
 	"foundry/gatherer"
 	"foundry/project"
 	"foundry/record"
+	"foundry/vcs"
 	"foundry/verify"
 	"foundry/workspace"
 )
@@ -61,6 +62,7 @@ type Session struct {
 	executor  engine.Executor
 	executors *engine.ExecutorRegistry
 	appliers  *engine.ApplierRegistry
+	cfg       project.Config
 }
 
 // NewSession resolves root's full Pipeline registry (built-in plus
@@ -75,7 +77,12 @@ type Session struct {
 // never configures a named Executor keeps compiling and behaving
 // identically.
 func NewSession(ctx context.Context, root string, in io.Reader, out io.Writer, newExecutor NewExecutor, newNamedExecutor ...project.ExecutorConstructor) (*Session, error) {
-	registry, err := (project.ProjectLoader{}).LoadRegistry(ctx, root)
+	cfg, err := project.LoadConfig(root)
+	if err != nil {
+		return nil, fmt.Errorf("session: load config: %w", err)
+	}
+
+	registry, err := (project.ProjectLoader{}).LoadRegistry(ctx, root, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("session: load pipelines: %w", err)
 	}
@@ -99,7 +106,7 @@ func NewSession(ctx context.Context, root string, in io.Reader, out io.Writer, n
 		return nil, fmt.Errorf("session: build executor registry: %w", err)
 	}
 
-	appliers, err := buildApplierRegistry(root)
+	appliers, err := buildApplierRegistry(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("session: build applier registry: %w", err)
 	}
@@ -115,22 +122,20 @@ func NewSession(ctx context.Context, root string, in io.Reader, out io.Writer, n
 		executor:  newExecutor(root),
 		executors: executors,
 		appliers:  appliers,
+		cfg:       cfg,
 	}, nil
 }
 
-// buildApplierRegistry registers root's Knowledge-lite capture apply
-// targets (RFC-0004 §2.6, Piece 4 of
+// buildApplierRegistry registers cfg's Knowledge-lite capture and VCS/PR
+// apply targets (RFC-0004 §2.6 Piece 4; ADR-0010 Piece 6, both of
 // docs/04-guides/multi-executor-router-implementation-plan.md):
-// ApplyTargetKnowledgeNote unconditionally, and ApplyTargetProjectDoc only
-// if root's .foundry/config.json names a docs_path — a project that never
-// opts in registers neither and sees no change, exactly as an apply Step
-// with no Target already behaves. Mirrors
-// cmd/foundry/commands/do.go's own buildApplierRegistry.
-func buildApplierRegistry(root string) (*engine.ApplierRegistry, error) {
-	cfg, err := project.LoadConfig(root)
-	if err != nil {
-		return nil, err
-	}
+// ApplyTargetKnowledgeNote unconditionally, ApplyTargetProjectDoc only if
+// cfg names a DocsPath, and ApplyTargetRemotePR only if cfg names a
+// RemotePublishTokenEnv — a project that never opts in registers none of
+// the last two and sees no change, exactly as an apply Step with no
+// Target already behaves. Mirrors cmd/foundry/commands/do.go's own
+// buildApplierRegistry.
+func buildApplierRegistry(cfg project.Config) (*engine.ApplierRegistry, error) {
 	appliers := engine.NewApplierRegistry()
 	if err := appliers.Register(engine.ApplyTargetKnowledgeNote, workspace.KnowledgeNoteApplier{}); err != nil {
 		return nil, err
@@ -140,15 +145,23 @@ func buildApplierRegistry(root string) (*engine.ApplierRegistry, error) {
 			return nil, err
 		}
 	}
+	if cfg.RemotePublishTokenEnv != "" {
+		if err := appliers.Register(engine.ApplyTargetRemotePR, vcs.GitHubPRApplier{TokenEnv: cfg.RemotePublishTokenEnv}); err != nil {
+			return nil, err
+		}
+	}
 	return appliers, nil
 }
 
 // ReloadPipelines re-resolves the session's Pipeline registry from disk
 // — built-in plus project-local, via project.ProjectLoader — so a
 // command that changes what a project has authored (/init foremost)
-// takes effect immediately, without restarting the session.
+// takes effect immediately, without restarting the session. It reuses the
+// Config NewSession already loaded rather than re-reading
+// .foundry/config.json — the same session-lifetime treatment executors
+// and appliers already get.
 func (s *Session) ReloadPipelines(ctx context.Context) error {
-	registry, err := (project.ProjectLoader{}).LoadRegistry(ctx, s.Root)
+	registry, err := (project.ProjectLoader{}).LoadRegistry(ctx, s.Root, s.cfg)
 	if err != nil {
 		return fmt.Errorf("session: reload pipelines: %w", err)
 	}
