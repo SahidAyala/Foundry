@@ -18,7 +18,16 @@ import (
 func DefaultValidators(root string) []*Validator {
 	if _, err := os.Stat(filepath.Join(root, "go.mod")); err == nil {
 		return []*Validator{
-			{Name: "go-build", Cmd: "go build ./..."},
+			// A bare "go build ./..." compiles any package main it finds
+			// straight into a binary left sitting in the working tree
+			// after every verification — real dogfooding surfaced this
+			// as a leaked, untracked artifact on every single Act. Only
+			// redirect to a throwaway -o directory when a main package
+			// actually exists: "go build -o <dir> ./..." errors with "no
+			// main packages to build" on a library-only module, which
+			// would turn every such module's real, passing build into a
+			// false verification failure.
+			{Name: "go-build", Cmd: `if go list -f "{{.Name}}" ./... 2>/dev/null | grep -qx main; then go build -o "$(mktemp -d)/" ./...; else go build ./...; fi`},
 			{Name: "go-test", Cmd: "go test ./..."},
 		}
 	}
