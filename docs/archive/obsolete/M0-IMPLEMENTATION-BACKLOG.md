@@ -1,6 +1,8 @@
 # M0 Implementation Backlog
 
-> **Executable roadmap for M0:** each PR produces working software that leaves the repository compilable. Written for sequential execution. Refer to [m0-plan.md](m0-plan.md) for strategy and [../02-architecture/](../02-architecture/) for domain concepts.
+> **Status: Historical — M0 is complete.** All 13 PRs below shipped, and the codebase has since gone well past them (multi-executor router, VCS/PR publish, Knowledge capture and retrieval — see [../../00-overview/roadmap.md](../../00-overview/roadmap.md) for current status per milestone). Kept for traceability of how M0 was actually sequenced; do not treat its unchecked boxes as current state.
+>
+> **Executable roadmap for M0:** each PR produces working software that leaves the repository compilable. Written for sequential execution. Refer to [m0-plan.md](../../04-guides/m0-plan.md) for strategy and [../../02-architecture/](../../02-architecture/) for domain concepts.
 
 **Repository structure after M0:** See [m0-plan.md §5](m0-plan.md#5-repository--package-structure). The canonical module path is provisional (ADR-0001 Open Question 3); these PRs use `foundry` as a placeholder.
 

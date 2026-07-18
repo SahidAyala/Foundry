@@ -1,6 +1,6 @@
 # Development Guide
 
-> **Building M0 now? The active, concrete plan is [m0-plan.md](m0-plan.md).** This guide covers the durable build approach (testing, CI, structure) that outlives any single milestone; milestones are in [../00-overview/roadmap.md](../00-overview/roadmap.md). Terms: [../05-reference/terminology.md](../05-reference/terminology.md). The accepted language/toolchain decision is [../03-adrs/ADR-0001-language-and-toolchain.md](../03-adrs/ADR-0001-language-and-toolchain.md).
+> **M0 is complete; [m0-plan.md](m0-plan.md) is kept as design rationale, not an active plan.** This guide covers the durable build approach (testing, CI, structure) that outlives any single milestone; current status per milestone is in [../00-overview/roadmap.md](../00-overview/roadmap.md). Want to install and run Foundry today? See [getting-started.md](getting-started.md). Terms: [../05-reference/terminology.md](../05-reference/terminology.md). The accepted language/toolchain decision is [../03-adrs/ADR-0001-language-and-toolchain.md](../03-adrs/ADR-0001-language-and-toolchain.md).
 
 ## Build approach
 
@@ -30,8 +30,10 @@
 - Cross-platform binary build in CI; conventional commits to enable generated changelogs.
 - Live-model checks run only in a gated, non-PR job.
 
-## M0 Implementation Plan
+## Current implementation status
 
-**The active, executable plan for M0 is [M0-IMPLEMENTATION-BACKLOG.md](M0-IMPLEMENTATION-BACKLOG.md)** — a PR-by-PR breakdown, dependencies, acceptance criteria, and success signals. For a condensed checklist, see [M0-QUICK-REFERENCE.md](M0-QUICK-REFERENCE.md).
+**M0 is complete**, and the codebase has since shipped well past it (multi-executor router, VCS/PR publish, Knowledge capture and retrieval). See [../00-overview/roadmap.md](../00-overview/roadmap.md) for the current status per milestone, and [getting-started.md](getting-started.md) to install and run what exists today.
+
+M0's original PR-by-PR execution plan is archived at [../archive/obsolete/M0-IMPLEMENTATION-BACKLOG.md](../archive/obsolete/M0-IMPLEMENTATION-BACKLOG.md) / [M0-QUICK-REFERENCE.md](../archive/obsolete/M0-QUICK-REFERENCE.md), kept for traceability of how M0 was actually sequenced — not as a current plan.
 
 A historical plan predating the current ([Act-centric](../02-architecture/domain.md)) terminology is archived at [../archive/obsolete/IMPLEMENTATION-ROADMAP.md](../archive/obsolete/IMPLEMENTATION-ROADMAP.md) for reference only.
