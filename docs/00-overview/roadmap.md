@@ -21,11 +21,15 @@
 
 Each milestone is independently useful. A project could stop at M1 and have a rigorous deterministic engine with audit and replay.
 
+## Current implementation status
+
+The table above states the *plan*. For what has actually shipped per milestone, per RFC, and per architecture document — kept current as a living index rather than duplicated here — see [implementation-status.md](implementation-status.md). Getting-started instructions for what's usable today (install, dependencies, first run) live in [../04-guides/getting-started.md](../04-guides/getting-started.md).
+
 ## Open decisions that require a human (architectural / governance)
 
 These are unresolved and **must not be settled silently in implementation**. They are the prerequisites to any architecture "freeze". The ones that are architectural (not pure governance) are treated in depth, with alternatives and a current recommendation, in [../06-open-questions/](../06-open-questions/) — that tier is the home for this deliberation so it never leaks into canonical docs.
 
-1. **Governance & ratification process.** There is no defined process for accepting RFCs/ADRs; the founding RFC is unratified and in major revision. *This is the highest-priority blocker for finalizing any decision.*
+1. ~~**Governance & ratification process.**~~ **RESOLVED 2026-07-16** — see [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md): a lightweight, sole-maintainer-led process, with no enforced comment period while the project has one maintainer, and a named trigger (a second contributor) that forces a real comment period to be defined. The founding RFC (RFC-0001) itself remains unratified — resolving *how* decisions are ratified does not itself ratify any pending RFC.
 2. **Principle priority ordering.** No ratified rule for resolving conflicts between core principles (see [principles.md](principles.md)).
 3. **The center of the domain — Act vs Knowledge** (see [../02-architecture/domain.md](../02-architecture/domain.md)).
 4. **Cross-version replay scope** (see [../02-architecture/execution.md](../02-architecture/execution.md)).

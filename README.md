@@ -51,6 +51,8 @@ Documentation is **single-source-of-truth**: every concept is defined once, in `
 3. [docs/02-architecture/domain.md](docs/02-architecture/domain.md) — the core model (the Act)
 4. [docs/05-reference/terminology.md](docs/05-reference/terminology.md) — the canonical vocabulary
 5. [docs/00-overview/roadmap.md](docs/00-overview/roadmap.md) — what is being built, and the open decisions that still need a human
+6. [docs/00-overview/implementation-status.md](docs/00-overview/implementation-status.md) — a living dashboard of what's actually shipped vs. planned, across every RFC, ADR, and architecture doc
+7. [docs/04-guides/getting-started.md](docs/04-guides/getting-started.md) — install it and produce your first Act
 
 ## Install
 
@@ -76,10 +78,10 @@ cd Foundry
 
 Either way, the binary is installed to `/usr/local/bin` (override with `FOUNDRY_INSTALL_DIR=<dir>`; `sudo` is only invoked if that directory isn't writable). If the install directory isn't already on your `PATH`, the script prints the line to add to your shell profile (`~/.zshrc`, `~/.bashrc`, ...).
 
-Once installed, run `foundry` from any directory to start an interactive session.
+Once installed, run `foundry` from any directory to start an interactive session. **First time using Foundry?** See [docs/04-guides/getting-started.md](docs/04-guides/getting-started.md) for requirements, dependencies, and a walkthrough of your first Act.
 
 ## Status
 
-**Implementation active.** Architecture direction is set; M0 backlog is finalized and executable. Several foundational decisions remain open (governance, the precise center of the domain, replay scope, knowledge migration, and more) and are listed honestly in [docs/00-overview/roadmap.md](docs/00-overview/roadmap.md). Only the language/toolchain decision is accepted ([docs/03-adrs/ADR-0001-language-and-toolchain.md](docs/03-adrs/ADR-0001-language-and-toolchain.md)).
+**Implementation active, well past the original walking skeleton.** M0 (the first usable, deterministic vertical slice) is complete, and the codebase has since shipped a multi-Executor Router (Claude Code + OpenAI), VCS/PR publishing, and Authored Knowledge capture and retrieval. [docs/00-overview/roadmap.md](docs/00-overview/roadmap.md)'s current-status table gives an honest, milestone-by-milestone read of what's shipped vs. still planned. Several foundational decisions remain open (governance, the precise center of the domain, replay scope, knowledge migration, and more) and are also listed there. Only the language/toolchain decision is accepted ([docs/03-adrs/ADR-0001-language-and-toolchain.md](docs/03-adrs/ADR-0001-language-and-toolchain.md)).
 
-**Start here for implementation:** [docs/04-guides/M0-IMPLEMENTATION-BACKLOG.md](docs/04-guides/M0-IMPLEMENTATION-BACKLOG.md) (13 PRs, sequential) or [docs/04-guides/M0-QUICK-REFERENCE.md](docs/04-guides/M0-QUICK-REFERENCE.md) (one-page checklist).
+**Start here:** [docs/04-guides/getting-started.md](docs/04-guides/getting-started.md) to install and run Foundry today; [docs/00-overview/roadmap.md](docs/00-overview/roadmap.md) for what's built and what's next.
