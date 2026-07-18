@@ -2,17 +2,17 @@
 
 | | |
 |---|---|
-| **Status** | Draft — Proposed (seeking ratification; no governance process exists yet — see [OQ-006](../06-open-questions/OQ-006-governance-model.md)) |
+| **Status** | Draft — Proposed (seeking ratification; a governance process now exists — [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md) — but this RFC has not itself been individually ratified through it) |
 | **Authors** | Principal architect review (AI-assisted), for Foundry Core |
 | **Reviewers** | _(pending)_ |
 | **Supersedes** | — |
 | **Superseded by** | — |
 | **Created** | 2026-07-07 |
-| **Related** | [domain.md](../02-architecture/domain.md), [execution.md](../02-architecture/execution.md), [extensibility.md](../02-architecture/extensibility.md), [OQ-002](../06-open-questions/OQ-002-pipeline-as-strategy.md), [ADR-0001](../03-adrs/ADR-0001-language-and-toolchain.md), [M0-IMPLEMENTATION-BACKLOG.md](../04-guides/M0-IMPLEMENTATION-BACKLOG.md) |
+| **Related** | [domain.md](../02-architecture/domain.md), [execution.md](../02-architecture/execution.md), [extensibility.md](../02-architecture/extensibility.md), [OQ-002](../06-open-questions/OQ-002-pipeline-as-strategy.md), [ADR-0001](../03-adrs/ADR-0001-language-and-toolchain.md), [M0-IMPLEMENTATION-BACKLOG.md](../archive/obsolete/M0-IMPLEMENTATION-BACKLOG.md) |
 
 > **What this document is.** A full architectural audit of the M0 implementation as it exists today, and a proposed migration from its single hardcoded Act lifecycle to a data-driven Pipeline execution runtime — while preserving the Act as the domain's invariant unit, the Engine's ownership of control flow (I1), and every other accepted invariant. This RFC does not redefine the domain ([domain.md](../02-architecture/domain.md)); it proposes how [execution.md](../02-architecture/execution.md)'s "Pipeline is one Strategy" idea gets a real, general implementation instead of remaining a single fixed procedure wearing Pipeline vocabulary.
 >
-> **Maturity discipline.** This RFC is PROVISIONAL and non-canonical until ratified through whatever process OQ-006 eventually resolves to. It does not silently upgrade OQ-002's open status — see §4's reconciliation note. No code accompanies this RFC; per the operating instructions for this audit, the deliverable is the plan, not the implementation.
+> **Maturity discipline.** This RFC is PROVISIONAL and non-canonical until ratified through [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md)'s process — that process now exists, but this RFC has not yet been individually walked through it. It does not silently upgrade OQ-002's open status — see §4's reconciliation note. No code accompanies this RFC; per the operating instructions for this audit, the deliverable is the plan, not the implementation.
 
 ---
 
@@ -322,7 +322,7 @@ Adopt the target architecture in §4: the Engine as a generic Strategy runtime w
 
 This is deliberately **not** a re-architecture: every element above is either already present in the codebase in miniature (the `Executor` port, `StagedVerifier`'s decorator pattern, the `Reporter` observer, the Validator/Gate error-vs-finding split) or already designed and reasoned through in the archived pre-M0 architecture document, shelved only because M0 correctly chose not to build a framework before it had one real use case. What changes now is that the "one real use case" condition this RFC is written to satisfy — configurable multi-model, multi-verification, multi-approval pipelines — did not exist when M0 was scoped, and does now.
 
-Per [OQ-006](../06-open-questions/OQ-006-governance-model.md), this RFC cannot be formally ratified until a governance process exists; until then it should be treated exactly as [RFC-0001](RFC-0001-vision-and-product-philosophy.md) is treated — Draft, Proposed, argued with rather than deferred to.
+A governance process now exists ([ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md)), but this RFC has not yet been individually ratified through it; until it is, it should be treated exactly as [RFC-0001](RFC-0001-vision-and-product-philosophy.md) is treated — Draft, Proposed, argued with rather than deferred to.
 
 ---
 

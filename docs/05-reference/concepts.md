@@ -4,7 +4,7 @@
 
 ## Maturity index (status of every major concept)
 
-See [maturity levels](../04-guides/documentation.md#maturity-levels). **Nothing is CANONICAL yet** — the ceiling is PROVISIONAL until a governance process exists ([../06-open-questions/OQ-006-governance-model.md](../06-open-questions/OQ-006-governance-model.md)).
+See [maturity levels](../04-guides/documentation.md#maturity-levels). **CANONICAL is now reachable, narrowly**: [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md) resolved the systemic blocker (no ratification process existed). Most of the repository is still PROVISIONAL, not because CANONICAL is unreachable in principle, but because each document still needs its own explicit ratification — nothing upgrades automatically. Only [ADR-0001](../03-adrs/ADR-0001-language-and-toolchain.md), [ADR-0005](../03-adrs/ADR-0005-executor-contract-and-capability-model.md), and [ADR-0010](../03-adrs/ADR-0010-vcs-pr-integration-and-apply-targets.md) are Accepted so far; RFC-0001 through RFC-0005 remain Draft — Proposed.
 
 | Concept / decision | Maturity | Owner | Open question |
 |---|---|---|---|
@@ -17,8 +17,10 @@ See [maturity levels](../04-guides/documentation.md#maturity-levels). **Nothing 
 | Replay across versions | OPEN | — | [OQ-003](../06-open-questions/OQ-003-replay-across-versions.md) |
 | Verification guarantee strength | OPEN | — | [OQ-004](../06-open-questions/OQ-004-validator-determinism.md) |
 | Extension isolation mechanism | OPEN (requirements only) | [extensibility.md](../02-architecture/extensibility.md) | [OQ-005](../06-open-questions/OQ-005-extension-isolation.md) |
-| Governance / ratification | OPEN (highest priority) | — | [OQ-006](../06-open-questions/OQ-006-governance-model.md) |
-| Language = Go | ACCEPTED (interim authority) | [ADR-0001](../03-adrs/ADR-0001-language-and-toolchain.md) | pending amendment |
+| Governance / ratification | **RESOLVED** | [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md) | — |
+| Language = Go | ACCEPTED | [ADR-0001](../03-adrs/ADR-0001-language-and-toolchain.md) | pending amendment |
+| Executor contract & capability model | ACCEPTED | [ADR-0005](../03-adrs/ADR-0005-executor-contract-and-capability-model.md) | — |
+| VCS/PR integration & Apply targets | ACCEPTED | [ADR-0010](../03-adrs/ADR-0010-vcs-pr-integration-and-apply-targets.md) | — |
 | Workflow / Stage / Provider / Skill / Runtime | REJECTED | [archive](../archive/) | — |
 
 ## Domain concepts at a glance

@@ -2,12 +2,12 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** — drafted per [RFC-0004](../01-rfcs/RFC-0004-multi-executor-router-and-publish-policy.md) §2.3; **not ratified**. No governance process exists yet ([OQ-006](../06-open-questions/OQ-006-governance-model.md)); this ADR must not be treated as decided until one does. |
-| **Date** | 2026-07-14 |
-| **Deciders** | _(pending — proposed by RFC-0004, AI-assisted, for whoever eventually reviews it)_ |
-| **Ratifies** | Nothing yet. Proposes a shape for the ADR backlog entry named in [../03-adrs/README.md](README.md) ("Executor contract & capability model"). |
-| **Gates** | Piece 3 of [multi-executor-router-implementation-plan.md](../04-guides/multi-executor-router-implementation-plan.md) — writing a second real vendor `Executor`. Per that plan, Piece 3 does not start until this ADR exists, precisely so the contract is not reverse-engineered from one adapter's accidental shape. |
-| **Process note** | Same posture as RFC-0004 itself: Draft — Proposed, argued with rather than deferred to, exactly as RFC-0001 through RFC-0004 are treated pending [OQ-006](../06-open-questions/OQ-006-governance-model.md). Nothing here gates M0/M1 work already insulated by [roadmap.md](../00-overview/roadmap.md)'s "what may begin now" clause; it gates only the *next* real-vendor Executor, which is later-milestone (M3) work under [roadmap.md](../00-overview/roadmap.md)'s own milestone table. |
+| **Status** | **Accepted** — ratified 2026-07-16 under [ADR-0000](ADR-0000-governance-and-ratification-process.md)'s governance process. Originally drafted per [RFC-0004](../01-rfcs/RFC-0004-multi-executor-router-and-publish-policy.md) §2.3. |
+| **Date** | Drafted 2026-07-14; Accepted 2026-07-16 |
+| **Deciders** | The project's sole maintainer, under [ADR-0000](ADR-0000-governance-and-ratification-process.md); drafted AI-assisted per RFC-0004 |
+| **Ratifies** | The ADR backlog entry named in [../03-adrs/README.md](README.md) ("Executor contract & capability model") — the normalized contract every Executor implements, per Decisions 1–5 below. |
+| **Gates** | Piece 3 of [multi-executor-router-implementation-plan.md](../04-guides/multi-executor-router-implementation-plan.md) — writing a second real vendor `Executor`. Piece 3 (`executor/openai`) has since shipped against this contract. |
+| **Process note** | Accepted under [ADR-0000](ADR-0000-governance-and-ratification-process.md). RFC-0004, the RFC this ADR was drafted from, remains Draft — Proposed in its own right; ratifying this ADR does not ratify that RFC. |
 
 ---
 
@@ -120,14 +120,14 @@ None required. `executor/claude.ClaudeExecutor` and `executor.ScriptedExecutor` 
 
 ## Review Checklist
 
-For whoever eventually ratifies or rejects this ADR (blocked on [OQ-006](../06-open-questions/OQ-006-governance-model.md)):
+Walked through at ratification (2026-07-16), with Piece 3 (`executor/openai`) already shipped to check Decision 3 against a real adapter, not a hypothetical one:
 
-- [ ] **No contradiction with accepted documents.** Confirmed at authoring: does not contradict ADR-0001 (Go/toolchain — adapters remain in-process Go, per RFC-0004 §2.3's own framing that the extension boundary discussion is separate); does not contradict [extensibility.md](../02-architecture/extensibility.md)'s "Executor output is untrusted" clause (Decision 4 is consistent with it, not an exception to it).
-- [ ] **Decision 3's optional-interface shape actually holds** once Piece 3 lands: does the real second-vendor Executor implement `CostEstimator` cleanly, or does the interface need reshaping against a real adapter (not just this ADR's hypothetical one)?
-- [ ] **Decision 4 is re-examined**, not silently inherited, the moment any negotiation/matching logic over Capability is proposed.
+- [x] **No contradiction with accepted documents.** Confirmed: does not contradict ADR-0001 (Go/toolchain — adapters remain in-process Go, per RFC-0004 §2.3's own framing that the extension boundary discussion is separate); does not contradict [extensibility.md](../02-architecture/extensibility.md)'s "Executor output is untrusted" clause (Decision 4 is consistent with it, not an exception to it).
+- [x] **Decision 3's optional-interface shape actually holds.** `executor/openai` implements `CostEstimator` cleanly against the real second-vendor adapter; no reshaping was needed.
+- [ ] **Decision 4 must be re-examined**, not silently inherited, the moment any negotiation/matching logic over Capability is proposed (RFC-0002 §7 layer 2 — not yet built).
 - [ ] **RFC-0004 §2.3's own open call (Copilot's fit) is still open** — this ADR must not be read as having resolved it.
-- [ ] **Process caveat tracked.** Reconcile this ADR's Proposed status once [OQ-006](../06-open-questions/OQ-006-governance-model.md)'s governance process exists.
+- [x] **Process caveat resolved.** Ratified under [ADR-0000](ADR-0000-governance-and-ratification-process.md); no longer blocked on OQ-006.
 
 ---
 
-_This ADR proposes, and does not itself ratify, the contract a second real vendor Executor must satisfy. It keeps `Executor.Execute` untouched, adds cost-reporting as optional rather than forced, and explicitly declines to verify capability truthfulness while routing stays explicit-pin-only — deferring that harder question to whichever future ADR actually builds negotiation._
+_This ADR fixes the contract a second real vendor Executor must satisfy. It keeps `Executor.Execute` untouched, adds cost-reporting as optional rather than forced, and explicitly declines to verify capability truthfulness while routing stays explicit-pin-only — deferring that harder question to whichever future ADR actually builds negotiation._

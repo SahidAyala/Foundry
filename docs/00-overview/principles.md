@@ -32,4 +32,6 @@ The canonical storage format for Foundry is the project's filesystem. Every dura
 
 Every significant decision (RFC, ADR, design) should be answerable against: durable-vs-disposable, provenance/audit, control flow, accountability, the simple path, vendor capture, honesty, the compounding loop, and reversibility.
 
-> **Open governance question (human decision required):** the principles do not yet have a ratified *priority ordering* for when two of them conflict, and there is no ratified process for accepting decisions. Until resolved, treat conflicts as escalations, not as something to settle silently. Tracked in [roadmap.md](roadmap.md).
+> **Open governance question (human decision required):** the principles do not yet have a ratified *priority ordering* for when two of them conflict. Until resolved, treat conflicts as escalations, not as something to settle silently. Tracked in [roadmap.md](roadmap.md) (item 2).
+>
+> A separate, related question — *whether there was any process at all for accepting decisions* — is now resolved: [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md) defines a lightweight, sole-maintainer-led ratification process. That ADR settles *who can accept a decision and how*; it does not settle *which principle wins when two conflict*, which remains the open question above.
