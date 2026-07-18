@@ -37,7 +37,7 @@ Never mix these concerns in one file.
 
 Every major concept and document carries one of four maturity levels, shown in a banner at the top of the document and indexed in [../05-reference/concepts.md](../05-reference/concepts.md):
 
-- **CANONICAL** — accepted through governance; future work must follow it. *Currently aspirational: nothing can reach this level until a ratification process exists ([../06-open-questions/OQ-006-governance-model.md](../06-open-questions/OQ-006-governance-model.md)).*
+- **CANONICAL** — accepted through governance; future work must follow it. *Reachable, narrowly: [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md) resolved the systemic blocker (no ratification process existed), but each document still needs its own explicit ratification — nothing is upgraded automatically.*
 - **PROVISIONAL** — the current best understanding; sound enough to build on, but may evolve. **Most of this repository is here.**
 - **OPEN QUESTION** — unresolved; lives in [../06-open-questions/](../06-open-questions/) with a *current recommendation* that is explicitly not a decision.
 - **REJECTED** — historical only; lives in [../archive/](../archive/); never mixed into active docs.

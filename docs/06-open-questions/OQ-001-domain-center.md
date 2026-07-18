@@ -27,4 +27,4 @@ This conclusion originated in a first-principles review (now archived), authored
 Adopt **Act as the dynamic center with Knowledge as the durable medium** (alternative 1/3 blended) as the **current working model**, because it expresses the full lifecycle cleanly and is the least committal about mechanism. Treat it as PROVISIONAL.
 
 ## Status
-**OPEN.** Resolution should come via an RFC once a governance process exists ([OQ-006](OQ-006-governance-model.md)). Until then, [domain.md](../02-architecture/domain.md) must label this as the current working model, not architectural truth.
+**OPEN.** Resolution should come via an RFC, ratified under [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md)'s now-existing process. Until an RFC actually resolves it, [domain.md](../02-architecture/domain.md) must label this as the current working model, not architectural truth.

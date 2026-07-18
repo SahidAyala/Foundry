@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Draft — Proposed (seeking ratification; no governance process exists yet — see [OQ-006](../06-open-questions/OQ-006-governance-model.md)) |
+| **Status** | Draft — Proposed (seeking ratification; a governance process now exists — [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md) — but this RFC has not itself been individually ratified through it. Two of the ADRs it proposed shapes for, [ADR-0005](../03-adrs/ADR-0005-executor-contract-and-capability-model.md) and [ADR-0010](../03-adrs/ADR-0010-vcs-pr-integration-and-apply-targets.md), are now separately Accepted — that does not ratify this RFC itself) |
 | **Authors** | Principal architect review (AI-assisted), for Foundry Core |
 | **Reviewers** | _(pending)_ |
 | **Supersedes** | — |
@@ -118,12 +118,12 @@ The worked example's **F** role ("document, in two places") is given the smalles
 
 ## 4. Backlog ADRs this RFC touches
 
-Per the [ADR backlog](../03-adrs/README.md), none of the following are decided by this RFC — it proposes concrete shapes for each, to be ratified or rejected once governance exists (OQ-006):
+None of the following are decided by this RFC itself — it proposed concrete shapes for each, per the [ADR backlog](../03-adrs/README.md); two have since been ratified as their own ADRs (governance now exists — [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md)), the other two remain backlog:
 
-- **Executor contract & capability model** — §2.3.
-- **Routing & policy** — §2.1, §2.2 (explicit-pin only; negotiation, RFC-0002 §7 layer 2, remains out of scope).
-- **VCS/PR integration & Apply targets** — §2.5 (added to the backlog by RFC-0003 §6; this RFC is the first concrete proposal against it).
-- **Knowledge & semantic store** — §2.6, named as fed-but-not-preempted.
+- **Executor contract & capability model** — §2.3. Ratified as [ADR-0005](../03-adrs/ADR-0005-executor-contract-and-capability-model.md).
+- **Routing & policy** — §2.1, §2.2 (explicit-pin only; negotiation, RFC-0002 §7 layer 2, remains out of scope). Still backlog (proposed ADR-0006).
+- **VCS/PR integration & Apply targets** — §2.5 (added to the backlog by RFC-0003 §6; this RFC is the first concrete proposal against it). Ratified as [ADR-0010](../03-adrs/ADR-0010-vcs-pr-integration-and-apply-targets.md).
+- **Knowledge & semantic store** — §2.6, named as fed-but-not-preempted. Still backlog (proposed ADR-0007); RFC-0005 has since shipped a narrow retrieval slice against it without ratifying the ADR itself.
 
 ---
 
@@ -145,7 +145,7 @@ Per the [ADR backlog](../03-adrs/README.md), none of the following are decided b
 5. **Per-Step Budget accounting** (§2.7) — required before running the full seven-role Pipeline in production; not required to build/test 1–4 in isolation.
 6. **VCS/PR publish policy** (§2.5) — gated on writing the "VCS/PR integration & Apply targets" ADR; the highest-risk, least-precedented piece, sequenced last deliberately, exactly as RFC-0003 §8 already recommended for its own §4.1.
 
-Per [OQ-006](../06-open-questions/OQ-006-governance-model.md), this RFC cannot be formally ratified until a governance process exists. Until then, treat it as RFC-0001 through RFC-0003 are treated: Draft, Proposed, argued with rather than deferred to.
+A governance process now exists ([ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md)), but this RFC has not yet been individually ratified through it. Until it is, treat it as RFC-0001 through RFC-0003 are treated: Draft, Proposed, argued with rather than deferred to.
 
 ---
 

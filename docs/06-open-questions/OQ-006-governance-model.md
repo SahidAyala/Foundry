@@ -1,6 +1,6 @@
 # OQ-006 — How are decisions ratified?
 
-**Maturity: OPEN QUESTION** · the prerequisite for anything reaching CANONICAL · informs all tiers
+**Maturity: RESOLVED** · graduated to [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md) (Accepted 2026-07-16) · this page is now historical context for that ADR, not a live question
 
 ## Problem
 The repository has RFCs, ADRs, and a documentation precedence chain — but **no defined process for accepting an RFC or ADR, amending the constitution, or resolving conflicts between equal-precedence documents.** Without it, nothing can legitimately be ratified, and "CANONICAL" is a status nothing can currently reach.
@@ -26,5 +26,7 @@ This is the deepest honesty issue in the project. The founding RFC is itself unr
 ## Current recommendation
 Adopt a **lightweight maintainer-led process with an open comment period** as an explicit interim governance ADR, *and label everything it has not yet ratified as PROVISIONAL.* Until that ADR exists, treat all "accepted" statuses (including ADR-0001) as interim. PROVISIONAL.
 
+**Adopted, with one named narrowing**: [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md) takes this recommendation as its Decision 1 verbatim, but suspends the open comment period specifically while the project has a single maintainer (its own Decision 2) — a scope this recommendation did not anticipate because it did not distinguish "solo" from "small group." ADR-0000 names the exact trigger (a second contributor) that ends the narrowing and forces a real comment period to be defined.
+
 ## Status
-**OPEN — highest priority.** Until resolved, the maturity ceiling for the whole repository is PROVISIONAL.
+**RESOLVED — 2026-07-16.** Graduated to [ADR-0000 — Governance & Ratification Process](../03-adrs/ADR-0000-governance-and-ratification-process.md), Accepted. The maturity ceiling this question capped is no longer systemically PROVISIONAL — CANONICAL is reachable per-document, on explicit ratification, per ADR-0000. The Open Questions this page named (licence/sponsoring entity; authority transfer on maintainer unavailability; comment-period length and quorum once a second contributor exists) are carried forward, unresolved, in ADR-0000's own Open Questions section — this page is kept for historical context, not as a live question.

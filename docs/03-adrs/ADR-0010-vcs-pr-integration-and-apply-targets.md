@@ -2,12 +2,12 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** — drafted per [RFC-0004](../01-rfcs/RFC-0004-multi-executor-router-and-publish-policy.md) §2.5 and [RFC-0003](../01-rfcs/RFC-0003-interactive-assistant-and-multi-executor-pipelines.md) §4.1; **not ratified**. No governance process exists yet ([OQ-006](../06-open-questions/OQ-006-governance-model.md)); this ADR must not be treated as decided until one does. |
-| **Date** | 2026-07-15 |
-| **Deciders** | _(pending — proposed by RFC-0003/RFC-0004, AI-assisted, for whoever eventually reviews it)_ |
-| **Ratifies** | Nothing yet. Proposes a shape for the ADR backlog entry named in [../03-adrs/README.md](README.md) ("VCS/PR integration & Apply targets"), numbered ADR-0010 to match the row order [ADR-0005](ADR-0005-executor-contract-and-capability-model.md) already implied (0006 Routing & policy, 0007 Knowledge & semantic store, 0008 Extension isolation, 0009 CLI & output contract, 0010 this entry, 0011 Cost). |
-| **Gates** | Piece 6 of [multi-executor-router-implementation-plan.md](../04-guides/multi-executor-router-implementation-plan.md) — the `remote-pr` apply target, `.foundry/config.json`'s publish-policy fields, and the `vcs` package. Per that plan, Piece 6 does not start until this ADR exists — the highest-risk, least-precedented piece, sequenced last deliberately. |
-| **Process note** | Same posture as RFC-0003/RFC-0004 and [ADR-0005](ADR-0005-executor-contract-and-capability-model.md): Draft — Proposed, argued with rather than deferred to, pending [OQ-006](../06-open-questions/OQ-006-governance-model.md). Nothing here gates any already-shipped work (Pieces 1–5); it gates only the one piece that is Foundry's first outbound write to shared infrastructure. |
+| **Status** | **Accepted** — ratified 2026-07-16 under [ADR-0000](ADR-0000-governance-and-ratification-process.md)'s governance process. Originally drafted per [RFC-0004](../01-rfcs/RFC-0004-multi-executor-router-and-publish-policy.md) §2.5 and [RFC-0003](../01-rfcs/RFC-0003-interactive-assistant-and-multi-executor-pipelines.md) §4.1. |
+| **Date** | Drafted 2026-07-15; Accepted 2026-07-16 |
+| **Deciders** | The project's sole maintainer, under [ADR-0000](ADR-0000-governance-and-ratification-process.md); drafted AI-assisted per RFC-0003/RFC-0004 |
+| **Ratifies** | The ADR backlog entry named in [../03-adrs/README.md](README.md) ("VCS/PR integration & Apply targets"), numbered ADR-0010 to match the row order [ADR-0005](ADR-0005-executor-contract-and-capability-model.md) already implied (0006 Routing & policy, 0007 Knowledge & semantic store, 0008 Extension isolation, 0009 CLI & output contract, 0010 this entry, 0011 Cost). |
+| **Gates** | Piece 6 of [multi-executor-router-implementation-plan.md](../04-guides/multi-executor-router-implementation-plan.md) — the `remote-pr` apply target, `.foundry/config.json`'s publish-policy fields, and the `vcs` package. Piece 6 (`vcs.GitHubPRApplier`) has since shipped against this ADR. |
+| **Process note** | Accepted under [ADR-0000](ADR-0000-governance-and-ratification-process.md). RFC-0003 and RFC-0004, the RFCs this ADR was drafted from, remain Draft — Proposed in their own right; ratifying this ADR does not ratify either RFC. |
 
 ---
 
@@ -133,14 +133,14 @@ None identified beyond what [ADR-0005](ADR-0005-executor-contract-and-capability
 
 ## Review Checklist
 
-For whoever eventually ratifies or rejects this ADR (blocked on [OQ-006](../06-open-questions/OQ-006-governance-model.md)):
+Walked through at ratification (2026-07-16), with Piece 6 (`vcs.GitHubPRApplier`) already shipped to check Decision 3 against real usage, not a hypothetical:
 
-- [ ] **No contradiction with accepted documents.** Confirmed at authoring: does not contradict ADR-0001 (`gh` runs as a subprocess, in-process Go caller — the extension-boundary discussion stays separate); does not contradict [trust.md](../02-architecture/trust.md) or I5 (Decision 4 reuses, never bypasses, the existing `approve`/Authority mechanism); does not contradict I8/I10 (Decision 5 explicitly declines to let a PR's later fate mutate a recorded Act).
-- [ ] **Decision 3's `SetPublishPolicy` shape actually holds** once Piece 6 builds it: does a real `.foundry/config.json` + multi-Pipeline project confirm the registration-time check is unambiguous, or does it need reshaping against real project structures?
-- [ ] **Decision 6 is re-examined, not silently inherited,** the moment any credential-identity-linking mechanism is proposed for Executors or VCS hosts alike.
+- [x] **No contradiction with accepted documents.** Confirmed: does not contradict ADR-0001 (`gh` runs as a subprocess, in-process Go caller — the extension-boundary discussion stays separate); does not contradict [trust.md](../02-architecture/trust.md) or I5 (Decision 4 reuses, never bypasses, the existing `approve`/Authority mechanism); does not contradict I8/I10 (Decision 5 explicitly declines to let a PR's later fate mutate a recorded Act).
+- [x] **Decision 3's `SetPublishPolicy` shape holds.** Shipped and wired into both composition roots (`cmd/foundry/commands/do.go`, `session.Session`); the registration-time check is unambiguous against the project's own Pipelines.
+- [ ] **Decision 6 must be re-examined, not silently inherited,** the moment any credential-identity-linking mechanism is proposed for Executors or VCS hosts alike.
 - [ ] **Decision 8's GitHub-only scope is still accurate** — re-open if a second VCS host adapter is ever proposed.
-- [ ] **Process caveat tracked.** Reconcile this ADR's Proposed status once [OQ-006](../06-open-questions/OQ-006-governance-model.md)'s governance process exists.
+- [x] **Process caveat resolved.** Ratified under [ADR-0000](ADR-0000-governance-and-ratification-process.md); no longer blocked on OQ-006.
 
 ---
 
-_This ADR proposes, and does not itself ratify, the shape Foundry's first outbound, off-machine action takes. It keeps `Apply`'s meaning and `engine.Applier`'s contract unchanged, adds a project-level publish policy enforced at Pipeline-registration time rather than at run time, and explicitly declines to model a pull request's own review as a second Foundry-tracked accountability surface — deferring identity-linking and multi-host support to whichever future need actually motivates them._
+_This ADR fixes the shape Foundry's first outbound, off-machine action takes. It keeps `Apply`'s meaning and `engine.Applier`'s contract unchanged, adds a project-level publish policy enforced at Pipeline-registration time rather than at run time, and explicitly declines to model a pull request's own review as a second Foundry-tracked accountability surface — deferring identity-linking and multi-host support to whichever future need actually motivates them._

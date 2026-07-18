@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Draft — Proposed (seeking ratification; no governance process exists yet — see [OQ-006](../06-open-questions/OQ-006-governance-model.md)) |
+| **Status** | Draft — Proposed (seeking ratification; a governance process now exists — [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md) — but this RFC has not itself been individually ratified through it) |
 | **Authors** | Principal architect review (AI-assisted), for Foundry Core |
 | **Reviewers** | _(pending)_ |
 | **Supersedes** | — |
@@ -121,7 +121,7 @@ Only `.foundry/knowledge/` (the `knowledge-note` target's directory) is retrieve
 
 Derived Knowledge indexing, semantic retrieval, and Authored-knowledge format stability (§3) are named, deliberately deferred follow-ups — this RFC does not schedule them, and building them now would be exactly the kind of premature machinery this codebase has consistently declined to build ahead of a real, motivating need.
 
-Per [OQ-006](../06-open-questions/OQ-006-governance-model.md), this RFC cannot be formally ratified until a governance process exists. Until then, treat it as RFC-0001 through RFC-0004 are treated: Draft, Proposed, argued with rather than deferred to.
+A governance process now exists ([ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md)), but this RFC has not yet been individually ratified through it. Until it is, treat it as RFC-0001 through RFC-0004 are treated: Draft, Proposed, argued with rather than deferred to.
 
 ---
 

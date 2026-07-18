@@ -17,7 +17,7 @@ The first-pass refactor archived eight Architecture Review Board reviews. Their 
 | [OQ-003](OQ-003-replay-across-versions.md) | Does the replay guarantee hold across Engine versions? | Scope it to same-version initially | OPEN |
 | [OQ-004](OQ-004-validator-determinism.md) | What can the verification guarantee honestly promise? | Record-and-replay, not "pure function" | OPEN |
 | [OQ-005](OQ-005-extension-isolation.md) | How are third-party extensions isolated and versioned? | Undecided — requirements only | OPEN |
-| [OQ-006](OQ-006-governance-model.md) | How are decisions ratified? | Lightweight maintainer-led process first | OPEN |
+| [OQ-006](OQ-006-governance-model.md) | How are decisions ratified? | Lightweight maintainer-led process first | **RESOLVED** → [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md) |
 | [OQ-007](OQ-007-canonical-terminology.md) | Is the proposed vocabulary (Act/Engine/Strategy/…) the right one? | Adopt provisionally, revisit at first implementation | OPEN |
 | [OQ-008](OQ-008-in-progress-act-persistence.md) | Where does an interrupted Act's in-progress state live, given the Record is write-once? | Separate mutable checkpoint store, deleted on terminal Judgment | OPEN |
 

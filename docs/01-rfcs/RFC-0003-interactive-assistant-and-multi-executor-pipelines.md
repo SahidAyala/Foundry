@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Draft — Proposed (seeking ratification; no governance process exists yet — see [OQ-006](../06-open-questions/OQ-006-governance-model.md)) |
+| **Status** | Draft — Proposed (seeking ratification; a governance process now exists — [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md) — but this RFC has not itself been individually ratified through it) |
 | **Authors** | Principal architect review (AI-assisted), for Foundry Core |
 | **Reviewers** | _(pending)_ |
 | **Supersedes** | — |
@@ -164,7 +164,7 @@ Adopt the product-shape decision — Foundry's primary interface becomes an inte
 4. **RFC-0002 Phase 6** (Router, explicit-pin-only policy) — the minimum needed to name Opus/Sonnet/Haiku/Copilot per Step; do not build Phase 7 (negotiation) until a real multi-Executor Pipeline in production motivates it, per RFC-0002's own depth-before-breadth discipline.
 5. **§4.1 VCS/PR integration** — gated on its own dedicated ADR (§6); the highest-risk, least-specified piece, and should not be built opportunistically alongside 1–4.
 
-Per [OQ-006](../06-open-questions/OQ-006-governance-model.md), this RFC cannot be formally ratified until a governance process exists. Until then, treat it as RFC-0001 and RFC-0002 are treated: Draft, Proposed, argued with rather than deferred to.
+A governance process now exists ([ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md)), but this RFC has not yet been individually ratified through it. Until it is, treat it as RFC-0001 and RFC-0002 are treated: Draft, Proposed, argued with rather than deferred to.
 
 ---
 
