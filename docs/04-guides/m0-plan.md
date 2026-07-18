@@ -1,5 +1,7 @@
 # M0 Implementation Plan
 
+> **Status: M0 is complete**, and the codebase has since shipped well past it. This document is kept as the design rationale behind *why* M0 was scoped and sequenced the way it was — not as a current plan. For current status per milestone, see [../00-overview/roadmap.md](../00-overview/roadmap.md); to install and run Foundry today, see [getting-started.md](getting-started.md). "Atlas" below was always a placeholder name for whichever real codebase M0 was first pointed at, not a specific repository.
+>
 > **Goal of M0:** the first *usable* Foundry — capable of producing real, verified, human-approved, recorded code changes on the **Atlas** codebase. Documentation is done; a working system is the deliverable. This plan supersedes the M0 detail in the archived roadmap and uses the provisional vocabulary from [terminology.md](../05-reference/terminology.md). Build approach: [development.md](development.md).
 
 ## 1. Strategy & philosophy
@@ -17,7 +19,7 @@ Three rules govern every M0 decision:
 
 - **Implementation-ready:** Act lifecycle (domain.md), the trust gate (validate → judge), deterministic-first verification, human-as-Authority, the immutable Record, worktree isolation (concept survives from archived ARCHITECTURE §7.3). These map directly to code.
 - **Postpone (concept exists, not needed for M0):** Knowledge graph & Authored/Derived split, Context *engine* (ranking/compaction/provenance scoring), Router & Capability negotiation, multiple Strategies, Skills/reusable templates, replay.
-- **Open questions that DO NOT block M0:** all of them. OQ-001/002 are *answered provisionally* and M0 tests them. OQ-003 (replay) and OQ-005 (extensions) are deferred features. OQ-004 (validator-determinism) is sidestepped — M0 just runs validators and records results. OQ-006 (governance) blocks *ratifying* decisions, not *writing code*. OQ-007 (terminology) only affects names, which are cheap to change pre-1.0.
+- **Open questions that DO NOT block M0:** all of them. OQ-001/002 are *answered provisionally* and M0 tests them. OQ-003 (replay) and OQ-005 (extensions) are deferred features. OQ-004 (validator-determinism) is sidestepped — M0 just runs validators and records results. OQ-006 (governance) is resolved ([ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md)); while it was open it blocked *ratifying* decisions, not *writing code*, which is why M0 work was never gated on it. OQ-007 (terminology) only affects names, which are cheap to change pre-1.0.
 - **The only real prerequisite:** the language decision ([ADR-0001](../03-adrs/ADR-0001-language-and-toolchain.md), Go, interim) — sufficient. Plus knowing Atlas's build/test commands (config).
 
 **Conclusion: nothing blocks starting M0.**

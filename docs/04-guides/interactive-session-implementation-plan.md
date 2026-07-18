@@ -1,6 +1,6 @@
 # Interactive Session — Component Design & Implementation Plan
 
-> **Executable roadmap** for the product-shape decision proposed in [RFC-0003](../01-rfcs/RFC-0003-interactive-assistant-and-multi-executor-pipelines.md): `foundry` becomes an interactive, slash-command-driven session instead of a flag-parsed one-shot CLI. This guide is the "how, in order"; RFC-0003 is the "why". Each PR below leaves the repository compiling with tests green, mirroring [M0-IMPLEMENTATION-BACKLOG.md](M0-IMPLEMENTATION-BACKLOG.md)'s discipline.
+> **Executable roadmap** for the product-shape decision proposed in [RFC-0003](../01-rfcs/RFC-0003-interactive-assistant-and-multi-executor-pipelines.md): `foundry` becomes an interactive, slash-command-driven session instead of a flag-parsed one-shot CLI. This guide is the "how, in order"; RFC-0003 is the "why". Each PR below leaves the repository compiling with tests green, mirroring [M0-IMPLEMENTATION-BACKLOG.md](../archive/obsolete/M0-IMPLEMENTATION-BACKLOG.md)'s discipline (M0 is now complete; that document is historical).
 >
 > **Scope guard, confirmed by audit (§1):** `engine.Engine`, `engine.PipelineStrategy`, `engine.PipelineRegistry`, and `engine.PipelineProvider` require **zero modifications**. Every component below is either a new adapter satisfying an existing port, or new code in new packages one layer above `engine`. Where this guide would have needed an Engine change, it says so explicitly (it doesn't happen).
 

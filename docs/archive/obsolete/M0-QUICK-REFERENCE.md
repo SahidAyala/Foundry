@@ -1,5 +1,7 @@
 # M0 Quick Reference
 
+> **Status: Historical — M0 is complete.** See [../../00-overview/roadmap.md](../../00-overview/roadmap.md) for current status per milestone; this checklist's boxes predate that work and are left unchecked on purpose, as a record of the original plan.
+
 Condensed checklist for the implementation engineer. **Read [M0-IMPLEMENTATION-BACKLOG.md](M0-IMPLEMENTATION-BACKLOG.md) for full details.**
 
 ## One-line summary
