@@ -1,8 +1,10 @@
 package engine
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"regexp"
 
 	"foundry/domain"
 )
@@ -10,13 +12,14 @@ import (
 // PipelineDocument is the declarative, wire-format shape a Pipeline is
 // authored as, decoded by DecodePipelineDocument into the engine.Pipeline
 // PipelineStrategy actually executes. It is deliberately a distinct type
-// from Pipeline, not a JSON-tagged Pipeline itself: the document's schema
-// and its own versioning belong to an as-yet-unwritten ADR ("Reusable-Act
-// template format & evolution policy", docs/03-adrs/README.md backlog).
-// Reusing Pipeline's Go field names and tags as the wire format would
-// silently pre-decide that ADR's question; keeping the two shapes
-// separate, joined by one explicit translation, is what lets the document
-// evolve independently of the runtime type later
+// from Pipeline, not a JSON-tagged Pipeline itself: ADR-0004
+// ("Reusable-Act template format & evolution policy") ratifies this
+// separation as the permanent mechanism that lets the document evolve
+// independently of the runtime type — new fields must be optional and
+// omitempty (ADR-0004 Decision 3); there is no version field yet, by the
+// same decision, since no second reader of this format exists.
+// Reusing Pipeline's Go field names and tags as the wire format would have
+// pre-decided that question implicitly instead of deliberately
 // (docs/01-rfcs/RFC-0002-pipeline-execution-runtime.md §6).
 //
 // JSON is the only decodable form today — the canonical form RFC-0002 §6
@@ -56,11 +59,22 @@ type RepairPolicyDocument struct {
 	Target      string `json:"target"`
 }
 
+// pipelineSchemaDocRef is where DecodePipelineDocument points an author who
+// hits an unknown-field error (ADR-0004 Decision 4) to fix it against.
+const pipelineSchemaDocRef = "docs/04-guides/pipelines.md"
+
+// unknownFieldPattern extracts the field name from encoding/json's own
+// DisallowUnknownFields error ("json: unknown field \"x\""), which
+// otherwise says nothing about which Step or section it occurred in.
+var unknownFieldPattern = regexp.MustCompile(`unknown field "([^"]+)"`)
+
 // DecodePipelineDocument parses data as a PipelineDocument and translates
 // it into an engine.Pipeline. It is the loader RFC-0002 §9 Phase 3 calls
 // for: the one place a declarative document becomes the data
 // PipelineStrategy walks. Decode validates the document's own shape —
-// required fields present, each Step's Kind one of RFC-0002 §4.2's closed
+// required fields present, no unrecognized field anywhere in the document
+// (ADR-0004 Decision 4 — a typo'd or stray key is a decode-time error, not
+// silently dropped), each Step's Kind one of RFC-0002 §4.2's closed
 // five-kind vocabulary (domain.StepKindGenerate, domain.StepKindVerify,
 // domain.StepKindApprove, domain.StepKindApply, domain.StepKindRecord),
 // RepairPolicy.MaxAttempts non-negative, and a non-empty
@@ -70,10 +84,83 @@ type RepairPolicyDocument struct {
 // on much later, at execution time.
 func DecodePipelineDocument(data []byte) (Pipeline, error) {
 	var doc PipelineDocument
-	if err := json.Unmarshal(data, &doc); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&doc); err != nil {
+		if unknownFieldPattern.MatchString(err.Error()) {
+			return Pipeline{}, describeUnknownField(data, err)
+		}
 		return Pipeline{}, fmt.Errorf("engine: decode pipeline document: %w", err)
 	}
 	return doc.toPipeline()
+}
+
+// describeUnknownField re-decodes data one level at a time — top-level,
+// then each Step, then repair — to locate which section DisallowUnknownFields
+// rejected, so the returned error names the field, the enclosing Step (by
+// id, when there is one), and pipelineSchemaDocRef. Go's own error gives
+// none of that context, only the bare field name.
+func describeUnknownField(data []byte, cause error) error {
+	field := "(unrecognized)"
+	if m := unknownFieldPattern.FindStringSubmatch(cause.Error()); m != nil {
+		field = fmt.Sprintf("%q", m[1])
+	}
+
+	var loose struct {
+		Name   string            `json:"name"`
+		Steps  []json.RawMessage `json:"steps"`
+		Repair json.RawMessage   `json:"repair"`
+	}
+	if err := json.Unmarshal(data, &loose); err != nil {
+		// Doesn't even parse leniently as a PipelineDocument shape; report
+		// Go's own error rather than guessing further.
+		return fmt.Errorf("engine: decode pipeline document: unknown field %s — see %s for the current schema: %w", field, pipelineSchemaDocRef, cause)
+	}
+	prefix := "engine: decode pipeline document:"
+	if loose.Name != "" {
+		prefix = fmt.Sprintf("engine: pipeline document %q:", loose.Name)
+	}
+
+	if strictlyRejects(data, &struct {
+		Name   json.RawMessage `json:"name"`
+		Steps  json.RawMessage `json:"steps"`
+		Repair json.RawMessage `json:"repair"`
+	}{}) {
+		return fmt.Errorf("%s unknown top-level field %s — see %s for the current schema", prefix, field, pipelineSchemaDocRef)
+	}
+
+	for i, raw := range loose.Steps {
+		if strictlyRejects(raw, &StepDocument{}) {
+			return fmt.Errorf("%s step %s: unknown field %s — see %s for the current schema", prefix, stepLabel(raw, i), field, pipelineSchemaDocRef)
+		}
+	}
+
+	if len(loose.Repair) > 0 && strictlyRejects(loose.Repair, &RepairPolicyDocument{}) {
+		return fmt.Errorf("%s repair: unknown field %s — see %s for the current schema", prefix, field, pipelineSchemaDocRef)
+	}
+
+	return fmt.Errorf("%s unknown field %s — see %s for the current schema: %w", prefix, field, pipelineSchemaDocRef, cause)
+}
+
+// strictlyRejects reports whether decoding raw into v with unknown fields
+// disallowed fails on an unknown field specifically.
+func strictlyRejects(raw []byte, v any) bool {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	err := dec.Decode(v)
+	return err != nil && unknownFieldPattern.MatchString(err.Error())
+}
+
+// stepLabel identifies a Step for an error message: its declared id when
+// present, or its position when the id itself is missing or unparsable.
+func stepLabel(raw json.RawMessage, index int) string {
+	var peek struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(raw, &peek); err == nil && peek.ID != "" {
+		return fmt.Sprintf("%q", peek.ID)
+	}
+	return fmt.Sprintf("at index %d", index)
 }
 
 // toPipeline validates doc and translates it into the Pipeline it

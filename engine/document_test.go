@@ -348,3 +348,81 @@ func TestBuiltinProvider_LoadedPipelineRepairsIdenticallyToDefaultPipeline(t *te
 		t.Errorf("CostEstimateUSD = %v, want budget usage to have been charged", act.CostEstimateUSD)
 	}
 }
+
+// The following tests cover ADR-0004 Decision 4: an unknown field anywhere
+// in a Pipeline document is a decode-time error naming the field, the
+// enclosing Step (when there is one), and pointing the author at
+// docs/04-guides/pipelines.md — never silently dropped.
+
+func TestDecodePipelineDocument_UnknownTopLevelFieldFails(t *testing.T) {
+	data := []byte(`{"nmae": "bad", "steps": [{"id": "generate", "kind": "generate"}]}`)
+
+	_, err := engine.DecodePipelineDocument(data)
+	if err == nil {
+		t.Fatal("DecodePipelineDocument with an unknown top-level field returned nil error")
+	}
+	if !strings.Contains(err.Error(), `"nmae"`) {
+		t.Errorf("error = %q, want it to name the unknown field %q", err.Error(), "nmae")
+	}
+	if !strings.Contains(err.Error(), "top-level") {
+		t.Errorf("error = %q, want it to say the field is top-level", err.Error())
+	}
+	if !strings.Contains(err.Error(), "docs/04-guides/pipelines.md") {
+		t.Errorf("error = %q, want it to point at the pipelines guide", err.Error())
+	}
+}
+
+func TestDecodePipelineDocument_UnknownStepFieldFailsAndNamesTheStep(t *testing.T) {
+	data := []byte(`{
+		"name": "bad",
+		"steps": [{"id": "generate", "kind": "generate", "capabilty": {"vendor": "x"}}]
+	}`)
+
+	_, err := engine.DecodePipelineDocument(data)
+	if err == nil {
+		t.Fatal("DecodePipelineDocument with an unknown step field returned nil error")
+	}
+	if !strings.Contains(err.Error(), `"capabilty"`) {
+		t.Errorf("error = %q, want it to name the unknown field %q", err.Error(), "capabilty")
+	}
+	if !strings.Contains(err.Error(), `"generate"`) {
+		t.Errorf("error = %q, want it to name the enclosing step %q", err.Error(), "generate")
+	}
+	if !strings.Contains(err.Error(), "docs/04-guides/pipelines.md") {
+		t.Errorf("error = %q, want it to point at the pipelines guide", err.Error())
+	}
+}
+
+func TestDecodePipelineDocument_UnknownStepFieldWithoutIDFallsBackToIndex(t *testing.T) {
+	data := []byte(`{"name": "bad", "steps": [{"kynd": "generate"}]}`)
+
+	_, err := engine.DecodePipelineDocument(data)
+	if err == nil {
+		t.Fatal("DecodePipelineDocument with an unknown field on an id-less step returned nil error")
+	}
+	if !strings.Contains(err.Error(), `"kynd"`) {
+		t.Errorf("error = %q, want it to name the unknown field %q", err.Error(), "kynd")
+	}
+	if !strings.Contains(err.Error(), "index 0") {
+		t.Errorf("error = %q, want it to fall back to the step's index", err.Error())
+	}
+}
+
+func TestDecodePipelineDocument_UnknownRepairFieldFails(t *testing.T) {
+	data := []byte(`{
+		"name": "bad",
+		"steps": [{"id": "generate", "kind": "generate"}],
+		"repair": {"max_attemtps": 1}
+	}`)
+
+	_, err := engine.DecodePipelineDocument(data)
+	if err == nil {
+		t.Fatal("DecodePipelineDocument with an unknown repair field returned nil error")
+	}
+	if !strings.Contains(err.Error(), `"max_attemtps"`) {
+		t.Errorf("error = %q, want it to name the unknown field %q", err.Error(), "max_attemtps")
+	}
+	if !strings.Contains(err.Error(), "repair") {
+		t.Errorf("error = %q, want it to say the field is in the repair block", err.Error())
+	}
+}

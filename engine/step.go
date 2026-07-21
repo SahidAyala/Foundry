@@ -89,10 +89,11 @@ type RepairPolicy struct {
 // Audited against RFC-0002 (§4.2, §4.5, §5, §6, §7) for missing structural
 // concepts: Name, Steps, and RepairPolicy already cover everything the
 // runtime executes today. Deliberately not added, and why:
-//   - Pipeline/Step versioning (§6) — the versioning scheme is an unwritten
-//     prerequisite ADR's decision (§9 Phase 0), not this type's; guessing
-//     at a shape now risks the premature-hardening §10 warns against for
-//     the Record's on-disk surface.
+//   - Pipeline/Step versioning (§6) — ADR-0004 ("Reusable-Act template
+//     format & evolution policy", accepted) deliberately adds no version
+//     field yet, ratifying additive-only field evolution instead; a real
+//     version scheme is introduced only once a second reader of this
+//     format actually exists.
 //   - A named repair-jump target (§4.2, §4.3) — see RepairPolicy.
 //   - Capabilities, model hints, or routing metadata (§4.4, §7) — belong
 //     to the Router, which does not exist until Phase 6.
