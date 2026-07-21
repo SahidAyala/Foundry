@@ -40,6 +40,7 @@ Running `foundry` with no arguments opens an interactive session rooted at the c
 | `/bug "<intent>"` | Runs the `bugfix` Pipeline: `implement → verify → approve → apply → record`. |
 | `/review "<intent>"` | Runs the built-in `review` Pipeline: two independent `verify` Steps against one Outcome. |
 | `/release "<intent>"` | Runs the `release` Pipeline: `prepare → verify → verify-checklist → approve → apply → record`, no repair. |
+| `/help` | Lists every slash command this session understands, by name and one-line description. |
 | `/exit` or `/quit` | End the session. |
 
 Each Pipeline's `verify` Step(s) must pass before you're ever asked to approve anything — a failing verification stops the attempt (and retries once, bounded, if the Pipeline declares repair) rather than reaching approval. When it does reach an `approve` Step, you'll see the proposed patch and its verdict, then a `y/n` prompt; declining leaves your repository untouched. On approval, the patch is applied and the Act is recorded immutably under `.foundry/acts/` in your repository.
