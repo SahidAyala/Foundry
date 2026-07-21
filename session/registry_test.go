@@ -19,6 +19,10 @@ func (h *recordingHandler) Run(ctx context.Context, s *session.Session, args str
 	return h.err
 }
 
+func (h *recordingHandler) Describe() string {
+	return "a fake command for testing"
+}
+
 func TestCommandRegistry_RegisterThenDispatch(t *testing.T) {
 	registry := session.NewCommandRegistry()
 	handler := &recordingHandler{}
@@ -52,6 +56,30 @@ func TestCommandRegistry_DispatchUnknownCommandFails(t *testing.T) {
 	err := registry.Dispatch(context.Background(), nil, "nonexistent", "")
 	if err == nil {
 		t.Fatal("Dispatch of an unregistered command returned nil error")
+	}
+}
+
+func TestCommandRegistry_ListReturnsCommandsInRegistrationOrder(t *testing.T) {
+	registry := session.NewCommandRegistry()
+	if err := registry.Register("feature", &recordingHandler{}); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+	if err := registry.Register("bug", &recordingHandler{}); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+
+	got := registry.List()
+	want := []session.CommandInfo{
+		{Name: "feature", Description: "a fake command for testing"},
+		{Name: "bug", Description: "a fake command for testing"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("List() = %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("List()[%d] = %+v, want %+v", i, got[i], want[i])
+		}
 	}
 }
 

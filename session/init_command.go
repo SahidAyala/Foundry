@@ -16,6 +16,11 @@ type InitCommand struct{}
 
 var _ CommandHandler = InitCommand{}
 
+// Describe returns InitCommand's one-line /help description.
+func (InitCommand) Describe() string {
+	return "Scaffold this project's pipelines directory with starter Pipeline documents."
+}
+
 // Run scaffolds s.Root's pipelines directory, then reloads s's registry
 // so the newly scaffolded Pipelines (and anything else a user has
 // already added to .foundry/pipelines) are immediately resolvable by

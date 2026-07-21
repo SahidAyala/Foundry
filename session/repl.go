@@ -80,8 +80,8 @@ func (r *REPL) handleLine(ctx context.Context, line string) (done bool) {
 }
 
 // DefaultCommandRegistry returns the CommandRegistry this build of
-// Foundry ships by default: /init, plus one RunPipelineCommand per
-// slash command a fresh project resolves out of the box — /feature,
+// Foundry ships by default: /init, /help, plus one RunPipelineCommand
+// per slash command a fresh project resolves out of the box — /feature,
 // /bug, /review, /release — matching the Pipeline names
 // project.ProjectLoader.Scaffold writes starters for ("feature",
 // "bugfix", "release") plus the "review" built-in. A project that
@@ -100,5 +100,9 @@ func DefaultCommandRegistry() *CommandRegistry {
 	must("bug", RunPipelineCommand{PipelineName: "bugfix"})
 	must("review", RunPipelineCommand{PipelineName: "review"})
 	must("release", RunPipelineCommand{PipelineName: "release"})
+	// help is registered last so its own Registry pointer already sees
+	// every command above (registry is a pointer; Register mutates it
+	// in place, and help.Run only reads it later, at dispatch time).
+	must("help", HelpCommand{Registry: registry})
 	return registry
 }
