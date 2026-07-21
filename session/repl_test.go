@@ -105,6 +105,32 @@ func TestREPL_EndOfInputEndsSessionCleanly(t *testing.T) {
 	}
 }
 
+// TestREPL_HelpListsRegisteredCommands verifies /help — the command the
+// startup banner has always promised (ADR-0009 Decision 6) — actually
+// lists every command DefaultCommandRegistry registers, itself included.
+func TestREPL_HelpListsRegisteredCommands(t *testing.T) {
+	root := initGitRepo(t)
+	out := &bytes.Buffer{}
+	in := strings.NewReader("/help\n/exit\n")
+
+	s, err := session.NewSession(context.Background(), root, in, out, newScriptedExecutorFactory(scriptedPatch))
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+
+	repl := session.NewREPL(s, session.DefaultCommandRegistry())
+	if err := repl.Run(context.Background()); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	got := out.String()
+	for _, name := range []string{"/init", "/feature", "/bug", "/review", "/release", "/help"} {
+		if !strings.Contains(got, name) {
+			t.Errorf("output = %q, want it to list %s", got, name)
+		}
+	}
+}
+
 func TestREPL_PlainTextIsReportedNotSilentlyDropped(t *testing.T) {
 	root := initGitRepo(t)
 	out := &bytes.Buffer{}

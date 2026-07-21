@@ -26,6 +26,12 @@ type RunPipelineCommand struct {
 
 var _ CommandHandler = RunPipelineCommand{}
 
+// Describe returns this command's one-line /help description, naming the
+// Pipeline it runs.
+func (cmd RunPipelineCommand) Describe() string {
+	return fmt.Sprintf("Run the %q Pipeline over a description of the work.", cmd.PipelineName)
+}
+
 // Run resolves cmd.PipelineName from s, then delegates the entire
 // approve/apply/record lifecycle to the unchanged cli.CLI.Do — the same
 // call cmd/foundry/commands/do.go already makes once per process, made
