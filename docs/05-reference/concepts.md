@@ -4,7 +4,7 @@
 
 ## Maturity index (status of every major concept)
 
-See [maturity levels](../04-guides/documentation.md#maturity-levels). **CANONICAL is now reachable, narrowly**: [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md) resolved the systemic blocker (no ratification process existed). Most of the repository is still PROVISIONAL, not because CANONICAL is unreachable in principle, but because each document still needs its own explicit ratification — nothing upgrades automatically. Only [ADR-0001](../03-adrs/ADR-0001-language-and-toolchain.md), [ADR-0004](../03-adrs/ADR-0004-reusable-act-template-format-and-evolution-policy.md), [ADR-0005](../03-adrs/ADR-0005-executor-contract-and-capability-model.md), [ADR-0009](../03-adrs/ADR-0009-cli-and-output-contract.md), and [ADR-0010](../03-adrs/ADR-0010-vcs-pr-integration-and-apply-targets.md) are Accepted so far; RFC-0001 through RFC-0005 remain Draft — Proposed.
+See [maturity levels](../04-guides/documentation.md#maturity-levels). **CANONICAL is now reachable, narrowly**: [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md) resolved the systemic blocker (no ratification process existed). Most of the repository is still PROVISIONAL, not because CANONICAL is unreachable in principle, but because each document still needs its own explicit ratification — nothing upgrades automatically. Only [ADR-0001](../03-adrs/ADR-0001-language-and-toolchain.md), [ADR-0004](../03-adrs/ADR-0004-reusable-act-template-format-and-evolution-policy.md), [ADR-0005](../03-adrs/ADR-0005-executor-contract-and-capability-model.md), [ADR-0006](../03-adrs/ADR-0006-routing-and-policy.md), [ADR-0009](../03-adrs/ADR-0009-cli-and-output-contract.md), and [ADR-0010](../03-adrs/ADR-0010-vcs-pr-integration-and-apply-targets.md) are Accepted so far; RFC-0001 through RFC-0005 remain Draft — Proposed.
 
 | Concept / decision | Maturity | Owner | Open question |
 |---|---|---|---|
@@ -21,6 +21,7 @@ See [maturity levels](../04-guides/documentation.md#maturity-levels). **CANONICA
 | Language = Go | ACCEPTED | [ADR-0001](../03-adrs/ADR-0001-language-and-toolchain.md) | pending amendment |
 | Reusable-Act template format & evolution policy | ACCEPTED | [ADR-0004](../03-adrs/ADR-0004-reusable-act-template-format-and-evolution-policy.md) | — |
 | Executor contract & capability model | ACCEPTED | [ADR-0005](../03-adrs/ADR-0005-executor-contract-and-capability-model.md) | — |
+| Routing & policy (explicit-pin Router; negotiation/failover deferred) | ACCEPTED | [ADR-0006](../03-adrs/ADR-0006-routing-and-policy.md) | — |
 | CLI & output contract | ACCEPTED | [ADR-0009](../03-adrs/ADR-0009-cli-and-output-contract.md) | — |
 | VCS/PR integration & Apply targets | ACCEPTED | [ADR-0010](../03-adrs/ADR-0010-vcs-pr-integration-and-apply-targets.md) | — |
 | Workflow / Stage / Provider / Skill / Runtime | REJECTED | [archive](../archive/) | — |
