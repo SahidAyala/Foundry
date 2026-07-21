@@ -24,4 +24,4 @@
 - **I13 — No single execution Strategy is privileged.** The Pipeline is one Strategy among several.
 - **I14 — The durable core is closed; the substrate edge is open.** Extensions may add Strategies, Executors, Validators, and Context Sources; they may never redefine the Act, the Judgment, or the Record.
 
-> Several invariants (I3 cross-version scope, I6 validator-determinism limits, I8 Record durability classification, I11 knowledge migration) have **pending owning ADRs**; they state intent that is not yet fully proven in a decision. See [../03-adrs/README.md](../03-adrs/README.md).
+> Several invariants (I3 cross-version scope, I6 validator-determinism limits, I11 knowledge migration) have **pending owning ADRs**; they state intent that is not yet fully proven in a decision. See [../03-adrs/README.md](../03-adrs/README.md). **I8's durability classification is now ratified** by [ADR-0002](../03-adrs/ADR-0002-persistence-content-addressing-and-on-disk-layout.md).

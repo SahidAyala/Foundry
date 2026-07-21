@@ -34,7 +34,7 @@ These are unresolved and **must not be settled silently in implementation**. The
 3. **The center of the domain — Act vs Knowledge** (see [../02-architecture/domain.md](../02-architecture/domain.md)).
 4. **Cross-version replay scope** (see [../02-architecture/execution.md](../02-architecture/execution.md)).
 5. **Validator determinism limits & the honest verification guarantee** (see [../02-architecture/trust.md](../02-architecture/trust.md)).
-6. **Record durability classification** — durable, not a cache (see [../02-architecture/trust.md](../02-architecture/trust.md)).
+6. ~~**Record durability classification** — durable, not a cache.~~ **RESOLVED 2026-07-20** — see [ADR-0002](../03-adrs/ADR-0002-persistence-content-addressing-and-on-disk-layout.md): the Record is durable, ratifying [I8](../05-reference/invariants.md); commit `.foundry/acts/` to a project's own repository, the same convention `.foundry/pipelines/` already follows.
 7. **Authored-knowledge format stability & migration** (see [../02-architecture/knowledge.md](../02-architecture/knowledge.md)).
 8. **Extension isolation mechanism & contract versioning** (see [../02-architecture/extensibility.md](../02-architecture/extensibility.md)).
 9. **Cost as a first-class constraint**, and **near-term single-user value** vs the long compounding bet.

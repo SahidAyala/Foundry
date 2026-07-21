@@ -26,4 +26,4 @@
 Alternative 1: a separate, mutable `record.CheckpointStore`, sharing the same root as `record.FileStore` so a checkpoint sits alongside its eventual `act.json`, written after every Step and deleted once a terminal Judgment is reached. PROVISIONAL.
 
 ## Status
-**OPEN.** Owns the same pending ADR as OQ-003 (replay & determinism contract) and the "Persistence, content-addressing & on-disk layout" ADR; see [../03-adrs/README.md](../03-adrs/README.md).
+**RESOLVED — 2026-07-20.** Graduated to [ADR-0002 — Persistence, Content-Addressing & On-Disk Layout](../03-adrs/ADR-0002-persistence-content-addressing-and-on-disk-layout.md), Accepted, Decision 3: `record.CheckpointStore` (this page's Alternative 1, already implemented) is ratified as the sole mechanism for an Act's in-progress state. This page's own two Open Questions (checkpoint-shape promotion; multi-attempt resume) are carried forward, unresolved, in that ADR's own Open Questions section — this page is kept for historical context, not as a live question. OQ-003 (replay & determinism contract) remains separately OPEN.
