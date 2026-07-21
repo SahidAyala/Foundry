@@ -8,10 +8,10 @@ import (
 	"foundry/engine"
 )
 
-func TestBuiltinProvider_LoadsDefaultPipeline(t *testing.T) {
-	var provider engine.PipelineProvider = engine.BuiltinProvider{}
+func TestBuiltinPipelineSource_LoadsDefaultPipeline(t *testing.T) {
+	var source engine.PipelineSource = engine.BuiltinPipelineSource{}
 
-	pipelines, err := provider.Load(context.Background())
+	pipelines, err := source.Load(context.Background())
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
@@ -31,20 +31,20 @@ func TestBuiltinProvider_LoadsDefaultPipeline(t *testing.T) {
 	}
 }
 
-// TestBuiltinProvider_LoadIsIndependentPerCall verifies Load never hands
+// TestBuiltinPipelineSource_LoadIsIndependentPerCall verifies Load never hands
 // back a Pipeline sharing mutable state with a Pipeline from a prior call —
 // a caller mutating one loaded Pipeline's Steps must never affect a
 // subsequent Load.
-func TestBuiltinProvider_LoadIsIndependentPerCall(t *testing.T) {
-	provider := engine.BuiltinProvider{}
+func TestBuiltinPipelineSource_LoadIsIndependentPerCall(t *testing.T) {
+	source := engine.BuiltinPipelineSource{}
 
-	first, err := provider.Load(context.Background())
+	first, err := source.Load(context.Background())
 	if err != nil {
 		t.Fatalf("first Load failed: %v", err)
 	}
 	first[0].Steps[0].Kind = "tampered"
 
-	second, err := provider.Load(context.Background())
+	second, err := source.Load(context.Background())
 	if err != nil {
 		t.Fatalf("second Load failed: %v", err)
 	}
@@ -53,15 +53,15 @@ func TestBuiltinProvider_LoadIsIndependentPerCall(t *testing.T) {
 	}
 }
 
-// TestBuiltinProvider_DoesNotMutateRegistryState verifies a PipelineProvider
+// TestBuiltinPipelineSource_DoesNotMutateRegistryState verifies a PipelineSource
 // has no way to reach into a PipelineRegistry: registering its output,
 // then mutating the registry, must never be observable from a fresh Load —
 // there is no shared state for a registry mutation to reach.
-func TestBuiltinProvider_DoesNotMutateRegistryState(t *testing.T) {
-	provider := engine.BuiltinProvider{}
+func TestBuiltinPipelineSource_DoesNotMutateRegistryState(t *testing.T) {
+	source := engine.BuiltinPipelineSource{}
 	registry := engine.NewPipelineRegistry()
 
-	pipelines, err := provider.Load(context.Background())
+	pipelines, err := source.Load(context.Background())
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
@@ -77,11 +77,11 @@ func TestBuiltinProvider_DoesNotMutateRegistryState(t *testing.T) {
 	}
 	got.Steps[0].Kind = "mutated-after-register"
 
-	again, err := provider.Load(context.Background())
+	again, err := source.Load(context.Background())
 	if err != nil {
 		t.Fatalf("second Load failed: %v", err)
 	}
 	if again[0].Steps[0].Kind == "mutated-after-register" {
-		t.Error("mutating a Pipeline fetched from the registry affected the provider's next Load")
+		t.Error("mutating a Pipeline fetched from the registry affected the source's next Load")
 	}
 }

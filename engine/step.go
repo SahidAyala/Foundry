@@ -81,8 +81,8 @@ type RepairPolicy struct {
 // type by DecodePipelineDocument, so its schema and evolution stay
 // separate from what PipelineStrategy actually executes
 // (docs/01-rfcs/RFC-0002-pipeline-execution-runtime.md §9 Phase 3). A
-// Pipeline is discovered by a PipelineProvider (provider.go —
-// DefaultPipeline is built in via BuiltinProvider, builtin_provider.go,
+// Pipeline is discovered by a PipelineSource (pipeline_source.go —
+// DefaultPipeline is built in via BuiltinPipelineSource, builtin_pipeline_source.go,
 // which now decodes its document rather than constructing this type by
 // hand) and identified by Name within a PipelineRegistry (registry.go).
 //

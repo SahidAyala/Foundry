@@ -11,13 +11,13 @@ import (
 // TestDogfoodPipelines_DecodeAndUseTrustSteps loads this repository's own
 // .foundry/pipelines — the "well-generated pipeline examples" the repo
 // ships for anyone reading it, not test fixtures — through the same
-// FilesystemPipelineProvider a real project's Session uses, so a future
+// FilesystemPipelineSource a real project's Session uses, so a future
 // edit that breaks their JSON or reverts them to the trivial
 // generate-then-verify starter shape fails here, not silently.
 func TestDogfoodPipelines_DecodeAndUseTrustSteps(t *testing.T) {
-	provider := project.FilesystemPipelineProvider{Dir: "../.foundry/pipelines"}
+	source := project.FilesystemPipelineSource{Dir: "../.foundry/pipelines"}
 
-	pipelines, err := provider.Load(context.Background())
+	pipelines, err := source.Load(context.Background())
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}

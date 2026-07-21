@@ -26,9 +26,9 @@ import (
 // recommends even for the eventual YAML-authored end state ("YAML source,
 // canonical JSON"). Nothing here discovers, walks, or reads a document
 // from the filesystem or network; a document is a []byte a caller already
-// has. Today that caller is always BuiltinProvider, embedding the one
-// built-in document (builtin_provider.go); a future filesystem or remote
-// PipelineProvider would read its own bytes and call the same decoder.
+// has. Today that caller is always BuiltinPipelineSource, embedding the one
+// built-in document (builtin_pipeline_source.go); a future filesystem or remote
+// PipelineSource would read its own bytes and call the same decoder.
 type PipelineDocument struct {
 	Name   string               `json:"name"`
 	Steps  []StepDocument       `json:"steps"`

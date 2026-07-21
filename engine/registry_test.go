@@ -263,15 +263,15 @@ func TestPipelineRegistry_MustGet_PanicsForUnknownName(t *testing.T) {
 	registry.MustGet("does-not-exist")
 }
 
-// TestPipelineRegistry_CannotMutateProviderState verifies the registry
-// never mutates what a PipelineProvider produced: registering a
-// provider's output, then mutating a Pipeline obtained back out of the
-// registry, must never be visible in a later Load from the same provider.
-func TestPipelineRegistry_CannotMutateProviderState(t *testing.T) {
-	provider := engine.BuiltinProvider{}
+// TestPipelineRegistry_CannotMutateSourceState verifies the registry
+// never mutates what a PipelineSource produced: registering a
+// source's output, then mutating a Pipeline obtained back out of the
+// registry, must never be visible in a later Load from the same source.
+func TestPipelineRegistry_CannotMutateSourceState(t *testing.T) {
+	source := engine.BuiltinPipelineSource{}
 	registry := engine.NewPipelineRegistry()
 
-	pipelines, err := provider.Load(context.Background())
+	pipelines, err := source.Load(context.Background())
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
@@ -282,12 +282,12 @@ func TestPipelineRegistry_CannotMutateProviderState(t *testing.T) {
 	got := registry.MustGet("default")
 	got.Steps[0].Kind = "mutated-by-registry-caller"
 
-	reloaded, err := provider.Load(context.Background())
+	reloaded, err := source.Load(context.Background())
 	if err != nil {
 		t.Fatalf("second Load failed: %v", err)
 	}
 	if reloaded[0].Steps[0].Kind == "mutated-by-registry-caller" {
-		t.Error("mutating a registry-returned Pipeline affected the provider's own state")
+		t.Error("mutating a registry-returned Pipeline affected the source's own state")
 	}
 }
 
@@ -320,8 +320,8 @@ func TestNewDefaultRegistry_RegistersDefaultPipeline(t *testing.T) {
 // composition root (cmd/foundry/commands/do.go) relies on: resolving
 // "default" out of NewDefaultRegistry() and wiring it into an Engine must
 // produce byte-for-byte the same Act as wiring engine.DefaultPipeline()
-// directly. This is the regression the PipelineProvider refactor (moving
-// DefaultPipeline's construction behind BuiltinProvider) must never cause.
+// directly. This is the regression the PipelineSource refactor (moving
+// DefaultPipeline's construction behind BuiltinPipelineSource) must never cause.
 func TestNewDefaultRegistry_EngineBehaviorUnchanged(t *testing.T) {
 	newSubject := func(pipeline engine.Pipeline) *engine.Engine {
 		gatherer := &fakeGatherer{files: []string{"main.go"}}

@@ -18,8 +18,8 @@ import (
 // can reach back and corrupt what the registry holds.
 //
 // PipelineRegistry does not discover Pipelines itself — it only registers
-// and looks up what a PipelineProvider (provider.go) hands it. Discovery
-// and registration are deliberately separate responsibilities: a provider
+// and looks up what a PipelineSource (pipeline_source.go) hands it. Discovery
+// and registration are deliberately separate responsibilities: a source
 // can be swapped (built-in, filesystem, embedded, remote) without the
 // registry, or anything that looks a Pipeline up by name, changing at all.
 type PipelineRegistry struct {
@@ -40,19 +40,19 @@ func NewPipelineRegistry() *PipelineRegistry {
 
 // NewDefaultRegistry returns a PipelineRegistry pre-populated with every
 // Pipeline this build of Foundry ships built in, loaded from
-// BuiltinProvider — today, only "default" (DefaultPipeline). A future
-// built-in Pipeline is added to BuiltinProvider.Load, not here; Engine,
+// BuiltinPipelineSource — today, only "default" (DefaultPipeline). A future
+// built-in Pipeline is added to BuiltinPipelineSource.Load, not here; Engine,
 // Strategy, and PipelineRegistry never need to change to see it.
 func NewDefaultRegistry() *PipelineRegistry {
 	registry := NewPipelineRegistry()
-	provider := BuiltinProvider{}
-	pipelines, err := provider.Load(context.Background())
+	source := BuiltinPipelineSource{}
+	pipelines, err := source.Load(context.Background())
 	if err != nil {
-		// BuiltinProvider.Load has nothing external that can fail.
+		// BuiltinPipelineSource.Load has nothing external that can fail.
 		panic(fmt.Sprintf("engine: NewDefaultRegistry: %v", err))
 	}
 	if err := registry.RegisterMany(pipelines...); err != nil {
-		// Registering BuiltinProvider's own fixed set into a registry
+		// Registering BuiltinPipelineSource's own fixed set into a registry
 		// created two lines above can only fail if the built-in set
 		// itself declares a duplicate name — a programmer error, not a
 		// runtime condition any caller can hit.
@@ -124,8 +124,8 @@ func validateRemotePublishRequiresApproval(p Pipeline) error {
 // RegisterMany registers each of pipelines in order, exactly as a loop of
 // Register calls would. It stops at the first duplicate name and returns
 // that error; every Pipeline registered before the failing one remains
-// registered. This is the shape a PipelineProvider's Load result is meant
-// to be registered with: provider.Load(ctx) then registry.RegisterMany(...).
+// registered. This is the shape a PipelineSource's Load result is meant
+// to be registered with: source.Load(ctx) then registry.RegisterMany(...).
 func (r *PipelineRegistry) RegisterMany(pipelines ...Pipeline) error {
 	for _, p := range pipelines {
 		if err := r.Register(p); err != nil {
