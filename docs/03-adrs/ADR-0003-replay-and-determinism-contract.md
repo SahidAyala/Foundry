@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** — drafted per the ADR backlog ([README.md](README.md)), [OQ-003](../06-open-questions/OQ-003-replay-across-versions.md), and [OQ-004](../06-open-questions/OQ-004-validator-determinism.md); not yet ratified. |
-| **Date** | Drafted 2026-07-20 |
+| **Status** | **Accepted** — ratified 2026-07-20 under [ADR-0000](ADR-0000-governance-and-ratification-process.md)'s governance process. Originally drafted per the ADR backlog ([README.md](README.md)), [OQ-003](../06-open-questions/OQ-003-replay-across-versions.md), and [OQ-004](../06-open-questions/OQ-004-validator-determinism.md). |
+| **Date** | Drafted 2026-07-20; ratified 2026-07-20 |
 | **Deciders** | The project's sole maintainer, under [ADR-0000](ADR-0000-governance-and-ratification-process.md); drafted AI-assisted |
 | **Ratifies** | The ADR backlog entry named in [README.md](README.md) ("Replay & determinism contract") — which work is re-executed vs. replayed; cross-version replay scope; verification's honest guarantee. |
 | **Gates** | [OQ-003](../06-open-questions/OQ-003-replay-across-versions.md) and [OQ-004](../06-open-questions/OQ-004-validator-determinism.md), both explicitly assigned to this one ADR by their own Status sections. Also [docs/02-architecture/trust.md](../02-architecture/trust.md)'s "Unresolved: real Validators invoke external tools..." callout, [execution.md](../02-architecture/execution.md)'s "Unresolved: cross-version scope" callout, [roadmap.md](../00-overview/roadmap.md) open decisions 4–5, and [invariants.md](../05-reference/invariants.md) I3/I6's "pending owning ADR" notes. |
@@ -117,12 +117,12 @@ Carried forward, not resolved here:
 
 ## Review Checklist
 
-To be completed at ratification:
+Walked through at ratification (2026-07-20):
 
-- [ ] **No contradiction with accepted documents.** Confirm against [ADR-0002](ADR-0002-persistence-content-addressing-and-on-disk-layout.md) (this ADR inherits its on-disk format and Decision 8's deferral correctly) and [ADR-0004](ADR-0004-reusable-act-template-format-and-evolution-policy.md)/[ADR-0005](ADR-0005-executor-contract-and-capability-model.md)/[ADR-0006](ADR-0006-routing-and-policy.md) (no overlap).
-- [ ] **Decisions 1–3 verified against the actual shipped code** — `replay/replay.go`, `replay/replay_test.go` (specifically `TestVerify_DivergedVerdictIsNotReproduced` and `TestVerify_DivergedCheckedSameVerdictStillReproduced`) — re-read at ratification to confirm nothing has drifted since drafting.
-- [ ] **execution.md's and trust.md's corrected text reads accurately** once amended.
-- [ ] **Process caveat resolved.** Ratify under [ADR-0000](ADR-0000-governance-and-ratification-process.md); update this Status row and the backlog table in [README.md](README.md) in the same ratifying commit.
+- [x] **No contradiction with accepted documents.** Confirmed against [ADR-0002](ADR-0002-persistence-content-addressing-and-on-disk-layout.md) (this ADR correctly inherits its on-disk format and closes Decision 8's deferral) and [ADR-0004](ADR-0004-reusable-act-template-format-and-evolution-policy.md)/[ADR-0005](ADR-0005-executor-contract-and-capability-model.md)/[ADR-0006](ADR-0006-routing-and-policy.md) (no overlap).
+- [x] **Decisions 1–3 verified against the actual shipped code.** Re-read at ratification: `replay/replay.go` (same-version scoping in its own doc comment, real `engine.Verifier` re-invoked, Executor never called) and `replay/replay_test.go` (`TestVerify_DivergedVerdictIsNotReproduced`, `TestVerify_DivergedCheckedSameVerdictStillReproduced` both confirm divergence is reported, not hidden or erred) — all match this ADR's description exactly.
+- [x] **execution.md's and trust.md's corrected text reads accurately** — both now cite this ADR and ADR-0002 correctly, with no remaining "Unresolved" callout on either subject.
+- [x] **Process caveat resolved.** Ratified under [ADR-0000](ADR-0000-governance-and-ratification-process.md); Status row above and the backlog table in [README.md](README.md) updated in the same ratifying pass.
 
 ---
 
