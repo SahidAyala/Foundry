@@ -26,4 +26,4 @@ The archived freeze review flagged this as undefined. The "engineer three years 
 Scope the guarantee to **same-version** initially, and record enough that cross-version *verification* (not necessarily re-derivation) is possible. Make the scope explicit wherever replay is promised. PROVISIONAL.
 
 ## Status
-**OPEN.** Owns a pending ADR (replay & determinism contract); see [../03-adrs/README.md](../03-adrs/README.md).
+**RESOLVED — 2026-07-20.** Graduated to [ADR-0003 — Replay & Determinism Contract](../03-adrs/ADR-0003-replay-and-determinism-contract.md), Accepted, Decision 1: this page's own Alternative 1 (same-version only) is ratified as the replay guarantee's scope. This page's own open question ("what exactly does an auditor need — identical artifacts, or a verifiable account of how they were produced?") is carried forward, unresolved, in that ADR's own Open Questions section — this page is kept for historical context, not as a live question.
