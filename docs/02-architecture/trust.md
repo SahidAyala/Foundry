@@ -32,7 +32,7 @@ This gate is **Strategy-independent**: a Pipeline and an adaptive agent face the
 
 Verification prefers deterministic checks (compilers, type-checkers, tests, structural rules) over model-based judgment, because deterministic checks are cheaper, explainable, and reproducible. A model-based check is a last resort for the irreducibly subjective, never the default.
 
-> **Unresolved (human decision required):** real Validators invoke external tools whose outputs are not pure functions of the artifact (tool version, environment, ordering). The exact guarantee — which checks are re-executed on replay vs replayed from the Record, and the honest strength of "the same change yields the same verdict" — must be fixed by a pending decision ([../03-adrs/README.md](../03-adrs/README.md)). Do not assert unqualified validator determinism until then.
+> **Resolved:** real Validators invoke external tools whose outputs are not pure functions of the artifact (tool version, environment, ordering). Per [ADR-0003](../03-adrs/ADR-0003-replay-and-determinism-contract.md): the Gate and Validators are re-executed for real on replay (never replayed from a recorded finding), and a resulting verdict divergence is reported as honest data, never hidden or asserted impossible — "the same change yields the same verdict" is not a claim Foundry makes unqualified.
 
 ## Accountability and authority
 
