@@ -40,6 +40,10 @@
 
 > These implement the domain. A correct domain description never needs them. They are defined here only so implementation docs share one vocabulary. See [concepts.md](concepts.md) for how each maps to the domain.
 
+**Session** — The persistent, project-rooted interactive process a user runs `foundry` into; the primary interface, per [ADR-0009](../03-adrs/ADR-0009-cli-and-output-contract.md) Decision 1.
+
+**Slash Command** — One named, user-typed instruction inside a Session, dispatched by a CommandRegistry; the vocabulary a Session understands.
+
 **Engine** — The component that produces Acts: it drives a Strategy, gathers Evidence, obtains a Judgment, applies an Outcome, and writes the Record. Owns control flow.
 
 **Pipeline** — *One Strategy*: a predeclared directed-acyclic graph of **Steps**. Optimal when the shape of the work is known in advance. Not the center of the system.

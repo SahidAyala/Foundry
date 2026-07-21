@@ -4,7 +4,7 @@
 
 ## Maturity index (status of every major concept)
 
-See [maturity levels](../04-guides/documentation.md#maturity-levels). **CANONICAL is now reachable, narrowly**: [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md) resolved the systemic blocker (no ratification process existed). Most of the repository is still PROVISIONAL, not because CANONICAL is unreachable in principle, but because each document still needs its own explicit ratification — nothing upgrades automatically. Only [ADR-0001](../03-adrs/ADR-0001-language-and-toolchain.md), [ADR-0005](../03-adrs/ADR-0005-executor-contract-and-capability-model.md), and [ADR-0010](../03-adrs/ADR-0010-vcs-pr-integration-and-apply-targets.md) are Accepted so far; RFC-0001 through RFC-0005 remain Draft — Proposed.
+See [maturity levels](../04-guides/documentation.md#maturity-levels). **CANONICAL is now reachable, narrowly**: [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md) resolved the systemic blocker (no ratification process existed). Most of the repository is still PROVISIONAL, not because CANONICAL is unreachable in principle, but because each document still needs its own explicit ratification — nothing upgrades automatically. Only [ADR-0001](../03-adrs/ADR-0001-language-and-toolchain.md), [ADR-0004](../03-adrs/ADR-0004-reusable-act-template-format-and-evolution-policy.md), [ADR-0005](../03-adrs/ADR-0005-executor-contract-and-capability-model.md), [ADR-0009](../03-adrs/ADR-0009-cli-and-output-contract.md), and [ADR-0010](../03-adrs/ADR-0010-vcs-pr-integration-and-apply-targets.md) are Accepted so far; RFC-0001 through RFC-0005 remain Draft — Proposed.
 
 | Concept / decision | Maturity | Owner | Open question |
 |---|---|---|---|
@@ -19,7 +19,9 @@ See [maturity levels](../04-guides/documentation.md#maturity-levels). **CANONICA
 | Extension isolation mechanism | OPEN (requirements only) | [extensibility.md](../02-architecture/extensibility.md) | [OQ-005](../06-open-questions/OQ-005-extension-isolation.md) |
 | Governance / ratification | **RESOLVED** | [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md) | — |
 | Language = Go | ACCEPTED | [ADR-0001](../03-adrs/ADR-0001-language-and-toolchain.md) | pending amendment |
+| Reusable-Act template format & evolution policy | ACCEPTED | [ADR-0004](../03-adrs/ADR-0004-reusable-act-template-format-and-evolution-policy.md) | — |
 | Executor contract & capability model | ACCEPTED | [ADR-0005](../03-adrs/ADR-0005-executor-contract-and-capability-model.md) | — |
+| CLI & output contract | ACCEPTED | [ADR-0009](../03-adrs/ADR-0009-cli-and-output-contract.md) | — |
 | VCS/PR integration & Apply targets | ACCEPTED | [ADR-0010](../03-adrs/ADR-0010-vcs-pr-integration-and-apply-targets.md) | — |
 | Workflow / Stage / Provider / Skill / Runtime | REJECTED | [archive](../archive/) | — |
 
@@ -43,6 +45,8 @@ Mechanism terms exist only to *implement* the domain. Use this table to translat
 
 | Mechanism term | Serves which domain concept | Note |
 |---|---|---|
+| Session | hosts the interactive lifecycle a user runs Acts through | the primary interface, per [ADR-0009](../03-adrs/ADR-0009-cli-and-output-contract.md) |
+| Slash Command | the per-instruction unit a Session dispatches, each usually backing one Act | vocabulary a Session understands |
 | Engine | produces the **Act**, owns control flow | not a domain concept |
 | Pipeline | **one Strategy** | not the center of the system |
 | Step | a unit inside the Pipeline strategy | replaces "Stage" |
