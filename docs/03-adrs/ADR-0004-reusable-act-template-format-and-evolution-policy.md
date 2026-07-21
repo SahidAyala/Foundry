@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** — drafted per [RFC-0002](../01-rfcs/RFC-0002-pipeline-execution-runtime.md) §9 Phase 0; not yet ratified. |
-| **Date** | Drafted 2026-07-20 |
+| **Status** | **Accepted** — ratified 2026-07-20 under [ADR-0000](ADR-0000-governance-and-ratification-process.md)'s governance process. Originally drafted per [RFC-0002](../01-rfcs/RFC-0002-pipeline-execution-runtime.md) §9 Phase 0. |
+| **Date** | Drafted 2026-07-20; Accepted 2026-07-20 |
 | **Deciders** | The project's sole maintainer, under [ADR-0000](ADR-0000-governance-and-ratification-process.md); drafted AI-assisted per RFC-0002 Phase 0 |
 | **Ratifies** | The ADR backlog entry named in [../03-adrs/README.md](README.md) ("Reusable-Act template format & evolution policy") — the authored Pipeline document's wire format and its evolution discipline. |
 | **Gates** | [RFC-0002](../01-rfcs/RFC-0002-pipeline-execution-runtime.md) §9 Phase 0's second prerequisite ADR (the first, Executor contract & capability model, shipped as [ADR-0005](ADR-0005-executor-contract-and-capability-model.md)). Also unblocks **Routing & policy** (backlog, proposed ADR-0006), which needs a settled document format to add routing semantics to rather than an implicit one. |
@@ -42,7 +42,7 @@ This ADR does not touch `.foundry/acts/<id>/act.json` (the *recorded* Act trace)
 
 3. **No explicit schema-version field is added yet.** With exactly one implementation and no external consumer, guessing at a versioning scheme now risks the premature-hardening RFC-0002 §10 warns against. Instead, this ADR ratifies the additive-only discipline already implicit in the code as an explicit, binding policy going forward: new document fields must be optional, `omitempty`, and decode to a safe zero-value default on any document written before the field existed. The existing `PipelineDocument`/`Pipeline` type split is ratified as the permanent mechanism that keeps this possible without ever coupling the wire format to Go struct internals.
 
-4. **Unknown fields, at any level, become a hard decode error.** `engine.DecodePipelineDocument` adopts `json.Decoder.DisallowUnknownFields()`. This generalizes the fail-loud principle the codebase already applies to `Kind` — "never a silently skipped Step" — to the whole document: a typo'd field name or a stray leftover key is caught at decode time, not silently ignored. This is a deliberate trade against forward compatibility: a document written for a newer schema, if it adds a field an older binary doesn't know about, will now fail to decode on that older binary instead of silently ignoring the new field. That trade is acceptable today because no such cross-version scenario exists; it is exactly the trigger for introducing a real version field and negotiated tolerance later (see Open Questions).
+4. **Unknown fields, at any level, become a hard decode error, and that error must be descriptive and actionable, not a bare decode failure.** `engine.DecodePipelineDocument` adopts `json.Decoder.DisallowUnknownFields()`. This generalizes the fail-loud principle the codebase already applies to `Kind` — "never a silently skipped Step" — to the whole document: a typo'd field name or a stray leftover key is caught at decode time, not silently ignored. Go's raw `DisallowUnknownFields` error (`json: unknown field "x"`) does not name which Step or top-level section it occurred in and gives the author no next step — this ADR requires `DecodePipelineDocument` to wrap that error into one that (a) names the offending field and, when inside a Step, that Step's `id`; (b) points the author at [docs/04-guides/pipelines.md](../04-guides/pipelines.md) as the canonical schema reference to fix it against. This is a deliberate trade against forward compatibility: a document written for a newer schema, if it adds a field an older binary doesn't know about, will now fail to decode on that older binary instead of silently ignoring the new field. That trade is acceptable today because no such cross-version scenario exists; it is exactly the trigger for introducing a real version field and negotiated tolerance later (see Open Questions).
 
 5. **Step `Kind` remains a closed set of exactly five values.** Adding a sixth Kind is a breaking change to this ADR, not a document-level extension point — it requires an explicit amendment here (or a superseding ADR), the same way a new Kind today already requires a code change to `domain.StepKind*`, not just a new document.
 
@@ -80,7 +80,7 @@ This ADR does not touch `.foundry/acts/<id>/act.json` (the *recorded* Act trace)
 
 ### What this decision makes EASIER
 - **RFC-0002 §9 Phase 0 is now fully satisfied** (both prerequisite ADRs exist), unblocking further hardening of the Pipeline/Step schema without an open question hanging over it.
-- **Authors get immediate, precise feedback** on typo'd or stray fields instead of a silently-ignored key producing confusing runtime behavior later.
+- **Authors get immediate, precise, self-service feedback** on typo'd or stray fields — naming the field, the Step, and pointing at [docs/04-guides/pipelines.md](../04-guides/pipelines.md) — instead of a silently-ignored key producing confusing runtime behavior later, or a bare Go decode error with no fix-it path.
 - **Routing & policy** (backlog ADR-0006) inherits a settled document format and evolution discipline to add routing semantics to, rather than having to decide document versioning as a side effect of adding routing fields.
 - **No new abstraction to maintain** — Decision 1 keeps exactly one authored-document concept (Pipeline), not two overlapping ones.
 
@@ -96,7 +96,9 @@ Medium. Turning on `DisallowUnknownFields` (Decision 4) is a one-line code chang
 
 ## Migration Strategy
 
-Turn on `json.Decoder.DisallowUnknownFields()` in `engine.DecodePipelineDocument`. No data migration is needed: all five currently-shipped Pipeline documents (`engine/pipelines/default.json`, `engine/pipelines/review.json`, `.foundry/pipelines/feature.json`, `.foundry/pipelines/bugfix.json`, `.foundry/pipelines/release.json`) already decode cleanly under strict field checking — verified against their actual field sets, no stray keys present. Document the additive-only field policy (Decision 3) and the closed Step Kind set (Decision 5) in [docs/04-guides/pipelines.md](../04-guides/pipelines.md) alongside the existing "decode-time error, never silently skipped" line.
+Turn on `json.Decoder.DisallowUnknownFields()` in `engine.DecodePipelineDocument`, wrapping its raw error into the descriptive, field/Step-scoped, doc-linking form Decision 4 requires. No data migration is needed: all five currently-shipped Pipeline documents (`engine/pipelines/default.json`, `engine/pipelines/review.json`, `.foundry/pipelines/feature.json`, `.foundry/pipelines/bugfix.json`, `.foundry/pipelines/release.json`) already decode cleanly under strict field checking — re-verified at ratification against their actual field sets, no stray keys present. Document the additive-only field policy (Decision 3) and the closed Step Kind set (Decision 5) in [docs/04-guides/pipelines.md](../04-guides/pipelines.md) alongside the existing "decode-time error, never silently skipped" line, so that document is a complete, accurate target for Decision 4's error-message pointer.
+
+**Sequencing, per the maintainer's explicit decision at ratification:** this ADR is accepted before the Decision 4 code change is implemented. The code change (strict decoding + descriptive errors + the `pipelines.md` update) is tracked as follow-up implementation work, not a precondition for ratifying this ADR.
 
 ---
 
@@ -118,13 +120,14 @@ Turn on `json.Decoder.DisallowUnknownFields()` in `engine.DecodePipelineDocument
 
 ## Review Checklist
 
-To be completed at ratification:
+Walked through at ratification (2026-07-20):
 
-- [ ] **No contradiction with accepted documents.** Confirm against [ADR-0005](ADR-0005-executor-contract-and-capability-model.md) (Router-reserved fields, Decision 7 here, must not preempt ADR-0006) and [ADR-0010](ADR-0010-vcs-pr-integration-and-apply-targets.md) (registration-time publish-policy validation is a separate check, unaffected by Decision 4's decode-time check).
-- [ ] **Decision 4 verified against all shipped documents.** All five current Pipeline documents decode cleanly under `DisallowUnknownFields` — re-verify at ratification time in case new documents were added since drafting.
-- [ ] **Decision 1 (no separate Act-template format) does not contradict `terminology.md`.** Confirmed: "reusable Act template" is not a canonical noun there; this ADR does not introduce one.
-- [ ] **OQ-002 and OQ-003 are cited as explicitly out of scope**, not silently resolved.
-- [ ] **Process caveat resolved.** Ratify under [ADR-0000](ADR-0000-governance-and-ratification-process.md); update this Status row and the backlog table in [README.md](README.md) in the same ratifying commit.
+- [x] **No contradiction with accepted documents.** Confirmed: does not contradict [ADR-0005](ADR-0005-executor-contract-and-capability-model.md) (Router-reserved fields, Decision 7 here, do not preempt ADR-0006) or [ADR-0010](ADR-0010-vcs-pr-integration-and-apply-targets.md) (registration-time publish-policy validation is a separate check, unaffected by Decision 4's decode-time check).
+- [x] **Decision 4 verified against all shipped documents.** All five current Pipeline documents (`default`, `review`, `feature`, `bugfix`, `release`) re-checked at ratification — none carry a field outside the schema; all decode cleanly under `DisallowUnknownFields`.
+- [x] **Decision 1 (no separate Act-template format) does not contradict `terminology.md`.** Confirmed: "reusable Act template" is not a canonical noun there; this ADR does not introduce one.
+- [x] **OQ-002 and OQ-003 are cited as explicitly out of scope**, not silently resolved.
+- [x] **Process caveat resolved.** Ratified under [ADR-0000](ADR-0000-governance-and-ratification-process.md); Status row and [README.md](README.md)'s backlog table updated in the same ratifying commit.
+- [ ] **Decision 4's code (`DisallowUnknownFields` + descriptive errors + `pipelines.md` update) is implemented.** Deliberately deferred past ratification per the maintainer's explicit sequencing decision — tracked as follow-up work, not a ratification blocker.
 
 ---
 
