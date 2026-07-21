@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** — drafted per [RFC-0003](../01-rfcs/RFC-0003-interactive-assistant-and-multi-executor-pipelines.md) §6 and the ADR backlog; not yet ratified. |
-| **Date** | Drafted 2026-07-20 |
+| **Status** | **Accepted** — ratified 2026-07-20 under [ADR-0000](ADR-0000-governance-and-ratification-process.md)'s governance process. Originally drafted per [RFC-0003](../01-rfcs/RFC-0003-interactive-assistant-and-multi-executor-pipelines.md) §6 and the ADR backlog. |
+| **Date** | Drafted 2026-07-20; ratified 2026-07-20 |
 | **Deciders** | The project's sole maintainer, under [ADR-0000](ADR-0000-governance-and-ratification-process.md); drafted AI-assisted per RFC-0003 §6 |
 | **Ratifies** | The ADR backlog entry named in [../03-adrs/README.md](README.md) ("CLI & output contract") — the product-shape decision (interactive session vs. flag CLI), the command/flag/exit-code stability policy, and the slash-command surface's own stability promise. |
 | **Gates** | [RFC-0003](../01-rfcs/RFC-0003-interactive-assistant-and-multi-executor-pipelines.md) §6's named "CLI & output contract" gap. Also one of the five compatibility surfaces [release.md](../04-guides/release.md) names as "gated by release" — that guide's own text says its "Honest versioning" principle is "intended, not ratified" until this ADR exists. |
@@ -126,13 +126,13 @@ No data migration; no change to any Act, Pipeline, or Record format.
 
 ## Review Checklist
 
-To be completed at ratification:
+Walked through at ratification (2026-07-20):
 
-- [ ] **No contradiction with accepted documents.** Confirm against [ADR-0004](ADR-0004-reusable-act-template-format-and-evolution-policy.md) (Decision 7's naming precedent — "Source" as a fresh, not-yet-canonical noun — is consistent with how ADR-0004 handled "reusable Act template") and [ADR-0005](ADR-0005-executor-contract-and-capability-model.md)/[ADR-0010](ADR-0010-vcs-pr-integration-and-apply-targets.md) (no overlap).
-- [ ] **Decision 6 (`/help`) and Decision 7 (rename) are actually implemented** before being marked shipped in [implementation-status.md](../00-overview/implementation-status.md).
-- [ ] **`release.md`'s disclaimer ("intended, not ratified") is updated** once this ADR is accepted, since it names this exact ADR as the blocker.
-- [ ] **Terminology additions (Decision 8) do not collide** with any existing term in [terminology.md](../05-reference/terminology.md) — confirmed: no prior entry for Session or Slash Command exists.
-- [ ] **Process caveat resolved.** Ratify under [ADR-0000](ADR-0000-governance-and-ratification-process.md); update this Status row and the backlog table in [README.md](README.md) in the same ratifying commit.
+- [x] **No contradiction with accepted documents.** Confirmed: [ADR-0004](ADR-0004-reusable-act-template-format-and-evolution-policy.md) Decision 7's naming precedent — "Source" as a fresh, not-yet-canonical noun — is consistent with how ADR-0004 handled "reusable Act template." [ADR-0005](ADR-0005-executor-contract-and-capability-model.md)'s "exit codes" mentions are subprocess exit codes from an Executor invocation, a different concept from this ADR's process exit-code convention (Decision 4) — no overlap. [ADR-0010](ADR-0010-vcs-pr-integration-and-apply-targets.md) only names this ADR in a numbering list — no substantive overlap.
+- [x] **Decision 6 (`/help`) and Decision 7 (rename) are actually implemented.** Shipped 2026-07-20: `session.HelpCommand` (backed by a new `CommandRegistry.List`) lists every registered slash command; `engine.PipelineProvider`/`BuiltinProvider` and `project.FilesystemPipelineProvider` are renamed to `PipelineSource`/`BuiltinPipelineSource`/`FilesystemPipelineSource` throughout the codebase (types, files, tests, doc comments) and in [pipelines.md](../04-guides/pipelines.md). Recorded in [implementation-status.md](../00-overview/implementation-status.md).
+- [x] **`release.md`'s disclaimer ("intended, not ratified") is updated** — its "Compatibility surfaces gated by release" section now has a "CLI & output contract" subsection documenting Decisions 2 and 4, and its closing disclaimer names this ADR as no longer a blocker for that specific surface.
+- [x] **Terminology additions (Decision 8) do not collide** with any existing term in [terminology.md](../05-reference/terminology.md) — confirmed: no prior entry for Session or Slash Command existed; both are now added, and cross-referenced in [concepts.md](../05-reference/concepts.md).
+- [x] **Process caveat resolved.** Ratified under [ADR-0000](ADR-0000-governance-and-ratification-process.md); Status row above and the backlog table in [README.md](README.md) updated in the same ratifying commit.
 
 ---
 
