@@ -44,7 +44,12 @@ func (s *StagedVerifier) Verify(ctx context.Context, outcome *domain.Outcome, wo
 	}
 	defer os.RemoveAll(tmp)
 
-	staged := filepath.Join(tmp, "worktree")
+	// The leaf name is derived from tmp's own random suffix rather than a
+	// constant: git derives its internal .git/worktrees/<name>
+	// administrative directory from this path's basename, so two
+	// concurrent Verify calls against the same workspace must not
+	// contend for the same name.
+	staged := filepath.Join(tmp, filepath.Base(tmp)+"-worktree")
 	if _, err := gitOutput(ctx, workspace, "worktree", "add", "--detach", staged, "HEAD"); err != nil {
 		return nil, fmt.Errorf("workspace: stage worktree: %w", err)
 	}
