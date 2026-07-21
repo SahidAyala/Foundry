@@ -10,7 +10,7 @@ The full milestone *plan* (themes, "usable system" definitions) lives in [roadma
 
 | Milestone | Status | Notes |
 |---|---|---|
-| **M0** — Walking skeleton | Shipped | All of M0.0–M0.3 (`foundry do`, scripted + real Executor, budget, repair, `log`/`show`). Historical plan: [archive/obsolete/M0-IMPLEMENTATION-BACKLOG.md](../archive/obsolete/M0-IMPLEMENTATION-BACKLOG.md). |
+| **M0** — Walking skeleton | Shipped, validated live | All of M0.0–M0.3 (`foundry do`, scripted + real Executor, budget, repair, `log`/`show`). Historical plan: [archive/obsolete/M0-IMPLEMENTATION-BACKLOG.md](../archive/obsolete/M0-IMPLEMENTATION-BACKLOG.md). Confirmed working end-to-end with a live Executor on 2026-07-18 — see §7. |
 | **M1** — Deterministic core | Shipped | Verified/judged/budgeted Acts, immutable filesystem Record, replay (`foundry replay`) and resume (`foundry resume`, mid-Pipeline checkpoints). |
 | **M2** — Reusable production + mock executor | Shipped | Authored Pipeline documents (`.foundry/pipelines/*.json`) stand in for "reusable Act templates"; `executor.ScriptedExecutor` is the fixture Executor; bounded repair works. |
 | **M3** — Real executors | Shipped, partially | Two real Executors behind a `Router` — Claude Code (default) and OpenAI (named). Routing is **explicit-pin-only**; capability-based negotiation is deferred (see RFC-0002 row below). |
@@ -72,6 +72,13 @@ All PROVISIONAL (nothing in the repository is CANONICAL yet — [ADR-0000](../03
 - Invariants: [../05-reference/invariants.md](../05-reference/invariants.md).
 - Open architectural questions (non-canonical, active deliberation): [../06-open-questions/README.md](../06-open-questions/README.md).
 
+## 7. Real-world validation log
+
+Distinct from the audits above (which read code and docs): this tracks actual runs of the built binary against a real repository with a live Executor — the strongest evidence available that the walking skeleton still works end-to-end, not just that its unit tests pass in isolation.
+
+- **2026-07-18** — Ran a full interactive session (`/init` → `/bug "<intent>"` → real Claude Code Executor → `go build`/`go test` verification → human approval → apply → record) against a throwaway Go-module sample repository. Confirmed working end-to-end: real patch generation, verification, approval, Act recording, and both `foundry log`/`foundry show` history inspection all matched their documented behavior. Surfaced one real bug in the process — the `go-build` validator (`verify/detect.go`) left a compiled binary artifact in the repository on every Act against a `package main` module — fixed same day (`fix(verify): Stop go-build validator from leaking a binary into the repo`).
+
 ## Changelog
 
 - **2026-07-18** — Initial audit. Archived the stale M0 checklist docs; added this file; registered the confirmed interactive-primary product-shape direction against ADR-0009 in [../03-adrs/README.md](../03-adrs/README.md).
+- **2026-07-18** — First real dogfooding run (§7): validated the walking skeleton end-to-end with a live Claude Code Executor; found and fixed a `go-build` validator bug that leaked a compiled binary into the repository on every Act.
