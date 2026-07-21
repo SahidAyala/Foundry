@@ -42,4 +42,4 @@ Foundry defaults to **approval, not autonomy**: an **Authority** (a human, or an
 
 The immutable Record makes any Act re-inspectable and (within the limits above) replayable. This is the basis of audit: the answer to "how was this built and why should we trust it?" is read directly from the Act, not reconstructed after the fact.
 
-> **Unresolved (human decision required):** the durability classification of the Record itself — it must be durable, not a disposable cache, or the audit/reproducibility promise fails. The owning decision is pending (see [../03-adrs/README.md](../03-adrs/README.md)).
+> **Resolved:** the durability classification of the Record itself — it is durable, not a disposable cache, per [ADR-0002](../03-adrs/ADR-0002-persistence-content-addressing-and-on-disk-layout.md) (ratifying I8). A project should commit `.foundry/acts/` to its own repository.
