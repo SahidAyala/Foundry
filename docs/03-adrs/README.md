@@ -20,7 +20,7 @@ Each owns one or more **compatibility surfaces** (expensive to change after rele
 
 | Proposed ADR | Owns | Gates |
 |---|---|---|
-| Persistence, content-addressing & on-disk layout | Record durability (must be durable, not cache), hash/canonicalization, what is committed vs cached | The Record, replay, audit |
+| Persistence, content-addressing & on-disk layout | Record durability (must be durable, not cache), hash/canonicalization, what is committed vs cached. **Drafted 2026-07-20 as [ADR-0002](ADR-0002-persistence-content-addressing-and-on-disk-layout.md)** — Status: Proposed, not yet ratified — ratifies the already-shipped flat-JSON `record.FileStore`/`record.CheckpointStore` design and corrects [ADR-0001](ADR-0001-language-and-toolchain.md)'s stale pre-commitment to an embedded SQLite storage driver. | The Record, replay, audit |
 | Replay & determinism contract | Which work is re-executed vs replayed; **cross-version replay scope**; verification's honest guarantee | The trust & replay promise |
 | Knowledge & semantic store (ADR-0007) | Knowledge persistence; **Authored-knowledge format stability & migration**. [RFC-0004](../01-rfcs/RFC-0004-multi-executor-router-and-publish-policy.md) §2.6 shipped a minimal write-only precursor; [RFC-0005](../01-rfcs/RFC-0005-authored-knowledge-retrieval.md) shipped naive lexical retrieval — this ADR still owns the note schema, versioning, and Derived-Knowledge indexing neither RFC decided | The durability/portability promise (V4) |
 | Extension isolation & contract versioning (ADR-0008) | The isolation mechanism (deliberately undecided today) and port versioning | Third-party safety & ecosystem |
