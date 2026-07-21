@@ -23,6 +23,16 @@ type Authority interface {
 // since a human rejection is not something a bounded repair round can fix.
 const VerdictRejected = "rejected"
 
+// VerdictApplyFailed is the Act-level JudgmentVerdict recorded when an
+// already-approved Act's patch fails to apply. It exists for cli.CLI's own
+// direct-apply fallback (a Pipeline declaring no apply Step of its own):
+// unlike a Pipeline-declared apply Step, which leaves a checkpoint
+// `foundry resume` can retry from, that fallback has nothing else that
+// would ever record an approved Act if applying it fails — so it must be
+// recorded here, not silently dropped, or the approval decision and the
+// patch it approved would vanish from the Record entirely.
+const VerdictApplyFailed = "apply-failed"
+
 // stepVerdictAccept and stepVerdictReject label an approve Step's own
 // StepRecord — distinct from VerdictRejected, which labels the Act's final
 // outcome once an approve Step has stopped the Pipeline.

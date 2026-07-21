@@ -154,7 +154,18 @@ func (c *CLI) finalize(ctx context.Context, act *domain.Act, repoPath string) er
 		// relies on the CLI's own apply, exactly as before RFC-0002 §9
 		// Phase 4 existed.
 		if err := workspace.ApplyAct(ctx, repoPath, act); err != nil {
-			return fmt.Errorf("cli: apply: %w", err)
+			// An approved Act must never vanish without a trace (I8):
+			// record it now, with the failure as its verdict and finding.
+			// Unlike a Pipeline-declared apply Step (engine/strategy.go),
+			// which leaves a checkpoint `foundry resume` can retry from,
+			// this fallback path has no other mechanism that would ever
+			// record this Act if applying it fails.
+			act.JudgmentVerdict = engine.VerdictApplyFailed
+			act.CheckedFindings = append(act.CheckedFindings, "apply-failed: "+err.Error())
+			if writeErr := c.recorder.Write(ctx, act); writeErr != nil {
+				return fmt.Errorf("cli: apply: %w (additionally failed to record: %v)", err, writeErr)
+			}
+			return fmt.Errorf("cli: apply: %w (recorded as Act %s so the approval is not lost — see `foundry show %s`)", err, act.ID, act.ID)
 		}
 	}
 	if !hasStepKind(act, domain.StepKindRecord) {

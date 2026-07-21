@@ -179,6 +179,75 @@ func TestCLI_Do_ApprovedAppliesAndRecords(t *testing.T) {
 	}
 }
 
+// conflictingPatch targets a line that does not exist in the fixture
+// repo's README.md, so `git apply` fails cleanly — used to force
+// workspace.ApplyAct to fail after approval without needing verification
+// itself to fail (this test's Gate never applies the patch; it only runs
+// validatorCmd, so verification passes regardless of the patch's content).
+const conflictingPatch = `diff --git a/README.md b/README.md
+index 0000000..1111111 100644
+--- a/README.md
++++ b/README.md
+@@ -1 +1 @@
+-this line does not exist in the file
++replacement
+`
+
+// TestCLI_Do_ApprovedButApplyFailsIsStillRecorded guards against an
+// approved Act vanishing without a trace (I8) when its patch fails to
+// apply: unlike a Pipeline-declared apply Step, engine.DefaultPipeline (used
+// here) has no checkpoint for `foundry resume` to recover from, so Do's own
+// fallback apply path must record the Act itself rather than silently
+// dropping it.
+func TestCLI_Do_ApprovedButApplyFailsIsStillRecorded(t *testing.T) {
+	t.Setenv("USER", "tester")
+	repo := initGitRepo(t)
+
+	var out bytes.Buffer
+	c, store := newCLI(t, repo, conflictingPatch, "exit 0", "y\n", &out)
+
+	err := c.Do(context.Background(), "add a feature", repo)
+	if err == nil {
+		t.Fatal("Do succeeded despite an unappliable patch, want an error")
+	}
+
+	acts, err := store.List(context.Background())
+	if err != nil {
+		t.Fatalf("store.List failed: %v", err)
+	}
+	if len(acts) != 1 {
+		t.Fatalf("store has %d acts, want 1 — an approved Act must be recorded even if applying it fails", len(acts))
+	}
+
+	act := acts[0]
+	if act.ApprovedBy != "tester" {
+		t.Errorf("recorded ApprovedBy = %q, want %q", act.ApprovedBy, "tester")
+	}
+	if act.ApprovedAt == nil {
+		t.Error("recorded ApprovedAt is nil, want a timestamp — the approval decision must survive")
+	}
+	if act.JudgmentVerdict != engine.VerdictApplyFailed {
+		t.Errorf("recorded JudgmentVerdict = %q, want %q", act.JudgmentVerdict, engine.VerdictApplyFailed)
+	}
+	found := false
+	for _, finding := range act.CheckedFindings {
+		if strings.Contains(finding, "apply-failed") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("recorded CheckedFindings = %v, want an entry describing the apply failure", act.CheckedFindings)
+	}
+
+	data, readErr := os.ReadFile(filepath.Join(repo, "README.md"))
+	if readErr != nil {
+		t.Fatalf("read README.md: %v", readErr)
+	}
+	if string(data) != "hello\n" {
+		t.Errorf("README.md = %q, want unchanged %q — the patch must never have actually landed", data, "hello\n")
+	}
+}
+
 func TestCLI_Replay_ReproducesRecordedVerification(t *testing.T) {
 	t.Setenv("USER", "tester")
 	repo := initGitRepo(t)
