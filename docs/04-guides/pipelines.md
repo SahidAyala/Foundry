@@ -34,7 +34,7 @@ Per [ADR-0004](../03-adrs/ADR-0004-reusable-act-template-format-and-evolution-po
 
 ## What's shipped, and why each is shaped the way it is
 
-Two Pipelines are built into the Engine itself (`engine/pipelines/`, embedded by `engine.BuiltinProvider`); three more are this repository's own project-level Pipelines (`.foundry/pipelines/`, loaded by `project.FilesystemPipelineProvider` alongside the built-ins). All five are real, decodable, tested documents — not illustrations.
+Two Pipelines are built into the Engine itself (`engine/pipelines/`, embedded by `engine.BuiltinPipelineSource`); three more are this repository's own project-level Pipelines (`.foundry/pipelines/`, loaded by `project.FilesystemPipelineSource` alongside the built-ins). All five are real, decodable, tested documents — not illustrations.
 
 - **`default`** (built-in) — `generate → verify`, one bounded repair, no `target` (there is only one Step to restart from). This is the Engine's original hardcoded lifecycle, preserved byte-for-byte as the trivial path a caller who never asks for a different Pipeline still gets (RFC-0002 §9 Phase 3's compatibility requirement).
 - **`review`** (built-in) — `generate → verify → verify-again`, no repair. Two independent verify Steps checking different things against the same Outcome (e.g. lint, then security); the second's verdict is what counts, and neither retries.
@@ -44,4 +44,4 @@ Two Pipelines are built into the Engine itself (`engine/pipelines/`, embedded by
 
 ## Authoring your own
 
-Add a `*.json` document to `.foundry/pipelines/` (create one with `/init` if the directory doesn't exist yet — it scaffolds simple starters you're free to edit). `project.FilesystemPipelineProvider` loads every `*.json` file in that directory alongside the built-ins; a name collision with a built-in is a registration error, never silently resolved.
+Add a `*.json` document to `.foundry/pipelines/` (create one with `/init` if the directory doesn't exist yet — it scaffolds simple starters you're free to edit). `project.FilesystemPipelineSource` loads every `*.json` file in that directory alongside the built-ins; a name collision with a built-in is a registration error, never silently resolved.

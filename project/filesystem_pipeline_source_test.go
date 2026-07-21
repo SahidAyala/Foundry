@@ -17,10 +17,10 @@ func writeFile(t *testing.T, dir, name, content string) {
 	}
 }
 
-func TestFilesystemPipelineProvider_MissingDirectoryReturnsNoPipelines(t *testing.T) {
-	provider := project.FilesystemPipelineProvider{Dir: filepath.Join(t.TempDir(), "does-not-exist")}
+func TestFilesystemPipelineSource_MissingDirectoryReturnsNoPipelines(t *testing.T) {
+	source := project.FilesystemPipelineSource{Dir: filepath.Join(t.TempDir(), "does-not-exist")}
 
-	pipelines, err := provider.Load(context.Background())
+	pipelines, err := source.Load(context.Background())
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
@@ -29,10 +29,10 @@ func TestFilesystemPipelineProvider_MissingDirectoryReturnsNoPipelines(t *testin
 	}
 }
 
-func TestFilesystemPipelineProvider_EmptyDirectoryReturnsNoPipelines(t *testing.T) {
-	provider := project.FilesystemPipelineProvider{Dir: t.TempDir()}
+func TestFilesystemPipelineSource_EmptyDirectoryReturnsNoPipelines(t *testing.T) {
+	source := project.FilesystemPipelineSource{Dir: t.TempDir()}
 
-	pipelines, err := provider.Load(context.Background())
+	pipelines, err := source.Load(context.Background())
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestFilesystemPipelineProvider_EmptyDirectoryReturnsNoPipelines(t *testing.
 	}
 }
 
-func TestFilesystemPipelineProvider_DecodesValidDocument(t *testing.T) {
+func TestFilesystemPipelineSource_DecodesValidDocument(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "feature.json", `{
 		"name": "feature",
@@ -52,8 +52,8 @@ func TestFilesystemPipelineProvider_DecodesValidDocument(t *testing.T) {
 		"repair": {"max_attempts": 1}
 	}`)
 
-	provider := project.FilesystemPipelineProvider{Dir: dir}
-	pipelines, err := provider.Load(context.Background())
+	source := project.FilesystemPipelineSource{Dir: dir}
+	pipelines, err := source.Load(context.Background())
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
@@ -68,12 +68,12 @@ func TestFilesystemPipelineProvider_DecodesValidDocument(t *testing.T) {
 	}
 }
 
-func TestFilesystemPipelineProvider_MalformedDocumentFails(t *testing.T) {
+func TestFilesystemPipelineSource_MalformedDocumentFails(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "broken.json", `{not valid json`)
 
-	provider := project.FilesystemPipelineProvider{Dir: dir}
-	_, err := provider.Load(context.Background())
+	source := project.FilesystemPipelineSource{Dir: dir}
+	_, err := source.Load(context.Background())
 	if err == nil {
 		t.Fatal("Load with a malformed document returned nil error")
 	}
@@ -82,13 +82,13 @@ func TestFilesystemPipelineProvider_MalformedDocumentFails(t *testing.T) {
 	}
 }
 
-func TestFilesystemPipelineProvider_MultipleDocumentsLoadInSortedOrder(t *testing.T) {
+func TestFilesystemPipelineSource_MultipleDocumentsLoadInSortedOrder(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "zeta.json", `{"name": "zeta", "steps": [{"id": "generate", "kind": "generate"}]}`)
 	writeFile(t, dir, "alpha.json", `{"name": "alpha", "steps": [{"id": "generate", "kind": "generate"}]}`)
 
-	provider := project.FilesystemPipelineProvider{Dir: dir}
-	pipelines, err := provider.Load(context.Background())
+	source := project.FilesystemPipelineSource{Dir: dir}
+	pipelines, err := source.Load(context.Background())
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestFilesystemPipelineProvider_MultipleDocumentsLoadInSortedOrder(t *testin
 	}
 }
 
-func TestFilesystemPipelineProvider_IgnoresNonJSONFilesAndSubdirectories(t *testing.T) {
+func TestFilesystemPipelineSource_IgnoresNonJSONFilesAndSubdirectories(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "README.md", "not a pipeline")
 	writeFile(t, dir, "feature.json", `{"name": "feature", "steps": [{"id": "generate", "kind": "generate"}]}`)
@@ -109,8 +109,8 @@ func TestFilesystemPipelineProvider_IgnoresNonJSONFilesAndSubdirectories(t *test
 	}
 	writeFile(t, filepath.Join(dir, "nested"), "ignored.json", `{"name": "ignored", "steps": [{"id": "generate", "kind": "generate"}]}`)
 
-	provider := project.FilesystemPipelineProvider{Dir: dir}
-	pipelines, err := provider.Load(context.Background())
+	source := project.FilesystemPipelineSource{Dir: dir}
+	pipelines, err := source.Load(context.Background())
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}

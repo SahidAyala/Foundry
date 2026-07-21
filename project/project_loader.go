@@ -10,7 +10,7 @@ import (
 )
 
 // PipelinesDir is the conventional location, relative to a project root,
-// where FilesystemPipelineProvider reads and ProjectLoader.Scaffold
+// where FilesystemPipelineSource reads and ProjectLoader.Scaffold
 // writes project-local Pipeline documents.
 const PipelinesDir = ".foundry/pipelines"
 
@@ -19,21 +19,21 @@ const PipelinesDir = ".foundry/pipelines"
 // project has authored for itself — and scaffolds a fresh project's
 // pipelines directory for /init. It owns no Engine, Strategy, or
 // PipelineRegistry logic of its own; it only composes what
-// engine.BuiltinProvider, FilesystemPipelineProvider, and
+// engine.BuiltinPipelineSource, FilesystemPipelineSource, and
 // engine.PipelineRegistry already do.
 type ProjectLoader struct{}
 
 // LoadRegistry returns a PipelineRegistry populated first with every
-// built-in Pipeline (engine.BuiltinProvider), then every Pipeline
-// authored under root's pipelines directory (FilesystemPipelineProvider)
+// built-in Pipeline (engine.BuiltinPipelineSource), then every Pipeline
+// authored under root's pipelines directory (FilesystemPipelineSource)
 // — the same RegisterMany composition engine.NewDefaultRegistry already
-// uses for built-ins alone, generalized by one more provider. A
+// uses for built-ins alone, generalized by one more source. A
 // project-local Pipeline whose name collides with a built-in surfaces
 // PipelineRegistry.RegisterMany's existing duplicate-name error; a
 // collision is never silently resolved in either direction.
 //
 // cfg's RequireApprovalBeforeRemotePublish is applied via
-// PipelineRegistry.SetPublishPolicy before either provider's Pipelines are
+// PipelineRegistry.SetPublishPolicy before either source's Pipelines are
 // registered (ADR-0010,
 // docs/03-adrs/ADR-0010-vcs-pr-integration-and-apply-targets.md Decision
 // 3) — this is the one place a project-authored Pipeline declaring a
@@ -43,7 +43,7 @@ func (ProjectLoader) LoadRegistry(ctx context.Context, root string, cfg Config) 
 	registry := engine.NewPipelineRegistry()
 	registry.SetPublishPolicy(cfg.RequireApprovalBeforeRemotePublish)
 
-	builtins, err := engine.BuiltinProvider{}.Load(ctx)
+	builtins, err := engine.BuiltinPipelineSource{}.Load(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("project: load built-in pipelines: %w", err)
 	}
@@ -51,7 +51,7 @@ func (ProjectLoader) LoadRegistry(ctx context.Context, root string, cfg Config) 
 		return nil, fmt.Errorf("project: register built-in pipelines: %w", err)
 	}
 
-	local, err := FilesystemPipelineProvider{Dir: pipelinesDir(root)}.Load(ctx)
+	local, err := FilesystemPipelineSource{Dir: pipelinesDir(root)}.Load(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("project: load project pipelines: %w", err)
 	}
@@ -117,7 +117,7 @@ var starterDocuments = []starterDocument{
 // starterPipelineDocument renders a minimal, valid PipelineDocument
 // (engine/document.go) under name: generate → verify, one bounded
 // repair — the same shape engine.DefaultPipeline already has, decoded
-// the same way BuiltinProvider's own embedded documents are.
+// the same way BuiltinPipelineSource's own embedded documents are.
 func starterPipelineDocument(name string) string {
 	return fmt.Sprintf(`{
   "name": %q,

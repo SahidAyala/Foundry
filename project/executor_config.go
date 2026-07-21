@@ -31,7 +31,7 @@ type ExecutorConfig struct {
 // configuration file (ExecutorsFile) into a map of name to ExecutorConfig,
 // the same names a PipelineDocument's Step.Executor pin refers to. A
 // missing file is not an error — it decodes to an empty map, mirroring
-// FilesystemPipelineProvider's "missing directory → no Pipelines": a
+// FilesystemPipelineSource's "missing directory → no Pipelines": a
 // project that never opts in to a project-local Executor sees only the
 // process default Executor, exactly as it did before this file's format
 // existed.

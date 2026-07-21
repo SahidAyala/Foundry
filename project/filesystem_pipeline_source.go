@@ -15,27 +15,27 @@ import (
 	"foundry/engine"
 )
 
-// FilesystemPipelineProvider discovers Pipeline documents a project has
+// FilesystemPipelineSource discovers Pipeline documents a project has
 // authored for itself: every *.json file directly inside Dir (no
 // recursion, no subdirectories), each decoded by the same
-// engine.DecodePipelineDocument BuiltinProvider already uses for its own
-// embedded documents. It satisfies engine.PipelineProvider — the seam
+// engine.DecodePipelineDocument BuiltinPipelineSource already uses for its own
+// embedded documents. It satisfies engine.PipelineSource — the seam
 // RFC-0002/RFC-0003 designed for exactly this: a non-built-in source of
 // Pipelines requiring no change to Engine, Strategy, or PipelineRegistry.
-type FilesystemPipelineProvider struct {
+type FilesystemPipelineSource struct {
 	// Dir is the directory to read Pipeline documents from, conventionally
 	// "<project root>/.foundry/pipelines".
 	Dir string
 }
 
-var _ engine.PipelineProvider = FilesystemPipelineProvider{}
+var _ engine.PipelineSource = FilesystemPipelineSource{}
 
 // Load decodes every *.json document directly inside Dir, in
 // filename-sorted order so Load's result is deterministic across calls
 // and across machines. A Dir that does not exist — a project that has
 // never run /init — is not an error: it decodes to no Pipelines, exactly
 // as an existing-but-empty directory would.
-func (p FilesystemPipelineProvider) Load(ctx context.Context) ([]engine.Pipeline, error) {
+func (p FilesystemPipelineSource) Load(ctx context.Context) ([]engine.Pipeline, error) {
 	entries, err := os.ReadDir(p.Dir)
 	if err != nil {
 		if os.IsNotExist(err) {

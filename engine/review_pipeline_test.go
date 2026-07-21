@@ -12,12 +12,12 @@ import (
 // This file validates that the architecture RFC-0002 §9 Phase 3 built is
 // genuinely extensible: adding a second built-in Pipeline — "review"
 // (generate, then two independent verify Steps, no bounded repair) —
-// required no change to Engine, Strategy, Pipeline, PipelineProvider, or
+// required no change to Engine, Strategy, Pipeline, PipelineSource, or
 // PipelineRegistry. Every assertion below runs against the unmodified
 // production types; none of it depends on any code written for this file.
 
 // wantReviewShape is "review"'s declared shape, mirrored here (not
-// imported from builtin_provider.go) so a future accidental edit to
+// imported from builtin_pipeline_source.go) so a future accidental edit to
 // pipelines/review.json is caught as a test failure rather than silently
 // changing behavior no test pins.
 func wantReviewShape() engine.Pipeline {
@@ -32,12 +32,12 @@ func wantReviewShape() engine.Pipeline {
 	}
 }
 
-// TestBuiltinProvider_LoadsBothBuiltinPipelines verifies BuiltinProvider
+// TestBuiltinPipelineSource_LoadsBothBuiltinPipelines verifies BuiltinPipelineSource
 // now returns two Pipelines — "default" first (preserving every existing
 // test's index-0 assumption), then "review" — decoded from two separate
 // embedded documents.
-func TestBuiltinProvider_LoadsBothBuiltinPipelines(t *testing.T) {
-	pipelines, err := (engine.BuiltinProvider{}).Load(context.Background())
+func TestBuiltinPipelineSource_LoadsBothBuiltinPipelines(t *testing.T) {
+	pipelines, err := (engine.BuiltinPipelineSource{}).Load(context.Background())
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
@@ -53,14 +53,14 @@ func TestBuiltinProvider_LoadsBothBuiltinPipelines(t *testing.T) {
 	}
 }
 
-// TestBuiltinProvider_ReviewDocumentMatchesProvenShape verifies the
+// TestBuiltinPipelineSource_ReviewDocumentMatchesProvenShape verifies the
 // embedded review.json decodes to exactly the shape
 // strategy_test.go's TestPipelineStrategy_CustomPipelineRunsWithoutEngineChanges
 // already proved executes correctly through an unmodified Engine and
 // PipelineStrategy — the new built-in document ships data, not a new
 // execution path.
-func TestBuiltinProvider_ReviewDocumentMatchesProvenShape(t *testing.T) {
-	pipelines, err := (engine.BuiltinProvider{}).Load(context.Background())
+func TestBuiltinPipelineSource_ReviewDocumentMatchesProvenShape(t *testing.T) {
+	pipelines, err := (engine.BuiltinPipelineSource{}).Load(context.Background())
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
