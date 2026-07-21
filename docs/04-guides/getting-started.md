@@ -45,6 +45,8 @@ Running `foundry` with no arguments opens an interactive session rooted at the c
 
 Each Pipeline's `verify` Step(s) must pass before you're ever asked to approve anything — a failing verification stops the attempt (and retries once, bounded, if the Pipeline declares repair) rather than reaching approval. When it does reach an `approve` Step, you'll see the proposed patch and its verdict, then a `y/n` prompt; declining leaves your repository untouched. On approval, the patch is applied and the Act is recorded immutably under `.foundry/acts/` in your repository.
 
+Per [ADR-0002](../03-adrs/ADR-0002-persistence-content-addressing-and-on-disk-layout.md): commit `.foundry/acts/` to your project's own repository — it is durable audit history, the same way `.foundry/pipelines/` already is, not a disposable cache. `.foundry/acts/*/checkpoint.json` (an interrupted Act's in-progress state, `foundry resume`'s own bookkeeping) is the one exception — it has no audit value once superseded or deleted, so you may gitignore `**/checkpoint.json` if you prefer.
+
 Plain text typed at the prompt (not a slash command) is not yet supported — use one of the commands above.
 
 ### One-shot command — for CI and automation scripting only
