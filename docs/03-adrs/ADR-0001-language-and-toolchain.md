@@ -71,7 +71,7 @@ Each alternative is evaluated against R1–R4 and against the *honest* cost of c
 
 ### What this decision makes EASIER (and why)
 
-- **ADR-0002 (persistence):** a mature pure-Go SQLite implementation exists, so the storage engine can be embedded while preserving R1. The static-binary requirement and the storage choice stop being in tension.
+- **ADR-0002 (persistence):** a mature pure-Go SQLite implementation exists, so an embedded storage engine *could* preserve R1 if one were ever needed. **In the event, [ADR-0002](ADR-0002-persistence-content-addressing-and-on-disk-layout.md) chose no database at all** — [principles.md](../00-overview/principles.md)'s Filesystem-first persistence principle settled this before it became a live tradeoff, so the tension this clause anticipated never actually arose.
 - **ADR-0008 (extension contract):** Go's out-of-process plugin ecosystem (gRPC, `go-plugin`-class tooling) is the most trodden path of any candidate. The *primary* isolation mechanism (gRPC subprocess) becomes low-risk.
 - **Distribution & CI (roadmap §7):** trivial cross-compilation to every target from one machine; `goreleaser`-class signed multi-platform releases; the "same binary in CI" promise (R1) is met by construction, not effort.
 - **Parallel stage execution (postponed in roadmap §8):** goroutines/channels make the eventual move from sequential to concurrent orchestration an internal change, not a paradigm shift (serves R4).
@@ -106,7 +106,7 @@ The honest summary: we cannot make this decision cheaply reversible, so we inste
 
 ## Future ADR Dependencies
 
-- **ADR-0002 (Persistence):** **inherits a hard constraint** — the storage driver must be pure-Go to satisfy clause 2 / R1. This ADR removes "use a cgo SQLite driver" from ADR-0002's option set.
+- **ADR-0002 (Persistence):** **inherits a hard constraint** — the storage driver must be pure-Go to satisfy clause 2 / R1. This ADR removes "use a cgo SQLite driver" from ADR-0002's option set. **Correction (2026-07-20, per [ADR-0002](ADR-0002-persistence-content-addressing-and-on-disk-layout.md), Accepted):** ADR-0002 selected no database at all — flat, versionable JSON files (`record.FileStore`), per [principles.md](../00-overview/principles.md)'s Filesystem-first persistence principle, which sits at a higher precedence tier than this ADR. The clause above describing "a mature pure-Go SQLite implementation... embedded" was this ADR's own anticipation, written before that principle settled the question the other way; it never became the shipped design and should not be read as though it had.
 - **ADR-0005 (Executor contract & ports):** ports are expressed as Go interfaces *in-process*; this ADR fixes that substrate. ADR-0005 inherits Go's interface semantics (structural, no default methods) as its modeling vocabulary.
 - **ADR-0007 (Knowledge & semantic store):** **must explicitly resolve** the on-device-embedding vs `CGO_ENABLED=0` tension this ADR creates.
 - **ADR-0008 (Extension contract):** **discharges R2** — it must define the language-neutral boundary that clause 4 requires; it is also where the WASM-track difficulty noted above is formally accepted.

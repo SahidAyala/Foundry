@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** — drafted per the ADR backlog ([README.md](README.md)) and [ADR-0001](ADR-0001-language-and-toolchain.md)'s own forward reference; not yet ratified. |
-| **Date** | Drafted 2026-07-20 |
+| **Status** | **Accepted** — ratified 2026-07-20 under [ADR-0000](ADR-0000-governance-and-ratification-process.md)'s governance process. Originally drafted per the ADR backlog ([README.md](README.md)) and [ADR-0001](ADR-0001-language-and-toolchain.md)'s own forward reference. |
+| **Date** | Drafted 2026-07-20; ratified 2026-07-20 |
 | **Deciders** | The project's sole maintainer, under [ADR-0000](ADR-0000-governance-and-ratification-process.md); drafted AI-assisted |
 | **Ratifies** | The ADR backlog entry named in [README.md](README.md) ("Persistence, content-addressing & on-disk layout") — Record durability, hash/canonicalization, and what is committed vs. cached. |
 | **Gates** | [docs/02-architecture/trust.md](../02-architecture/trust.md)'s "Unresolved: the durability classification of the Record itself"; [roadmap.md](../00-overview/roadmap.md) open decision 6; [invariants.md](../05-reference/invariants.md) I8's "pending owning ADR" note; [OQ-008](../06-open-questions/OQ-008-in-progress-act-persistence.md); [RFC-0002](../01-rfcs/RFC-0002-pipeline-execution-runtime.md) §4.5/§10's "the Record's on-disk shape is a compatibility surface with no owning ADR yet." Also corrects [ADR-0001](ADR-0001-language-and-toolchain.md) clause 2's specific pre-commitment (see Context). |
@@ -134,13 +134,13 @@ New to this ADR:
 
 ## Review Checklist
 
-To be completed at ratification:
+Walked through at ratification (2026-07-20):
 
-- [ ] **No contradiction with accepted documents**, beyond the one this ADR deliberately corrects (ADR-0001 clause 2). Confirm against [ADR-0004](ADR-0004-reusable-act-template-format-and-evolution-policy.md) (JSON-only wire format precedent, consistent) and [ADR-0005](ADR-0005-executor-contract-and-capability-model.md)/[ADR-0010](ADR-0010-vcs-pr-integration-and-apply-targets.md) (no overlap).
-- [ ] **ADR-0001's corrected clause reads accurately** once amended — it must not claim an embedded database was chosen, nor silently drop the fact that it once said so.
-- [ ] **Decisions 1, 3, and 7 verified against the actual shipped code** — `record/store.go`, `record/checkpoint.go`, `record/json.go`, `domain/act.go` (confirming no map fields) — re-read at ratification to confirm nothing has drifted since drafting.
-- [ ] **OQ-008's two sub-questions are carried forward accurately**, not silently dropped, in this ADR's own Open Questions.
-- [ ] **Process caveat resolved.** Ratify under [ADR-0000](ADR-0000-governance-and-ratification-process.md); update this Status row and the backlog table in [README.md](README.md) in the same ratifying commit.
+- [x] **No contradiction with accepted documents**, beyond the one this ADR deliberately corrects (ADR-0001 clause 2). Confirmed against [ADR-0004](ADR-0004-reusable-act-template-format-and-evolution-policy.md) (JSON-only wire format precedent, consistent) and [ADR-0005](ADR-0005-executor-contract-and-capability-model.md)/[ADR-0010](ADR-0010-vcs-pr-integration-and-apply-targets.md) (no overlap).
+- [x] **ADR-0001's corrected clauses read accurately** — both the persistence clause and its Consequences-section restatement now say plainly that no database was ever built and point here, without erasing that ADR-0001 once anticipated one.
+- [x] **Decisions 1, 3, and 7 verified against the actual shipped code.** Re-read at ratification: `record/store.go` (flat `<root>/<id>/act.json`, `O_EXCL` write-once), `record/checkpoint.go` (separate, overwritable `checkpoint.json`), `record/json.go` (`json.MarshalIndent`), `domain/act.go` (`Act` and `StepRecord` contain only structs/slices/scalars — no map fields) — all match this ADR's description exactly.
+- [x] **OQ-008's two sub-questions are carried forward accurately**, not silently dropped, in this ADR's own Open Questions (items 1–2).
+- [x] **Process caveat resolved.** Ratified under [ADR-0000](ADR-0000-governance-and-ratification-process.md); Status row above, [ADR-0001](ADR-0001-language-and-toolchain.md)'s corrected clauses, and the backlog table in [README.md](README.md) all updated in the same ratifying pass.
 
 ---
 
