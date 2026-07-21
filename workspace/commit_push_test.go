@@ -74,20 +74,25 @@ func TestWorkspace_Commit_CreatesACommitOnTheBranch(t *testing.T) {
 		t.Fatalf("Commit failed: %v", err)
 	}
 
+	// repo's own working tree was never touched by Commit at all — the
+	// commit happened in ws's isolated worktree.
 	status, err := gitOutput(context.Background(), repo, "status", "--porcelain")
 	if err != nil {
 		t.Fatalf("git status failed: %v", err)
 	}
 	if status != "" {
-		t.Errorf("git status after Commit = %q, want a clean working tree", status)
+		t.Errorf("git status in repo after Commit = %q, want a clean working tree (repo's own checkout was never touched)", status)
 	}
 
-	log, err := gitOutput(context.Background(), repo, "log", "-1", "--pretty=%s")
+	// The commit lives on ws.BranchName(), not repo's own checked-out
+	// branch — but since a worktree shares the same refs, it's visible from
+	// repo by naming the branch explicitly.
+	log, err := gitOutput(context.Background(), repo, "log", "-1", "--pretty=%s", ws.BranchName())
 	if err != nil {
 		t.Fatalf("git log failed: %v", err)
 	}
 	if log != "test: apply the patch" {
-		t.Errorf("last commit message = %q, want %q", log, "test: apply the patch")
+		t.Errorf("last commit message on %q = %q, want %q", ws.BranchName(), log, "test: apply the patch")
 	}
 }
 
