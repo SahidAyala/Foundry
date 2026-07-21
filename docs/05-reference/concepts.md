@@ -4,7 +4,7 @@
 
 ## Maturity index (status of every major concept)
 
-See [maturity levels](../04-guides/documentation.md#maturity-levels). **CANONICAL is now reachable, narrowly**: [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md) resolved the systemic blocker (no ratification process existed). Most of the repository is still PROVISIONAL, not because CANONICAL is unreachable in principle, but because each document still needs its own explicit ratification — nothing upgrades automatically. Only [ADR-0001](../03-adrs/ADR-0001-language-and-toolchain.md), [ADR-0002](../03-adrs/ADR-0002-persistence-content-addressing-and-on-disk-layout.md), [ADR-0004](../03-adrs/ADR-0004-reusable-act-template-format-and-evolution-policy.md), [ADR-0005](../03-adrs/ADR-0005-executor-contract-and-capability-model.md), [ADR-0006](../03-adrs/ADR-0006-routing-and-policy.md), [ADR-0009](../03-adrs/ADR-0009-cli-and-output-contract.md), and [ADR-0010](../03-adrs/ADR-0010-vcs-pr-integration-and-apply-targets.md) are Accepted so far; RFC-0001 through RFC-0005 remain Draft — Proposed.
+See [maturity levels](../04-guides/documentation.md#maturity-levels). **CANONICAL is now reachable, narrowly**: [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md) resolved the systemic blocker (no ratification process existed). Most of the repository is still PROVISIONAL, not because CANONICAL is unreachable in principle, but because each document still needs its own explicit ratification — nothing upgrades automatically. Only [ADR-0001](../03-adrs/ADR-0001-language-and-toolchain.md), [ADR-0002](../03-adrs/ADR-0002-persistence-content-addressing-and-on-disk-layout.md), [ADR-0003](../03-adrs/ADR-0003-replay-and-determinism-contract.md), [ADR-0004](../03-adrs/ADR-0004-reusable-act-template-format-and-evolution-policy.md), [ADR-0005](../03-adrs/ADR-0005-executor-contract-and-capability-model.md), [ADR-0006](../03-adrs/ADR-0006-routing-and-policy.md), [ADR-0009](../03-adrs/ADR-0009-cli-and-output-contract.md), and [ADR-0010](../03-adrs/ADR-0010-vcs-pr-integration-and-apply-targets.md) are Accepted so far; RFC-0001 through RFC-0005 remain Draft — Proposed.
 
 | Concept / decision | Maturity | Owner | Open question |
 |---|---|---|---|
@@ -14,12 +14,11 @@ See [maturity levels](../04-guides/documentation.md#maturity-levels). **CANONICA
 | **Act as domain center** | PROVISIONAL (working hypothesis) | [domain.md](../02-architecture/domain.md) | [OQ-001](../06-open-questions/OQ-001-domain-center.md) |
 | **Pipeline = one Strategy** | PROVISIONAL (working hypothesis) | [execution.md](../02-architecture/execution.md) | [OQ-002](../06-open-questions/OQ-002-pipeline-as-strategy.md) |
 | **Vocabulary** (Act/Engine/Strategy/…) | PROVISIONAL (proposal; some coined here) | [terminology.md](terminology.md) | [OQ-007](../06-open-questions/OQ-007-canonical-terminology.md) |
-| Replay across versions | OPEN | — | [OQ-003](../06-open-questions/OQ-003-replay-across-versions.md) |
-| Verification guarantee strength | OPEN | — | [OQ-004](../06-open-questions/OQ-004-validator-determinism.md) |
 | Extension isolation mechanism | OPEN (requirements only) | [extensibility.md](../02-architecture/extensibility.md) | [OQ-005](../06-open-questions/OQ-005-extension-isolation.md) |
 | Governance / ratification | **RESOLVED** | [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md) | — |
 | Language = Go | ACCEPTED | [ADR-0001](../03-adrs/ADR-0001-language-and-toolchain.md) | one pending amendment (extension isolation mechanism) |
 | Persistence, content-addressing & on-disk layout | ACCEPTED | [ADR-0002](../03-adrs/ADR-0002-persistence-content-addressing-and-on-disk-layout.md) | — |
+| Replay & determinism contract | ACCEPTED | [ADR-0003](../03-adrs/ADR-0003-replay-and-determinism-contract.md) | — |
 | Reusable-Act template format & evolution policy | ACCEPTED | [ADR-0004](../03-adrs/ADR-0004-reusable-act-template-format-and-evolution-policy.md) | — |
 | Executor contract & capability model | ACCEPTED | [ADR-0005](../03-adrs/ADR-0005-executor-contract-and-capability-model.md) | — |
 | Routing & policy (explicit-pin Router; negotiation/failover deferred) | ACCEPTED | [ADR-0006](../03-adrs/ADR-0006-routing-and-policy.md) | — |
