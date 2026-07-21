@@ -22,11 +22,15 @@ A **Pipeline** is one **Strategy** for producing an **Act**: a predeclared seque
 }
 ```
 
-- **`steps`** — an ordered list. Each Step has an `id` (unique within the document, doubles as the human-readable name a `repair.target` can point back to) and a `kind`, one of RFC-0002 §4.2's closed five: `generate`, `verify`, `approve`, `apply`, `record`. A Step Kind PipelineStrategy does not recognize is a decode-time error, never a silently skipped Step.
+- **`steps`** — an ordered list. Each Step has an `id` (unique within the document, doubles as the human-readable name a `repair.target` can point back to) and a `kind`, one of RFC-0002 §4.2's closed five: `generate`, `verify`, `approve`, `apply`, `record`. A Step Kind PipelineStrategy does not recognize is a decode-time error, never a silently skipped Step. A Step may also carry `capability` (object), `executor` (string), `feeds_forward` (bool), and `target` (string) — all optional, reserved for the Router (see [ADR-0005](../03-adrs/ADR-0005-executor-contract-and-capability-model.md)) and unused by any document above.
 - **`repair.max_attempts`** — how many times the Pipeline may re-run after a `verify` Step's Judgment is `fail`. `0` (or an omitted `repair` block) means no repair.
 - **`repair.target`** — the Step ID a repair round jumps back to, re-running only from there onward, not the whole Pipeline. Omitted means "restart from the first Step."
 
 A failing `verify` Step always stops the current attempt before any `approve`, `apply`, or `record` Step — a Pipeline never seeks approval for, applies, or records an Outcome its own verification just rejected, whether or not that attempt goes on to repair.
+
+### Field evolution and unknown fields
+
+Per [ADR-0004](../03-adrs/ADR-0004-reusable-act-template-format-and-evolution-policy.md): the fields listed above are the complete schema — there is no document schema-version field yet, and any field not named here is a decode-time error, not a silently ignored key. If you see an error like `unknown field "capabilty"`, it means exactly that: the document has a field this schema doesn't recognize, most often a typo of one of the names above. Fix the field name (or remove it) and re-run. New optional fields, when added, are always additive and `omitempty` — a document written before a new field existed keeps decoding identically once the field is documented here.
 
 ## What's shipped, and why each is shaped the way it is
 

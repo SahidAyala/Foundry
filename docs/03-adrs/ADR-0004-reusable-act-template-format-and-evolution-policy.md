@@ -127,7 +127,7 @@ Walked through at ratification (2026-07-20):
 - [x] **Decision 1 (no separate Act-template format) does not contradict `terminology.md`.** Confirmed: "reusable Act template" is not a canonical noun there; this ADR does not introduce one.
 - [x] **OQ-002 and OQ-003 are cited as explicitly out of scope**, not silently resolved.
 - [x] **Process caveat resolved.** Ratified under [ADR-0000](ADR-0000-governance-and-ratification-process.md); Status row and [README.md](README.md)'s backlog table updated in the same ratifying commit.
-- [ ] **Decision 4's code (`DisallowUnknownFields` + descriptive errors + `pipelines.md` update) is implemented.** Deliberately deferred past ratification per the maintainer's explicit sequencing decision — tracked as follow-up work, not a ratification blocker.
+- [x] **Decision 4's code (`DisallowUnknownFields` + descriptive errors + `pipelines.md` update) is implemented.** Shipped 2026-07-20 (`engine/document.go`'s `DecodePipelineDocument`/`describeUnknownField`), same day as ratification per the maintainer's sequencing decision (ratify first, implement after). Errors name the unknown field, the enclosing Step by `id` (or index when the Step has none), the section (top-level/Step/repair), and point at [docs/04-guides/pipelines.md](../04-guides/pipelines.md). All five shipped documents re-verified to still decode cleanly; new tests cover top-level, Step-level, id-less-Step, and repair-block unknown fields (`engine/document_test.go`).
 
 ---
 
