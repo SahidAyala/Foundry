@@ -98,7 +98,7 @@ Only `.foundry/knowledge/` (the `knowledge-note` target's directory) is retrieve
 
 ## 4. Backlog ADRs this RFC touches
 
-- **Knowledge & semantic store** (ADR backlog, [ADR README](../03-adrs/README.md)) — this RFC proposes a concrete, deliberately narrow shape for its read side (§2.1–§2.4); it does not ratify that ADR, and explicitly leaves the note-schema and semantic-retrieval questions (§3) to it.
+- **Knowledge & semantic store** — this RFC proposed a concrete, deliberately narrow shape for its read side (§2.1–§2.4); [ADR-0007](../03-adrs/ADR-0007-knowledge-and-semantic-store.md) has since ratified it, closing the note-schema/format-stability question (§3's first item) and explicitly declining semantic retrieval, Derived Knowledge indexing, and note curation (§3's remaining items) until each has a named trigger — not silently, and not by building them.
 - **Replay & determinism contract** (ADR backlog) — §2.5 argues Knowledge retrieval introduces no new risk under today's same-version, record-don't-re-derive replay model; that ADR, when written, should confirm rather than silently inherit this argument.
 - **Reusable-Act template format & evolution policy** (ADR backlog) — untouched; §2.1 deliberately declines to design a note schema so it does not preempt this ADR either.
 

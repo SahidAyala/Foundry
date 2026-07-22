@@ -43,7 +43,7 @@ Running `foundry` with no arguments opens an interactive session rooted at the c
 | `/help` | Lists every slash command this session understands, by name and one-line description. |
 | `/exit` or `/quit` | End the session. |
 
-Each Pipeline's `verify` Step(s) must pass before you're ever asked to approve anything — a failing verification stops the attempt (and retries once, bounded, if the Pipeline declares repair) rather than reaching approval. When it does reach an `approve` Step, you'll see the proposed patch and its verdict, then a `y/n` prompt; declining leaves your repository untouched. On approval, the patch is applied and the Act is recorded immutably under `.foundry/acts/` in your repository.
+Each Pipeline's `verify` Step(s) must pass before you're ever asked to approve anything — a failing verification stops the attempt (and retries once, bounded, if the Pipeline declares repair) rather than reaching approval. When it does reach an `approve` Step, you'll see the proposed patch and its verdict, then a `y/n` prompt; declining leaves your repository untouched. On approval, the patch is applied and the Act is recorded immutably under `.foundry/acts/` in your repository. A patch longer than 40 lines is piped through `$PAGER` (falling back to `less -R`) so it doesn't scroll past what you can read before deciding — `foundry show`'s output gets the same treatment.
 
 Per [ADR-0002](../03-adrs/ADR-0002-persistence-content-addressing-and-on-disk-layout.md): commit `.foundry/acts/` to your project's own repository — it is durable audit history, the same way `.foundry/pipelines/` already is, not a disposable cache. `.foundry/acts/*/checkpoint.json` (an interrupted Act's in-progress state, `foundry resume`'s own bookkeeping) is the one exception — it has no audit value once superseded or deleted, so you may gitignore `**/checkpoint.json` if you prefer.
 
@@ -95,11 +95,21 @@ Then reference the name (`"gpt"` above) from a Step's `executor` field in a Pipe
 
 ## Authored Knowledge (optional)
 
-A Pipeline's `apply` Step can declare `"target": "knowledge-note"` to write its output as a plain Markdown file under `.foundry/knowledge/`, one per contributing Act. A later Act's naive lexical retrieval automatically surfaces relevant notes back into its own considered Evidence — no separate indexing step needed. See [../02-architecture/knowledge.md](../02-architecture/knowledge.md) and [RFC-0005](../01-rfcs/RFC-0005-authored-knowledge-retrieval.md) (still Draft — Proposed, not yet ratified).
+A Pipeline's `apply` Step can declare `"target": "knowledge-note"` to write its output as a plain Markdown file under `.foundry/knowledge/`, one per contributing Act. A later Act's naive lexical retrieval automatically surfaces relevant notes back into its own considered Evidence — no separate indexing step needed. See [../02-architecture/knowledge.md](../02-architecture/knowledge.md) and [RFC-0005](../01-rfcs/RFC-0005-authored-knowledge-retrieval.md) (still Draft — Proposed as an RFC, though the store's own format and durability questions are ratified by [ADR-0007](../03-adrs/ADR-0007-knowledge-and-semantic-store.md)).
+
+Per [ADR-0007](../03-adrs/ADR-0007-knowledge-and-semantic-store.md): commit `.foundry/knowledge/` to your project's own repository, the same way `.foundry/acts/` and `.foundry/pipelines/` already are — a Knowledge note is durable audit-adjacent history, not a disposable cache.
+
+## Structured logging (optional)
+
+Setting the `FOUNDRY_LOG` environment variable to any non-empty value adds structured, leveled JSON log lines to stderr for every Act — one line per lifecycle event (gather start, each execute/verify round, repair, budget exceeded) — alongside the normal human-readable progress on stdout. Unset (the default), nothing changes: only the existing human narration runs. This is a diagnostic/observability stream, not a machine-readable *output* contract — `foundry show`/`log`'s own output format is unaffected (no `--json` mode exists; see [ADR-0009](../03-adrs/ADR-0009-cli-and-output-contract.md)).
+
+```
+FOUNDRY_LOG=1 foundry do "<intent>" --repo /path/to/your/repo 2>foundry.jsonl
+```
 
 ## What "usable for testing" means today, honestly
 
-Real: it builds a real patch through a real Executor against a real repository, verifies it, requires human approval, and records every Act immutably; replay and resume both work. Not yet real: multi-user use, true capability-based Executor routing (today's Router is explicit-pin-only), Derived Knowledge, or any observability surface. [../00-overview/roadmap.md](../00-overview/roadmap.md)'s current-status table is the honest, up-to-date list of what's shipped per milestone.
+Real: it builds a real patch through a real Executor against a real repository, verifies it, requires human approval, and records every Act immutably; replay and resume both work; `foundry show` renders a colored, per-Step trace of what happened. Not yet real: multi-user use, true capability-based Executor routing (today's Router is explicit-pin-only), Derived Knowledge. [../00-overview/roadmap.md](../00-overview/roadmap.md)'s current-status table is the honest, up-to-date list of what's shipped per milestone.
 
 ## Troubleshooting
 
