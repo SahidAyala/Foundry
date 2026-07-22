@@ -448,6 +448,13 @@ func (r *fakeReporter) Verifying(iteration int) {
 func (r *fakeReporter) Verified(iteration int, judgment *domain.Judgment) {
 	r.events = append(r.events, fmt.Sprintf("verified:%d:%s", iteration, judgment.Verdict))
 }
+func (r *fakeReporter) Executed(iteration int, actualCostUSD *float64) {
+	if actualCostUSD == nil {
+		r.events = append(r.events, fmt.Sprintf("executed:%d:none", iteration))
+		return
+	}
+	r.events = append(r.events, fmt.Sprintf("executed:%d:%.4f", iteration, *actualCostUSD))
+}
 func (r *fakeReporter) Repairing() { r.events = append(r.events, "repairing") }
 func (r *fakeReporter) RepairSkipped(reason string) {
 	r.events = append(r.events, "repair-skipped:"+reason)
@@ -465,7 +472,7 @@ func TestEngine_Run_ReportsPassWithoutRepair(t *testing.T) {
 		t.Fatalf("Run failed: %v", err)
 	}
 
-	want := []string{"gathering", "executing:1", "verifying:1", "verified:1:pass"}
+	want := []string{"gathering", "executing:1", "executed:1:none", "verifying:1", "verified:1:pass"}
 	if !reflect.DeepEqual(reporter.events, want) {
 		t.Errorf("events = %v, want %v", reporter.events, want)
 	}
@@ -486,8 +493,8 @@ func TestEngine_Run_ReportsRepairRound(t *testing.T) {
 	}
 
 	want := []string{
-		"gathering", "executing:1", "verifying:1", "verified:1:fail",
-		"repairing", "executing:2", "verifying:2", "verified:2:pass",
+		"gathering", "executing:1", "executed:1:none", "verifying:1", "verified:1:fail",
+		"repairing", "executing:2", "executed:2:none", "verifying:2", "verified:2:pass",
 	}
 	if !reflect.DeepEqual(reporter.events, want) {
 		t.Errorf("events = %v, want %v", reporter.events, want)
@@ -634,7 +641,7 @@ func TestEngine_RunBudgeted_ReportsRepairSkippedWhenBudgetRefuses(t *testing.T) 
 	}
 
 	want := []string{
-		"gathering", "executing:1", "verifying:1", "verified:1:fail", "repairing",
+		"gathering", "executing:1", "executed:1:none", "verifying:1", "verified:1:fail", "repairing",
 		"repair-skipped:budget exceeded: iteration 2 over limit 1",
 	}
 	if !reflect.DeepEqual(reporter.events, want) {

@@ -134,7 +134,7 @@ func wireEngine(repoPath string, stdin io.Reader, stdout io.Writer, newExecutor 
 	}
 	eng.SetApplierRegistry(appliers)
 
-	eng.SetReporter(cli.NewProgressReporter(stdout))
+	eng.SetReporter(cli.NewReporter(stdout))
 	eng.SetAuthority(cli.InteractiveAuthority{In: stdin, Out: stdout})
 	eng.SetApplier(workspace.GitApplier{})
 	eng.SetCheckpointer(store)

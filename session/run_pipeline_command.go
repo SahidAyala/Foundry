@@ -46,7 +46,7 @@ func (cmd RunPipelineCommand) Run(ctx context.Context, s *Session, args string) 
 	if err != nil {
 		return err
 	}
-	eng.SetReporter(cli.NewProgressReporter(s.Out))
+	eng.SetReporter(cli.NewReporter(s.Out))
 	eng.SetAuthority(cli.InteractiveAuthority{In: s.In, Out: s.Out})
 	eng.SetApplier(workspace.GitApplier{})
 	eng.SetCheckpointer(s.Recorder())

@@ -44,6 +44,11 @@ func (p *ProgressReporter) Executing(iteration int) {
 	p.line(ansiCyan, "→ "+label)
 }
 
+// Executed is intentionally silent: ADR-0011's actual-cost signal is
+// reported Evidence for `foundry show`/FOUNDRY_LOG, not live human
+// narration — ProgressReporter's own progress lines are unchanged.
+func (p *ProgressReporter) Executed(iteration int, actualCostUSD *float64) {}
+
 func (p *ProgressReporter) Verifying(iteration int) {
 	p.line(ansiCyan, "→ Verifying the proposed patch...")
 }

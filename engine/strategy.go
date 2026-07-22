@@ -220,11 +220,13 @@ func runSteps(ctx context.Context, pipelineName string, act *domain.Act, intent 
 				return outcome, judgment, false, wrapStepError(attempt, "execute", err)
 			}
 			outcome = o
+			rc.reporter.Executed(attempt+1, outcome.ActualCostUSD)
 			act.Patch = outcome.Patch
 			act.Iterations = rc.spent.iterations
 			act.CostEstimateUSD = rc.spent.costUSD
 			act.ConsideredFiles = stepConsidered
-			recordStep(act, domain.StepKindGenerate, stepConsidered, producedPatch(outcome), nil, "", "", start)
+			accumulateActualCost(act, outcome.ActualCostUSD)
+			recordStep(act, domain.StepKindGenerate, stepConsidered, producedPatch(outcome), nil, "", "", start, outcome.ActualCostUSD)
 			if err := rc.checkpoints.Save(ctx, act); err != nil {
 				return outcome, judgment, false, wrapStepError(attempt, "checkpoint", err)
 			}
@@ -241,7 +243,7 @@ func runSteps(ctx context.Context, pipelineName string, act *domain.Act, intent 
 			}
 			judgment = j
 			rc.reporter.Verified(attempt+1, judgment)
-			recordStep(act, domain.StepKindVerify, nil, nil, judgment.Checked, judgment.Verdict, "", start)
+			recordStep(act, domain.StepKindVerify, nil, nil, judgment.Checked, judgment.Verdict, "", start, nil)
 			if err := rc.checkpoints.Save(ctx, act); err != nil {
 				return outcome, judgment, false, wrapStepError(attempt, "checkpoint", err)
 			}
@@ -256,7 +258,7 @@ func runSteps(ctx context.Context, pipelineName string, act *domain.Act, intent 
 				return outcome, judgment, false, wrapStepError(attempt, "approve", err)
 			}
 			if !approved {
-				recordStep(act, domain.StepKindApprove, nil, nil, nil, stepVerdictReject, "", start)
+				recordStep(act, domain.StepKindApprove, nil, nil, nil, stepVerdictReject, "", start, nil)
 				act.JudgmentVerdict = VerdictRejected
 				if judgment != nil {
 					act.CheckedFindings = judgment.Checked
@@ -269,7 +271,7 @@ func runSteps(ctx context.Context, pipelineName string, act *domain.Act, intent 
 			now := time.Now()
 			act.ApprovedBy = authority
 			act.ApprovedAt = &now
-			recordStep(act, domain.StepKindApprove, nil, nil, nil, stepVerdictAccept, authority, start)
+			recordStep(act, domain.StepKindApprove, nil, nil, nil, stepVerdictAccept, authority, start, nil)
 			if err := rc.checkpoints.Save(ctx, act); err != nil {
 				return outcome, judgment, false, wrapStepError(attempt, "checkpoint", err)
 			}
@@ -286,7 +288,7 @@ func runSteps(ctx context.Context, pipelineName string, act *domain.Act, intent 
 			if err := applier.Apply(ctx, rc.workspace, act); err != nil {
 				return outcome, judgment, false, wrapStepError(attempt, "apply", err)
 			}
-			recordStep(act, domain.StepKindApply, nil, producedPatch(outcome), nil, "", "", start)
+			recordStep(act, domain.StepKindApply, nil, producedPatch(outcome), nil, "", "", start, nil)
 			if err := rc.checkpoints.Save(ctx, act); err != nil {
 				return outcome, judgment, false, wrapStepError(attempt, "checkpoint", err)
 			}
@@ -296,7 +298,7 @@ func runSteps(ctx context.Context, pipelineName string, act *domain.Act, intent 
 			if err := rc.checkpointer.Write(ctx, act); err != nil {
 				return outcome, judgment, false, wrapStepError(attempt, "record", err)
 			}
-			recordStep(act, domain.StepKindRecord, nil, nil, nil, "", "", start)
+			recordStep(act, domain.StepKindRecord, nil, nil, nil, "", "", start, nil)
 			if err := rc.checkpoints.Save(ctx, act); err != nil {
 				return outcome, judgment, false, wrapStepError(attempt, "checkpoint", err)
 			}
