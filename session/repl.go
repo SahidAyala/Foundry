@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"runtime/debug"
 	"strings"
 
 	"foundry/cli"
@@ -73,10 +75,31 @@ func (r *REPL) handleLine(ctx context.Context, line string) (done bool) {
 		return true
 	}
 
-	if err := r.commands.Dispatch(ctx, r.session, cmd.Name, cmd.Args); err != nil {
+	if err := r.dispatchRecovered(ctx, cmd); err != nil {
 		r.renderer.Error(err)
 	}
 	return false
+}
+
+// dispatchRecovered runs r.commands.Dispatch, converting a panic anywhere
+// in that call chain (RunPipelineCommand -> cli.CLI.Do -> Engine ->
+// Gatherer/Executor/Verifier/Applier) into a returned error instead of
+// crashing the whole interactive session. Run's own doc comment already
+// promises "one failed slash command must never end the session" — that
+// guarantee held only for a returned error before this; a panic bypassed
+// it entirely, taking the whole process down mid-session. The panic's
+// full value and stack trace are still written to stderr, so a real
+// programming bug remains loud and debuggable during development — only
+// the interactive session itself survives it, exactly as it already
+// survives a returned error.
+func (r *REPL) dispatchRecovered(ctx context.Context, cmd Command) (err error) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			fmt.Fprintf(os.Stderr, "session: recovered panic in /%s: %v\n%s\n", cmd.Name, rec, debug.Stack())
+			err = fmt.Errorf("session: /%s panicked and was recovered: %v (see stderr for the full stack trace)", cmd.Name, rec)
+		}
+	}()
+	return r.commands.Dispatch(ctx, r.session, cmd.Name, cmd.Args)
 }
 
 // DefaultCommandRegistry returns the CommandRegistry this build of
