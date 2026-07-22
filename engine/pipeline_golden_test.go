@@ -146,3 +146,80 @@ func TestGoldenFeaturePipeline_ExecutesFullLifecycleWithOneRepairRound(t *testin
 		}
 	}
 }
+
+// snapshotCheckpointer captures act.JudgmentVerdict/CheckedFindings at the
+// exact moment Write is called, unlike strategy_test.go's own
+// fakeCheckpointer (which stores the *domain.Act pointer itself) — a
+// pointer-capturing fake cannot distinguish "the value at call time" from
+// "the value now," since any later mutation to the same struct is visible
+// retroactively once the test inspects it after Run returns. That blind
+// spot is exactly why this real bug (below) went uncaught until a live,
+// end-to-end run surfaced it.
+type snapshotCheckpointer struct {
+	verdictAtWriteTime string
+	checkedAtWriteTime []string
+}
+
+func (c *snapshotCheckpointer) Write(ctx context.Context, act *domain.Act) error {
+	c.verdictAtWriteTime = act.JudgmentVerdict
+	c.checkedAtWriteTime = append([]string(nil), act.CheckedFindings...)
+	return nil
+}
+
+// TestGoldenFeaturePipeline_RecordStepSeesJudgmentAlreadySet covers a real
+// bug found via a live, real-Executor end-to-end run: engine/strategy.go's
+// Produce used to set act.JudgmentVerdict/CheckedFindings only *after*
+// runSteps returned — but the golden "feature" Pipeline's own record Step
+// calls Checkpointer.Write earlier, inside that same runSteps call. Every
+// Act produced by a Pipeline declaring its own record Step (RFC-0002 §9
+// Phase 4 — the shape .foundry/pipelines/feature.json actually ships)
+// was therefore persisted with a permanently empty JudgmentVerdict and nil
+// CheckedFindings, even though the verify Step's own recorded StepRecord
+// carried the correct verdict and findings the whole time. Fixed by
+// setting act's flat fields inside runSteps' own verify case, the moment
+// the last verify Step actually produces a Judgment — correct for every
+// later Step in the same attempt, not only for a caller that inspects act
+// after the whole Pipeline finishes.
+func TestGoldenFeaturePipeline_RecordStepSeesJudgmentAlreadySet(t *testing.T) {
+	data, err := os.ReadFile("testdata/golden/feature-pipeline.json")
+	if err != nil {
+		t.Fatalf("read golden feature pipeline: %v", err)
+	}
+	pipeline, err := engine.DecodePipelineDocument(data)
+	if err != nil {
+		t.Fatalf("DecodePipelineDocument failed: %v", err)
+	}
+
+	gatherer := &fakeGatherer{files: []string{"reports/handler.go"}}
+	exec := &captureExecutor{patches: []string{
+		"diff --git a/reports/plan.md b/reports/plan.md\n+plan: add a CSV export endpoint\n",
+		"diff --git a/reports/handler.go b/reports/handler.go\n+// export as CSV\n",
+	}}
+	verifier := &seqVerifier{judgments: []*domain.Judgment{
+		{Verdict: "pass", Checked: []string{"build: pass", "tests: pass"}},
+	}}
+	authority := &fakeAuthority{authority: "sahid.ayala@vtwo.co", approved: true}
+	applier := &fakeApplier{}
+	checkpointer := &snapshotCheckpointer{}
+
+	eng := engine.NewEngine(gatherer, exec, verifier, "the-workspace", pipeline)
+	eng.SetAuthority(authority)
+	eng.SetApplier(applier)
+	eng.SetCheckpointer(checkpointer)
+
+	act, err := eng.Run(context.Background(), &domain.Intent{Text: "Add CSV export to the reports page"})
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+	if act.JudgmentVerdict != "pass" {
+		t.Fatalf("final act.JudgmentVerdict = %q, want %q", act.JudgmentVerdict, "pass")
+	}
+
+	if checkpointer.verdictAtWriteTime != "pass" {
+		t.Errorf("Checkpointer.Write saw JudgmentVerdict = %q at write time, want %q — the record Step must see the flat fields already set, not the empty zero value",
+			checkpointer.verdictAtWriteTime, "pass")
+	}
+	if len(checkpointer.checkedAtWriteTime) == 0 {
+		t.Error("Checkpointer.Write saw empty CheckedFindings at write time, want the verify Step's own findings already present")
+	}
+}

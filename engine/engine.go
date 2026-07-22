@@ -243,8 +243,13 @@ func (e *Engine) Resume(ctx context.Context, act *domain.Act) (*domain.Act, erro
 	if judgment == nil {
 		return nil, fmt.Errorf("engine: pipeline %q declares no verify step: it can never produce a Judgment", strategy.Pipeline.Name)
 	}
-	act.JudgmentVerdict = judgment.Verdict
-	act.CheckedFindings = judgment.Checked
+	// act.JudgmentVerdict/CheckedFindings are already set — by the verify
+	// case inside runSteps, the moment the last verify Step actually ran
+	// (either earlier in this resumed attempt, or in the original attempt
+	// before the crash, in which case they arrived already correct via the
+	// loaded checkpoint) — not here. See runSteps' verify case for why
+	// setting them only here used to be too late for a Pipeline whose own
+	// record Step persists act earlier in this same call.
 	if err := rc.checkpoints.Delete(ctx, act.ID); err != nil {
 		return nil, fmt.Errorf("engine: checkpoint delete: %w", err)
 	}
