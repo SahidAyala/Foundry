@@ -56,7 +56,23 @@ type tracker struct {
 // charge accounts for one Executor.Execute call estimated at estimateUSD.
 // It returns an error wrapping ErrBudgetExceeded — without consuming the
 // budget — if the call would exceed the iteration or cost ceiling.
+//
+// estimateUSD must never be negative: a real cost cannot be negative, so a
+// negative value only ever comes from a broken CostEstimator (ADR-0005)
+// implementation. Without this guard, `t.costUSD+estimateUSD >
+// t.budget.MaxCostUSD` would silently evaluate false for a negative-enough
+// estimate, decrementing t.costUSD and permanently loosening MaxCostUSD's
+// ceiling for every later call in the same Act — a silent defeat of
+// Budget's own contract ("enforced as a constraint, never merely
+// reported," domain.Budget's doc comment) that would be very hard to
+// notice after the fact. Reported as a distinct, non-ErrBudgetExceeded
+// error (a broken component, not a legitimate budget refusal), so it
+// surfaces as a real engine error instead of a misleading "budget
+// exceeded" verdict.
 func (t *tracker) charge(estimateUSD float64) error {
+	if estimateUSD < 0 {
+		return fmt.Errorf("engine: cost estimate must not be negative, got $%.2f", estimateUSD)
+	}
 	if t.iterations+1 > t.budget.MaxIterations {
 		return fmt.Errorf("%w: iteration %d over limit %d",
 			ErrBudgetExceeded, t.iterations+1, t.budget.MaxIterations)
