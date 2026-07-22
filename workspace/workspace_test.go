@@ -94,6 +94,41 @@ func TestNewWorkspace_RejectsUnsafeBranchNames(t *testing.T) {
 	}
 }
 
+// TestNewWorkspace_FailedWorktreeAddPrunesWithoutTouchingExistingBranch
+// covers the error path's cleanup: when `git worktree add` fails, cleanup
+// must attempt `git worktree prune` (the same fallback cleanup() already
+// uses for a stale registration whose directory is gone), but must never
+// delete a same-named branch that already existed before the failed call
+// — that branch was not created by this attempt and cleaning up after a
+// failure must not destroy state it doesn't own.
+func TestNewWorkspace_FailedWorktreeAddPrunesWithoutTouchingExistingBranch(t *testing.T) {
+	repo := initGitRepo(t)
+	ctx := context.Background()
+
+	const preexisting = "already-exists"
+	if _, err := gitOutput(ctx, repo, "branch", preexisting); err != nil {
+		t.Fatalf("create pre-existing branch: %v", err)
+	}
+
+	// `worktree add -b <name>` fails because the branch already exists —
+	// this is not a worktree registered by us, so it must survive.
+	if _, err := NewWorkspace(repo, preexisting); err == nil {
+		t.Fatal("NewWorkspace with an already-existing branch name returned nil error")
+	}
+
+	if _, err := gitOutput(ctx, repo, "rev-parse", "--verify", preexisting); err != nil {
+		t.Errorf("pre-existing branch %q was deleted by NewWorkspace's failed-attempt cleanup: %v", preexisting, err)
+	}
+
+	worktrees, err := gitOutput(ctx, repo, "worktree", "list", "--porcelain")
+	if err != nil {
+		t.Fatalf("worktree list: %v", err)
+	}
+	if strings.Contains(worktrees, preexisting) {
+		t.Errorf("stray worktree registration left behind: %s", worktrees)
+	}
+}
+
 // TestWorkspace_Apply_ValidPatch verifies Apply's isolation guarantee: the
 // developer's actual repo directory must be completely unaffected by Apply
 // — the patch is only visible in the isolated worktree.
