@@ -123,7 +123,7 @@ None of the following are decided by this RFC itself — it proposed concrete sh
 - **Executor contract & capability model** — §2.3. Ratified as [ADR-0005](../03-adrs/ADR-0005-executor-contract-and-capability-model.md).
 - **Routing & policy** — §2.1, §2.2 (explicit-pin only; negotiation, RFC-0002 §7 layer 2, remains out of scope). Still backlog (proposed ADR-0006).
 - **VCS/PR integration & Apply targets** — §2.5 (added to the backlog by RFC-0003 §6; this RFC is the first concrete proposal against it). Ratified as [ADR-0010](../03-adrs/ADR-0010-vcs-pr-integration-and-apply-targets.md).
-- **Knowledge & semantic store** — §2.6, named as fed-but-not-preempted. Still backlog (proposed ADR-0007); RFC-0005 has since shipped a narrow retrieval slice against it without ratifying the ADR itself.
+- **Knowledge & semantic store** — §2.6, named as fed-but-not-preempted. Ratified as [ADR-0007](../03-adrs/ADR-0007-knowledge-and-semantic-store.md); RFC-0005 shipped the narrow retrieval slice this RFC's §2.6 fed into, and ADR-0007 has since ratified the note format, `.foundry/knowledge/`'s durability classification, and the decision to decline Derived-Knowledge indexing and semantic retrieval until each has a named trigger.
 
 ---
 

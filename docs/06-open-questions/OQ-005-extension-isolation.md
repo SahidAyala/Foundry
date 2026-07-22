@@ -26,4 +26,4 @@ An earlier draft asserted a specific isolation mechanism (out-of-process/subproc
 **Decide nothing on mechanism yet.** Keep [extensibility.md](../02-architecture/extensibility.md) stating only the requirements. Make the mechanism + versioning a dedicated ADR at the extensibility milestone, decoupled from the language ADR. PROVISIONAL (requirements) / UNDECIDED (mechanism).
 
 ## Status
-**OPEN.** Also requires removing the residual mechanism claim from ADR-0001 ([../03-adrs/README.md](../03-adrs/README.md)).
+**RESOLVED** → [ADR-0008](../03-adrs/ADR-0008-extension-isolation-and-contract-versioning.md) (Accepted 2026-07-21), per this page's own recommendation: no mechanism or versioning policy is chosen; the residual mechanism claim in [ADR-0001](../03-adrs/ADR-0001-language-and-toolchain.md) (clause 4 and its downstream Consequences/"Harder"/Future-ADR-Dependencies text) is corrected in place. The mechanism choice (which of this page's four alternatives, or another) remains genuinely open, deferred to a real third-party extension request — not decided by this resolution, only formally deferred.
