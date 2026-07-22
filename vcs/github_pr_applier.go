@@ -94,7 +94,15 @@ func (a GitHubPRApplier) Apply(ctx context.Context, workspaceRoot string, act *d
 		run = runGH
 	}
 	if err := createPullRequest(ctx, run, workspaceRoot, ws.BranchName(), act, token, out); err != nil {
-		return fmt.Errorf("vcs: github-pr: %w", err)
+		// Push (above) already succeeded by this point — the branch is
+		// real and live on defaultRemote even though no PR exists for it.
+		// Naming that state explicitly here is the fix: previously this
+		// error read identically to any other gh failure, giving no hint
+		// that anything had already reached the remote, and Apply's own
+		// dangling local worktree/branch (Clean is deliberately not called
+		// below on this path) had no comment explaining why either.
+		return fmt.Errorf("vcs: github-pr: %w — branch %q was already pushed to %q with no pull request open for it; the pushed branch and the local worktree are left in place for manual recovery (retry, or open the PR yourself with `gh pr create --head %s`)",
+			err, ws.BranchName(), defaultRemote, ws.BranchName())
 	}
 
 	if err := ws.Clean(ctx); err != nil {
