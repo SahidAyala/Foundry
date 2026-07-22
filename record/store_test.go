@@ -164,9 +164,118 @@ func TestFileStore_Read_NotFound(t *testing.T) {
 		t.Fatalf("NewFileStore failed: %v", err)
 	}
 
-	if _, err := store.Read(context.Background(), "missing"); err == nil {
+	_, err = store.Read(context.Background(), "missing")
+	if err == nil {
 		t.Fatal("Read of missing act returned nil error")
 	}
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("Read error = %v, want errors.Is(err, ErrNotFound)", err)
+	}
+}
+
+// TestFileStore_List_SkipsActDirectoryWithNoActJSONYet covers the benign
+// race List's ReadDir can observe against a Write still in progress:
+// Write's MkdirAll makes an Act's directory visible before act.json is
+// published (Write, record/store.go). List must skip that one directory,
+// not fail the entire call — every other, already-written Act must still
+// come back.
+func TestFileStore_List_SkipsActDirectoryWithNoActJSONYet(t *testing.T) {
+	root := t.TempDir()
+	store, err := NewFileStore(root)
+	if err != nil {
+		t.Fatalf("NewFileStore failed: %v", err)
+	}
+	ctx := context.Background()
+
+	complete := newAct("aaaaaaaaaaaaaaaa", "a completed act", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	if err := store.Write(ctx, complete); err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+
+	// Simulate Write's own in-progress state: MkdirAll has run, act.json
+	// has not been published yet.
+	inFlightDir := filepath.Join(root, "bbbbbbbbbbbbbbbb")
+	if err := os.MkdirAll(inFlightDir, 0o755); err != nil {
+		t.Fatalf("simulate in-flight act directory: %v", err)
+	}
+
+	acts, err := store.List(ctx)
+	if err != nil {
+		t.Fatalf("List failed: %v (an in-flight Write must not fail the whole call)", err)
+	}
+	if len(acts) != 1 || acts[0].ID != complete.ID {
+		t.Errorf("List = %v, want exactly [%s]", actIDs(acts), complete.ID)
+	}
+}
+
+// TestFileStore_Write_RetriesClanlyAfterSimulatedCrash covers the concrete
+// failure a non-atomic Write produced: a crash between creating the act
+// directory and publishing act.json (simulated here by leaving a stray
+// temp file, exactly what Write's own temp-file step can leave behind)
+// must not permanently block that Act ID — a later Write for the same ID
+// must still succeed.
+func TestFileStore_Write_RetriesCleanlyAfterSimulatedCrash(t *testing.T) {
+	root := t.TempDir()
+	store, err := NewFileStore(root)
+	if err != nil {
+		t.Fatalf("NewFileStore failed: %v", err)
+	}
+	ctx := context.Background()
+
+	act := newAct("cccccccccccccccc", "will retry after a crash", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	dir := filepath.Join(root, act.ID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("simulate crash: create act directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "act.json.tmp-simulated-crash"), []byte("{incomplete"), 0o644); err != nil {
+		t.Fatalf("simulate crash: leave stray temp file: %v", err)
+	}
+
+	if err := store.Write(ctx, act); err != nil {
+		t.Fatalf("Write after a simulated crash failed: %v, want it to succeed since act.json was never actually published", err)
+	}
+	got, err := store.Read(ctx, act.ID)
+	if err != nil {
+		t.Fatalf("Read after retry failed: %v", err)
+	}
+	if got.Intent != act.Intent {
+		t.Errorf("Read after retry = %q, want %q", got.Intent, act.Intent)
+	}
+}
+
+// TestFileStore_Write_LeavesNoStrayTempFile confirms the temp file Write
+// creates for the atomic publish (record/store.go) is cleaned up on the
+// success path — a durable Record directory must not accumulate orphaned
+// `act.json.tmp-*` files on every normal Write.
+func TestFileStore_Write_LeavesNoStrayTempFile(t *testing.T) {
+	root := t.TempDir()
+	store, err := NewFileStore(root)
+	if err != nil {
+		t.Fatalf("NewFileStore failed: %v", err)
+	}
+	act := newAct("dddddddddddddddd", "no stray temp file", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	if err := store.Write(context.Background(), act); err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+
+	entries, err := os.ReadDir(filepath.Join(root, act.ID))
+	if err != nil {
+		t.Fatalf("ReadDir failed: %v", err)
+	}
+	for _, entry := range entries {
+		if strings.Contains(entry.Name(), ".tmp-") {
+			t.Errorf("stray temp file left behind: %s", entry.Name())
+		}
+	}
+}
+
+// actIDs renders acts' IDs for a readable test failure message.
+func actIDs(acts []*domain.Act) []string {
+	ids := make([]string, len(acts))
+	for i, a := range acts {
+		ids[i] = a.ID
+	}
+	return ids
 }
 
 func TestFileStore_List_CreationOrder(t *testing.T) {

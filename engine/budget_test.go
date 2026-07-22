@@ -81,3 +81,35 @@ func TestTracker_ZeroBudgetRefusesFirstCharge(t *testing.T) {
 		t.Fatalf("charge error = %v, want ErrBudgetExceeded", err)
 	}
 }
+
+// TestTracker_NegativeEstimateRefusedNotSilentlyLoosened covers a broken
+// CostEstimator (or ADR-0011's actualCostUSD) reporting a negative
+// estimate: without a guard, costUSD+estimateUSD > MaxCostUSD would
+// evaluate false, decrementing costUSD and permanently loosening the
+// ceiling for every later charge in the same Act — a silent defeat of
+// Budget's enforcement, not merely a bad number.
+func TestTracker_NegativeEstimateRefusedNotSilentlyLoosened(t *testing.T) {
+	spent := &tracker{budget: &domain.Budget{MaxIterations: 10, MaxCostUSD: 1.00}}
+
+	if err := spent.charge(0.50); err != nil {
+		t.Fatalf("first charge failed: %v", err)
+	}
+	if err := spent.charge(-100); err == nil {
+		t.Fatal("charge(-100) succeeded, want an error refusing a negative estimate")
+	} else if errors.Is(err, ErrBudgetExceeded) {
+		t.Errorf("charge(-100) error wraps ErrBudgetExceeded, want a distinct error — a negative estimate is a broken component, not a legitimate budget refusal: %v", err)
+	}
+	if spent.iterations != 1 || spent.costUSD != 0.50 {
+		t.Errorf("refused negative charge changed tracker state: iterations=%d costUSD=%v, want unchanged at 1/0.50", spent.iterations, spent.costUSD)
+	}
+
+	// The ceiling must still be enforced correctly afterward — this is the
+	// concrete failure a missing guard would produce: a negative charge
+	// silently making room for more spend than MaxCostUSD allows.
+	if err := spent.charge(0.50); err != nil {
+		t.Fatalf("charge reaching the ceiling exactly must still pass, got: %v", err)
+	}
+	if err := spent.charge(0.01); !errors.Is(err, ErrBudgetExceeded) {
+		t.Fatalf("charge over the ceiling = %v, want ErrBudgetExceeded", err)
+	}
+}
