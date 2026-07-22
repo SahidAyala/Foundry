@@ -70,12 +70,21 @@ type ProjectDocApplier struct {
 // directory if neither already exists. It returns a clear, named error if
 // a.DocsPath is empty — a Pipeline that declares this target without a
 // project having configured docs_path is a configuration error, not a
-// silent no-op.
+// silent no-op — and refuses a.DocsPath if it would resolve outside
+// workspaceRoot: DocsPath comes verbatim from .foundry/config.json's
+// docs_path with no validation before reaching here, so an absolute path
+// or a "../../.." traversal must not be allowed to write anywhere on disk
+// a project's own configuration happens to name, the same boundary
+// gatherer.NaiveGatherer.resolve already enforces for repository-relative
+// paths named in an Intent.
 func (a ProjectDocApplier) Apply(ctx context.Context, workspaceRoot string, act *domain.Act) error {
 	if a.DocsPath == "" {
 		return fmt.Errorf("workspace: project-doc: no docs_path configured in .foundry/config.json")
 	}
-	path := filepath.Join(workspaceRoot, a.DocsPath)
+	path, ok := resolveWithinRoot(workspaceRoot, a.DocsPath)
+	if !ok {
+		return fmt.Errorf("workspace: project-doc: docs_path %q escapes the project root", a.DocsPath)
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("workspace: project-doc: create %s: %w", filepath.Dir(path), err)
 	}
@@ -92,6 +101,25 @@ func (a ProjectDocApplier) Apply(ctx context.Context, workspaceRoot string, act 
 }
 
 var _ engine.Applier = ProjectDocApplier{}
+
+// resolveWithinRoot joins name to root and reports whether the result
+// stays inside it, refusing an absolute name or one that escapes root via
+// ".." — the same boundary gatherer.NaiveGatherer.resolve already enforces
+// for repository-relative paths named in an Intent (gatherer/gatherer.go),
+// applied here for a project-configured path instead of a model-supplied
+// one, since neither source should be trusted more than the other to stay
+// inside the project.
+func resolveWithinRoot(root, name string) (string, bool) {
+	if filepath.IsAbs(name) {
+		return "", false
+	}
+	full := filepath.Join(root, filepath.Clean(name))
+	rel, err := filepath.Rel(root, full)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	return full, true
+}
 
 // nonAlnum matches any run of characters slugify treats as a word
 // separator.
