@@ -162,8 +162,11 @@ func (s PipelineStrategy) Produce(ctx context.Context, act *domain.Act, intent *
 		rc.reporter.Repairing()
 	}
 
-	act.JudgmentVerdict = judgment.Verdict
-	act.CheckedFindings = judgment.Checked
+	// act.JudgmentVerdict/CheckedFindings are already set — by the verify
+	// case inside runSteps, the moment the last verify Step actually ran,
+	// not here. Setting them again would be redundant; it would also be
+	// too late for a Pipeline whose own record Step already persisted act
+	// earlier in this same runSteps call (see the verify case's comment).
 	if err := rc.checkpoints.Delete(ctx, act.ID); err != nil {
 		return fmt.Errorf("engine: checkpoint delete: %w", err)
 	}
@@ -243,6 +246,20 @@ func runSteps(ctx context.Context, pipelineName string, act *domain.Act, intent 
 			}
 			judgment = j
 			rc.reporter.Verified(attempt+1, judgment)
+			// act's flat JudgmentVerdict/CheckedFindings are set here, not
+			// only after the whole Pipeline attempt finishes (Produce/
+			// Resume used to set them post-hoc): a Pipeline declaring its
+			// own record Step (RFC-0002 §9 Phase 4) can call
+			// rc.checkpointer.Write later in this same runSteps call,
+			// persisting act — and until this fix, that write happened
+			// before Produce/Resume ever got a chance to set these flat
+			// fields, permanently recording an empty JudgmentVerdict and
+			// nil CheckedFindings despite Steps[i]'s own trace already
+			// carrying the correct verdict. Setting them synchronously
+			// here keeps them correct for every later Step in the same
+			// attempt, not just for a caller that inspects act afterward.
+			act.JudgmentVerdict = judgment.Verdict
+			act.CheckedFindings = judgment.Checked
 			recordStep(act, domain.StepKindVerify, nil, nil, judgment.Checked, judgment.Verdict, "", start, nil)
 			if err := rc.checkpoints.Save(ctx, act); err != nil {
 				return outcome, judgment, false, wrapStepError(attempt, "checkpoint", err)
