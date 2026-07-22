@@ -56,14 +56,15 @@ type Session struct {
 	In  *bufio.Reader
 	Out io.Writer
 
-	registry  *engine.PipelineRegistry
-	recorder  record.Recorder
-	gatherer  engine.Gatherer
-	verifier  engine.Verifier
-	executor  engine.Executor
-	executors *engine.ExecutorRegistry
-	appliers  *engine.ApplierRegistry
-	cfg       project.Config
+	registry    *engine.PipelineRegistry
+	recorder    record.Recorder
+	checkpoints *record.CheckpointStore
+	gatherer    engine.Gatherer
+	verifier    engine.Verifier
+	executor    engine.Executor
+	executors   *engine.ExecutorRegistry
+	appliers    *engine.ApplierRegistry
+	cfg         project.Config
 }
 
 // NewSession resolves root's full Pipeline registry (built-in plus
@@ -88,9 +89,14 @@ func NewSession(ctx context.Context, root string, in io.Reader, out io.Writer, n
 		return nil, fmt.Errorf("session: load pipelines: %w", err)
 	}
 
-	recorder, err := record.NewFileStore(filepath.Join(root, ".foundry", "acts"))
+	actsDir := filepath.Join(root, ".foundry", "acts")
+	recorder, err := record.NewFileStore(actsDir)
 	if err != nil {
 		return nil, fmt.Errorf("session: open record: %w", err)
+	}
+	checkpoints, err := record.NewCheckpointStore(actsDir)
+	if err != nil {
+		return nil, fmt.Errorf("session: open checkpoint store: %w", err)
 	}
 
 	gate, err := verify.NewGate("all-pass", verify.DefaultValidators(root)...)
@@ -113,17 +119,18 @@ func NewSession(ctx context.Context, root string, in io.Reader, out io.Writer, n
 	}
 
 	return &Session{
-		Root:      root,
-		In:        bufio.NewReader(in),
-		Out:       out,
-		registry:  registry,
-		recorder:  recorder,
-		gatherer:  gatherer.Compose(gatherer.NewNaiveGatherer(root), knowledge.NewGatherer(root)),
-		verifier:  workspace.NewStagedVerifier(gate),
-		executor:  newExecutor(root),
-		executors: executors,
-		appliers:  appliers,
-		cfg:       cfg,
+		Root:        root,
+		In:          bufio.NewReader(in),
+		Out:         out,
+		registry:    registry,
+		recorder:    recorder,
+		checkpoints: checkpoints,
+		gatherer:    gatherer.Compose(gatherer.NewNaiveGatherer(root), knowledge.NewGatherer(root)),
+		verifier:    workspace.NewStagedVerifier(gate),
+		executor:    newExecutor(root),
+		executors:   executors,
+		appliers:    appliers,
+		cfg:         cfg,
 	}, nil
 }
 
@@ -175,6 +182,16 @@ func (s *Session) ReloadPipelines(ctx context.Context) error {
 // any other internals.
 func (s *Session) Recorder() record.Recorder {
 	return s.recorder
+}
+
+// Checkpoints returns the session's CheckpointStore, so a CommandHandler
+// can wire it as an Engine's in-progress checkpoint sink
+// (engine.Engine.SetCheckpointSaver) — without this, a crash or kill
+// mid-Pipeline during an interactive session leaves no checkpoint for
+// `foundry resume` to continue from, unlike the one-shot `foundry do`
+// path (cmd/foundry/commands/do.go's wireEngine), which always wired one.
+func (s *Session) Checkpoints() *record.CheckpointStore {
+	return s.checkpoints
 }
 
 // Engine resolves pipelineName from the session's registry and returns a

@@ -3,9 +3,12 @@ package session_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
+	"foundry/domain"
+	"foundry/engine"
 	"foundry/session"
 )
 
@@ -114,5 +117,71 @@ func TestRunPipelineCommand_BacksMultipleSlashCommandsViaDifferentPipelineNames(
 	}
 	if len(acts) != 2 {
 		t.Fatalf("recorded Acts = %d, want 2", len(acts))
+	}
+}
+
+// nonApplyingPatch references content that does not match initGitRepo's
+// real README.md ("hello\n") — git apply rejects it deterministically,
+// producing a legitimate "fail" Judgment (workspace.StagedVerifier's own
+// applyIn error path), not a Go error.
+const nonApplyingPatch = `diff --git a/README.md b/README.md
+--- a/README.md
++++ b/README.md
+@@ -1 +1 @@
+-this-line-does-not-exist-in-the-real-file
++replacement
+`
+
+// failThenErrorExecutor fails to apply on its first call (attempt 1 — a
+// legitimate "fail" verdict, not a Go error) then returns a genuine Go
+// error on its second call (attempt 2, the repair round default.json's
+// "repair": {"max_attempts": 1} allows) — simulating a crash mid-repair,
+// deterministically, after attempt 1's generate and verify Steps have
+// already had their checkpoints durably saved with a valid context
+// throughout. No timing-dependent simulation needed.
+type failThenErrorExecutor struct {
+	calls int
+}
+
+func (e *failThenErrorExecutor) Execute(ctx context.Context, intent *domain.Intent, considered []string) (*domain.Outcome, error) {
+	e.calls++
+	if e.calls == 1 {
+		return &domain.Outcome{Patch: nonApplyingPatch}, nil
+	}
+	return nil, errors.New("simulated executor crash mid-repair")
+}
+
+// TestRunPipelineCommand_SavesCheckpointOnInterruption covers a real gap:
+// session.NewSession never wired engine.Engine.SetCheckpointSaver, unlike
+// cmd/foundry/commands/do.go's wireEngine (which always did) — so no
+// interactive-session Act ever left a checkpoint behind, regardless of
+// how far into a Pipeline it got. Since ADR-0009 made the interactive
+// session Foundry's primary interface, this made `foundry resume`
+// effectively dead for the common case. A genuine mid-repair Executor
+// error (not merely a failing verdict, which reaches a terminal
+// disposition and correctly deletes its checkpoint) must leave a
+// checkpoint on disk that Checkpoints().List can find.
+func TestRunPipelineCommand_SavesCheckpointOnInterruption(t *testing.T) {
+	root := initGitRepo(t)
+	out := &bytes.Buffer{}
+	exec := &failThenErrorExecutor{}
+
+	s, err := session.NewSession(context.Background(), root, strings.NewReader(""), out,
+		func(string) engine.Executor { return exec })
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+
+	err = session.RunPipelineCommand{PipelineName: "default"}.Run(context.Background(), s, "add a feature")
+	if err == nil {
+		t.Fatal("Run with a mid-repair Executor error returned nil error, want the simulated crash to propagate")
+	}
+
+	acts, err := s.Checkpoints().List(context.Background())
+	if err != nil {
+		t.Fatalf("Checkpoints().List failed: %v", err)
+	}
+	if len(acts) != 1 {
+		t.Fatalf("checkpointed Acts = %d, want 1 (the interrupted Act's checkpoint must survive on disk)", len(acts))
 	}
 }

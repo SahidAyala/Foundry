@@ -74,7 +74,7 @@ func Resume(ctx context.Context, args []string, stdin io.Reader, stdout io.Write
 		return 1
 	}
 
-	eng, store, _, err := wireEngine(repoPath, stdin, stdout, newExecutor, newNamedExecutor, checkpointed.Pipeline)
+	eng, store, _, err := wireEngine(ctx, repoPath, stdin, stdout, newExecutor, newNamedExecutor, checkpointed.Pipeline)
 	if err != nil {
 		fmt.Fprintln(stdout, err)
 		return 1

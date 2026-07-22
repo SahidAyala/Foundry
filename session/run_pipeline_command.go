@@ -50,6 +50,7 @@ func (cmd RunPipelineCommand) Run(ctx context.Context, s *Session, args string) 
 	eng.SetAuthority(cli.InteractiveAuthority{In: s.In, Out: s.Out})
 	eng.SetApplier(workspace.GitApplier{})
 	eng.SetCheckpointer(s.Recorder())
+	eng.SetCheckpointSaver(s.Checkpoints())
 
 	c := cli.NewCLI(eng, s.Recorder(), s.In, s.Out)
 	return c.Do(ctx, args, s.Root)

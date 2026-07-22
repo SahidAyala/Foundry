@@ -49,7 +49,7 @@ func Do(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, n
 	// runs. It is hardcoded today; a future --pipeline flag replaces this
 	// literal with a parsed value — no change to engine.go required.
 	const pipelineName = "default"
-	eng, store, _, err := wireEngine(repoPath, stdin, stdout, newExecutor, newNamedExecutor, pipelineName)
+	eng, store, _, err := wireEngine(ctx, repoPath, stdin, stdout, newExecutor, newNamedExecutor, pipelineName)
 	if err != nil {
 		fmt.Fprintln(stdout, err)
 		return 1
@@ -80,15 +80,19 @@ func Do(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, n
 // such directory yet sees byte-for-byte the same considered Context as
 // before this existed.
 //
-// wireEngine never calls engine.PipelineRegistry.SetPublishPolicy: pipeline
-// is resolved from engine.NewDefaultRegistry(), which loads only Foundry's
-// built-in Pipelines (default, review) — neither declares an apply Step at
-// all, so there is nothing yet for that policy to enforce here. It becomes
-// relevant only if `foundry do` ever gains project-local Pipeline support
-// (today, project-authored Pipelines with a "remote-pr" apply target run
-// only through the interactive session, session.NewSession, which does set
-// it).
-func wireEngine(repoPath string, stdin io.Reader, stdout io.Writer, newExecutor func(workspace string) engine.Executor, newNamedExecutor project.ExecutorConstructor, pipelineName string) (*engine.Engine, *record.FileStore, *record.CheckpointStore, error) {
+// pipelineName is resolved from the project's full registry
+// (project.ProjectLoader.LoadRegistry — every built-in Pipeline plus every
+// Pipeline the project has authored under .foundry/pipelines/), not only
+// Foundry's built-ins. This matters concretely for `foundry resume`: an
+// interactive session (session.NewSession) already runs project-local
+// Pipelines like "feature"/"bugfix"/"release", and since session wires
+// SetCheckpointSaver too, a checkpoint left by an interrupted interactive
+// Act names one of those Pipelines — resolving it from only
+// engine.NewDefaultRegistry() (built-ins alone, as this function used to)
+// would fail resume for exactly the Pipelines a real project actually
+// uses. `foundry do` itself only ever asks for "default" (a built-in), so
+// this is a strict superset for that caller — no behavior change there.
+func wireEngine(ctx context.Context, repoPath string, stdin io.Reader, stdout io.Writer, newExecutor func(workspace string) engine.Executor, newNamedExecutor project.ExecutorConstructor, pipelineName string) (*engine.Engine, *record.FileStore, *record.CheckpointStore, error) {
 	actsDir := filepath.Join(repoPath, ".foundry", "acts")
 
 	store, err := record.NewFileStore(actsDir)
@@ -109,7 +113,16 @@ func wireEngine(repoPath string, stdin io.Reader, stdout io.Writer, newExecutor 
 	// the Gate runs inside a staged worktree with the patch applied.
 	verifier := workspace.NewStagedVerifier(gate)
 
-	pipeline, err := engine.NewDefaultRegistry().Get(pipelineName)
+	cfg, err := project.LoadConfig(repoPath)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	pipelines, err := (project.ProjectLoader{}).LoadRegistry(ctx, repoPath, cfg)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	pipeline, err := pipelines.Get(pipelineName)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -124,10 +137,6 @@ func wireEngine(repoPath string, stdin io.Reader, stdout io.Writer, newExecutor 
 	}
 	eng.SetRouter(engine.NewRouter(registry, def))
 
-	cfg, err := project.LoadConfig(repoPath)
-	if err != nil {
-		return nil, nil, nil, err
-	}
 	appliers, err := buildApplierRegistry(cfg)
 	if err != nil {
 		return nil, nil, nil, err
