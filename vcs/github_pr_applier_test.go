@@ -172,6 +172,60 @@ func TestGitHubPRApplier_Apply_GHFailurePropagates(t *testing.T) {
 	}
 }
 
+// TestGitHubPRApplier_Apply_GHFailureAfterPushNamesTheDanglingBranch covers
+// a real gap: Push (which already ran and succeeded by the time gh pr
+// create fails) leaves a real branch live on the remote with no PR open
+// for it. The returned error must name that branch and the remote
+// explicitly — not read identically to any other gh failure — so the
+// state is discoverable without a human having to already know to go
+// look. The branch itself must actually be on the remote (proving this
+// isn't a hypothetical), and Apply must not call Clean on this path, so
+// the local worktree survives for retry/manual recovery too.
+func TestGitHubPRApplier_Apply_GHFailureAfterPushNamesTheDanglingBranch(t *testing.T) {
+	repo := initGitRepoWithRemote(t)
+	remote := gitRemoteURL(t, repo)
+	t.Setenv("FOUNDRY_TEST_TOKEN", "shh-secret")
+
+	errGHFailed := errors.New("gh: pull request already exists")
+	fakeRun := func(ctx context.Context, dir string, args []string, env []string, out io.Writer) error {
+		return errGHFailed
+	}
+
+	a := GitHubPRApplier{TokenEnv: "FOUNDRY_TEST_TOKEN", run: fakeRun}
+	act := &domain.Act{ID: "act-3", Intent: "test", Patch: replacePatch}
+	err := a.Apply(context.Background(), repo, act)
+	if err == nil {
+		t.Fatal("Apply returned nil error when gh pr create failed")
+	}
+
+	branch := "foundry/act-" + act.ID
+	if !strings.Contains(err.Error(), branch) {
+		t.Errorf("error = %q, want it to name the dangling branch %q", err, branch)
+	}
+	if !strings.Contains(err.Error(), "already pushed") {
+		t.Errorf("error = %q, want it to state the branch was already pushed", err)
+	}
+
+	branches, gitErr := gitOutputForTest(remote, "branch", "--list", branch)
+	if gitErr != nil {
+		t.Fatalf("list remote branches: %v", gitErr)
+	}
+	if !strings.Contains(branches, branch) {
+		t.Errorf("branch %q was not actually found on the remote; the error's claim would be false", branch)
+	}
+}
+
+// gitRemoteURL returns repo's configured "origin" remote path, so a test
+// can inspect the bare remote repository directly.
+func gitRemoteURL(t *testing.T, repo string) string {
+	t.Helper()
+	url, err := gitOutputForTest(repo, "remote", "get-url", "origin")
+	if err != nil {
+		t.Fatalf("get remote url: %v", err)
+	}
+	return strings.TrimSpace(url)
+}
+
 func gitOutputForTest(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
