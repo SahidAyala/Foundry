@@ -16,6 +16,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -30,6 +31,29 @@ import (
 // maxContextBytes bounds the total gathered content per Act so an Intent
 // naming huge files cannot produce an unbounded Executor prompt.
 const maxContextBytes = 100 * 1024
+
+// readBounded opens path and reads at most limit+1 bytes — enough for a
+// caller to detect that the file exceeds limit (len(content) > limit)
+// without ever reading further. Every call site below only ever needs at
+// most maxContextBytes of a file's content anyway (appendBounded truncates
+// to the remaining budget, and the identifier fallback discards a file
+// bigger than maxContextBytes outright) — os.ReadFile would load the
+// entire file regardless of its size first, which on a large binary, log,
+// or database dump a repository happens to track (named directly by an
+// Intent, or encountered by the identifier fallback's directory walk) is a
+// real, unbounded memory spike despite maxContextBytes advertising a small
+// cap. This bounds the read itself to the overall budget ceiling; it is
+// not threaded through each call site's own shrinking `remaining` value,
+// which would need larger, riskier plumbing for a proportionally smaller
+// gain.
+func readBounded(path string, limit int) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return io.ReadAll(io.LimitReader(f, int64(limit)+1))
+}
 
 // tokenPattern matches candidate path tokens in an Intent: runs of
 // path-like characters. Filtering to tokens that look like file names
@@ -120,7 +144,7 @@ func (g *NaiveGatherer) Gather(ctx context.Context, intent *domain.Intent) ([]st
 			continue
 		}
 
-		content, err := os.ReadFile(full)
+		content, err := readBounded(full, maxContextBytes)
 		if err != nil {
 			gathered = append(gathered, name+": not found")
 			continue
@@ -136,7 +160,7 @@ func (g *NaiveGatherer) Gather(ctx context.Context, intent *domain.Intent) ([]st
 			if err := ctx.Err(); err != nil {
 				return nil, fmt.Errorf("gatherer: %w", err)
 			}
-			content, err := os.ReadFile(filepath.Join(g.repoPath, name))
+			content, err := readBounded(filepath.Join(g.repoPath, name), maxContextBytes)
 			if err != nil {
 				continue
 			}
@@ -151,7 +175,7 @@ func (g *NaiveGatherer) Gather(ctx context.Context, intent *domain.Intent) ([]st
 			return nil, fmt.Errorf("gatherer: %w", err)
 		}
 
-		content, err := os.ReadFile(filepath.Join(g.repoPath, name))
+		content, err := readBounded(filepath.Join(g.repoPath, name), maxContextBytes)
 		if err != nil {
 			continue
 		}
@@ -316,7 +340,7 @@ func (g *NaiveGatherer) findByIdentifier(ids []string) []string {
 		}
 		scanned++
 
-		content, err := os.ReadFile(path)
+		content, err := readBounded(path, maxContextBytes)
 		if err != nil || len(content) > maxContextBytes {
 			return nil
 		}

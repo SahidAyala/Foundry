@@ -133,6 +133,52 @@ func TestGather_BoundsTotalOutput(t *testing.T) {
 	}
 }
 
+// TestReadBounded_NeverReadsPastLimitPlusOne covers the concrete gap a bare
+// os.ReadFile call had: it loads a file's entire content regardless of
+// size, before any budget check ever runs. A file much larger than the
+// caller's limit (here, 50x) must still only ever produce limit+1 bytes —
+// readBounded's contract — not a copy of the whole file in memory.
+func TestReadBounded_NeverReadsPastLimitPlusOne(t *testing.T) {
+	const limit = 1024
+	path := filepath.Join(t.TempDir(), "huge.bin")
+	if err := os.WriteFile(path, []byte(strings.Repeat("x", limit*50)), 0o644); err != nil {
+		t.Fatalf("write huge file: %v", err)
+	}
+
+	got, err := readBounded(path, limit)
+	if err != nil {
+		t.Fatalf("readBounded failed: %v", err)
+	}
+	if len(got) != limit+1 {
+		t.Errorf("readBounded returned %d bytes, want exactly %d (limit+1)", len(got), limit+1)
+	}
+}
+
+// TestReadBounded_ReturnsFullContentWhenUnderLimit confirms the common
+// case — a file smaller than limit — is returned unchanged, byte for
+// byte, not truncated to limit+1.
+func TestReadBounded_ReturnsFullContentWhenUnderLimit(t *testing.T) {
+	const content = "small file, well under any limit"
+	path := filepath.Join(t.TempDir(), "small.txt")
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write small file: %v", err)
+	}
+
+	got, err := readBounded(path, maxContextBytes)
+	if err != nil {
+		t.Fatalf("readBounded failed: %v", err)
+	}
+	if string(got) != content {
+		t.Errorf("readBounded = %q, want %q", got, content)
+	}
+}
+
+func TestReadBounded_MissingFileReturnsError(t *testing.T) {
+	if _, err := readBounded(filepath.Join(t.TempDir(), "missing"), maxContextBytes); err == nil {
+		t.Fatal("readBounded of a missing file returned nil error")
+	}
+}
+
 func TestGather_IncludesReadme(t *testing.T) {
 	repo := newRepo(t, map[string]string{
 		"main.go":   "package main\n",
