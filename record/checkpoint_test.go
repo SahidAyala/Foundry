@@ -2,6 +2,9 @@ package record
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -84,6 +87,64 @@ func TestCheckpointStore_DeleteMissingCheckpointIsNotAnError(t *testing.T) {
 	}
 	if err := store.Delete(context.Background(), "nonexistent"); err != nil {
 		t.Errorf("Delete of a missing checkpoint returned an error: %v", err)
+	}
+}
+
+// TestCheckpointStore_Save_RetriesCleanlyAfterSimulatedCrash covers the
+// concrete failure a non-atomic Save produced: a crash between opening
+// and writing checkpoint.json (simulated here by leaving a stray temp
+// file, exactly what Save's own temp-file step can leave behind) must
+// not corrupt the checkpoint a later Save/Load depends on.
+func TestCheckpointStore_Save_RetriesCleanlyAfterSimulatedCrash(t *testing.T) {
+	root := t.TempDir()
+	store, err := NewCheckpointStore(root)
+	if err != nil {
+		t.Fatalf("NewCheckpointStore failed: %v", err)
+	}
+	ctx := context.Background()
+
+	act := newAct("act-1", "will retry after a crash", time.Now())
+	dir := filepath.Join(root, act.ID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("simulate crash: create act directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "checkpoint.json.tmp-simulated-crash"), []byte("{incomplete"), 0o644); err != nil {
+		t.Fatalf("simulate crash: leave stray temp file: %v", err)
+	}
+
+	if err := store.Save(ctx, act); err != nil {
+		t.Fatalf("Save after a simulated crash failed: %v", err)
+	}
+	got, err := store.Load(ctx, act.ID)
+	if err != nil {
+		t.Fatalf("Load after retry failed: %v", err)
+	}
+	if got.Intent != act.Intent {
+		t.Errorf("Load after retry = %q, want %q", got.Intent, act.Intent)
+	}
+}
+
+// TestCheckpointStore_Save_LeavesNoStrayTempFile confirms the temp file
+// Save creates for the atomic publish is cleaned up on the success path.
+func TestCheckpointStore_Save_LeavesNoStrayTempFile(t *testing.T) {
+	root := t.TempDir()
+	store, err := NewCheckpointStore(root)
+	if err != nil {
+		t.Fatalf("NewCheckpointStore failed: %v", err)
+	}
+	act := newAct("act-1", "no stray temp file", time.Now())
+	if err := store.Save(context.Background(), act); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	entries, err := os.ReadDir(filepath.Join(root, act.ID))
+	if err != nil {
+		t.Fatalf("ReadDir failed: %v", err)
+	}
+	for _, entry := range entries {
+		if strings.Contains(entry.Name(), ".tmp-") {
+			t.Errorf("stray temp file left behind: %s", entry.Name())
+		}
 	}
 }
 

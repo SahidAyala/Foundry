@@ -40,6 +40,14 @@ func (s *CheckpointStore) checkpointPath(actID string) string {
 // Save persists act's current trace, overwriting any previous checkpoint
 // for the same Act ID — repeated calls as a Pipeline's Steps complete are
 // expected, not an error.
+//
+// checkpoint.json is published atomically: the encoded Act is written in
+// full to a temp file in the same directory, synced, then published via
+// os.Rename — an atomic same-filesystem replace on POSIX, appropriate
+// here (unlike FileStore.Write's os.Link) precisely because a checkpoint
+// is meant to be overwritable. Without this, a crash between opening and
+// writing left a truncated checkpoint.json — corrupting the very
+// mechanism `foundry resume` depends on to recover from a crash.
 func (s *CheckpointStore) Save(ctx context.Context, act *domain.Act) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -58,8 +66,27 @@ func (s *CheckpointStore) Save(ctx context.Context, act *domain.Act) error {
 		return fmt.Errorf("record: encode checkpoint %s: %w", act.ID, err)
 	}
 
-	if err := os.WriteFile(s.checkpointPath(act.ID), data, 0o644); err != nil {
-		return fmt.Errorf("record: write checkpoint file: %w", err)
+	tmp, err := os.CreateTemp(dir, "checkpoint.json.tmp-*")
+	if err != nil {
+		return fmt.Errorf("record: create checkpoint temp file: %w", err)
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath) // best-effort; a no-op once Rename has already moved it to checkpointPath
+
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return fmt.Errorf("record: write checkpoint temp file: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return fmt.Errorf("record: sync checkpoint temp file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("record: close checkpoint temp file: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, s.checkpointPath(act.ID)); err != nil {
+		return fmt.Errorf("record: publish checkpoint file: %w", err)
 	}
 	return nil
 }
