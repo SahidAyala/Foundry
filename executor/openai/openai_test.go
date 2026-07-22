@@ -132,6 +132,15 @@ func TestExecute_Success(t *testing.T) {
 	if outcome.Patch != sampleDiff {
 		t.Errorf("Patch = %q, want %q", outcome.Patch, sampleDiff)
 	}
+	// successFixture's usage is PromptTokens: 42, CompletionTokens: 17 —
+	// 59 tokens at gpt-5.1's $5.00/million rate (costPerMillionTokensUSD).
+	wantActualCost := 59.0 / 1_000_000 * 5.00
+	if outcome.ActualCostUSD == nil {
+		t.Fatal("ActualCostUSD = nil, want a real value derived from the fixture's usage")
+	}
+	if *outcome.ActualCostUSD != wantActualCost {
+		t.Errorf("ActualCostUSD = %v, want %v", *outcome.ActualCostUSD, wantActualCost)
+	}
 
 	if d.gotReq.Header.Get("Authorization") != "Bearer test-key" {
 		t.Errorf("Authorization header = %q, want %q", d.gotReq.Header.Get("Authorization"), "Bearer test-key")
@@ -280,5 +289,54 @@ func TestEstimateCostUSD_IncludesConsideredContext(t *testing.T) {
 	}
 	if withContext <= withoutContext {
 		t.Errorf("EstimateCostUSD with considered context = %v, want it greater than without (%v)", withContext, withoutContext)
+	}
+}
+
+func TestActualCostUSD_UnknownModelFallsBackToDefaultRate(t *testing.T) {
+	e := newTestExecutor(&fakeDoer{})
+	e.model = "some-future-model"
+
+	got := e.actualCostUSD(chatCompletionUsage{PromptTokens: 500_000, CompletionTokens: 500_000})
+	if got == nil {
+		t.Fatal("actualCostUSD = nil, want a real value")
+	}
+	want := 1_000_000.0 / 1_000_000 * defaultCostPerMillionTokensUSD
+	if *got != want {
+		t.Errorf("actualCostUSD = %v, want %v", *got, want)
+	}
+}
+
+func TestActualCostUSD_NoUsageIsNil(t *testing.T) {
+	e := newTestExecutor(&fakeDoer{})
+
+	if got := e.actualCostUSD(chatCompletionUsage{}); got != nil {
+		t.Errorf("actualCostUSD(zero usage) = %v, want nil — no Executor should ever fabricate a $0.00 cost it doesn't actually know", *got)
+	}
+}
+
+func TestExecute_NoUsageInResponseLeavesActualCostNil(t *testing.T) {
+	// A response with a choices array but no usage object at all (as if a
+	// vendor's API omitted it) — Outcome.ActualCostUSD must stay nil, never
+	// silently read as a real $0.00.
+	body := successFixture(t, "```diff\n"+sampleDiff+"```\n")
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(body), &decoded); err != nil {
+		t.Fatalf("unmarshal fixture: %v", err)
+	}
+	delete(decoded, "usage")
+	noUsageBody, err := json.Marshal(decoded)
+	if err != nil {
+		t.Fatalf("marshal fixture: %v", err)
+	}
+
+	d := &fakeDoer{resp: jsonResponse(http.StatusOK, string(noUsageBody))}
+	e := newTestExecutor(d)
+
+	outcome, err := e.Execute(context.Background(), &domain.Intent{Text: "add a comment"}, nil)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if outcome.ActualCostUSD != nil {
+		t.Errorf("ActualCostUSD = %v, want nil when the response carries no usage", *outcome.ActualCostUSD)
 	}
 }

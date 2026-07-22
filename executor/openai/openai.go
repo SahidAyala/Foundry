@@ -120,6 +120,17 @@ type chatCompletionResponse struct {
 	Choices []struct {
 		Message chatMessage `json:"message"`
 	} `json:"choices"`
+	// Usage is OpenAI's own real, post-execution token accounting for this
+	// call — present on every successful Chat Completions response. Execute
+	// uses it to populate domain.Outcome.ActualCostUSD (ADR-0011); it was
+	// previously received and silently discarded.
+	Usage chatCompletionUsage `json:"usage"`
+}
+
+// chatCompletionUsage is OpenAI's documented per-call token accounting.
+type chatCompletionUsage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
 }
 
 type chatCompletionErrorResponse struct {
@@ -138,16 +149,35 @@ func (e *Executor) Execute(ctx context.Context, intent *domain.Intent, considere
 	ctx, cancel := context.WithTimeout(ctx, e.timeout)
 	defer cancel()
 
-	content, err := e.call(ctx, intent, considered)
+	decoded, err := e.call(ctx, intent, considered)
 	if err != nil {
 		return nil, err
 	}
 
-	patch, err := executor.ParsePatch(content)
+	patch, err := executor.ParsePatch(decoded.Choices[0].Message.Content)
 	if err != nil {
 		return nil, err
 	}
-	return &domain.Outcome{Patch: patch}, nil
+	return &domain.Outcome{Patch: patch, ActualCostUSD: e.actualCostUSD(decoded.Usage)}, nil
+}
+
+// actualCostUSD computes the real, post-execution cost of a call from
+// OpenAI's own reported token usage (ADR-0011), using the same per-model
+// price table EstimateCostUSD's pre-execution heuristic already reads —
+// nil if usage carries no tokens at all (a malformed or test response
+// with no real signal), so a caller never mistakes "we don't know" for
+// "this call cost $0.00."
+func (e *Executor) actualCostUSD(usage chatCompletionUsage) *float64 {
+	tokens := usage.PromptTokens + usage.CompletionTokens
+	if tokens == 0 {
+		return nil
+	}
+	rate, ok := costPerMillionTokensUSD[e.model]
+	if !ok {
+		rate = defaultCostPerMillionTokensUSD
+	}
+	cost := float64(tokens) / 1_000_000 * rate
+	return &cost
 }
 
 // EstimateCostUSD returns a rough, pre-execution cost estimate for calling
@@ -171,8 +201,9 @@ func (e *Executor) EstimateCostUSD(ctx context.Context, intent *domain.Intent, c
 }
 
 // call sends intent and considered to the Chat Completions API and returns
-// the first choice's message content.
-func (e *Executor) call(ctx context.Context, intent *domain.Intent, considered []string) (string, error) {
+// the decoded response — its first choice's message content, and its
+// Usage (ADR-0011's real, post-execution cost signal).
+func (e *Executor) call(ctx context.Context, intent *domain.Intent, considered []string) (chatCompletionResponse, error) {
 	body, err := json.Marshal(chatCompletionRequest{
 		Model: e.model,
 		Messages: []chatMessage{
@@ -181,12 +212,12 @@ func (e *Executor) call(ctx context.Context, intent *domain.Intent, considered [
 		},
 	})
 	if err != nil {
-		return "", fmt.Errorf("openai: encode request: %w", err)
+		return chatCompletionResponse{}, fmt.Errorf("openai: encode request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, e.endpoint, bytes.NewReader(body))
 	if err != nil {
-		return "", fmt.Errorf("openai: build request: %w", err)
+		return chatCompletionResponse{}, fmt.Errorf("openai: build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+e.apiKey)
@@ -194,29 +225,29 @@ func (e *Executor) call(ctx context.Context, intent *domain.Intent, considered [
 	resp, err := e.doer.Do(req)
 	if err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return "", fmt.Errorf("openai: timed out after %s", e.timeout)
+			return chatCompletionResponse{}, fmt.Errorf("openai: timed out after %s", e.timeout)
 		}
-		return "", fmt.Errorf("openai: request failed: %w", err)
+		return chatCompletionResponse{}, fmt.Errorf("openai: request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("openai: read response: %w", err)
+		return chatCompletionResponse{}, fmt.Errorf("openai: read response: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", statusError(resp.StatusCode, respBody)
+		return chatCompletionResponse{}, statusError(resp.StatusCode, respBody)
 	}
 
 	var decoded chatCompletionResponse
 	if err := json.Unmarshal(respBody, &decoded); err != nil {
-		return "", fmt.Errorf("openai: decode response: %w", err)
+		return chatCompletionResponse{}, fmt.Errorf("openai: decode response: %w", err)
 	}
 	if len(decoded.Choices) == 0 {
-		return "", errors.New("openai: response contained no choices")
+		return chatCompletionResponse{}, errors.New("openai: response contained no choices")
 	}
-	return decoded.Choices[0].Message.Content, nil
+	return decoded, nil
 }
 
 // statusError renders a diagnostic error for a non-2xx response, preferring

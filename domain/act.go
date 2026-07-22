@@ -15,17 +15,45 @@ type Act struct {
 	// Pipeline is the name of the Pipeline that produced this Act — set
 	// once, at Engine.RunBudgeted. Resume (engine/engine.go) needs it to
 	// look up the same declared Steps an interrupted attempt was running.
-	Pipeline        string       `json:"pipeline,omitempty"`
-	CreatedAt       time.Time    `json:"created_at"`
-	ConsideredFiles []string     `json:"considered_files"`
-	CheckedFindings []string     `json:"checked_findings"`
-	Patch           string       `json:"patch"`
-	JudgmentVerdict string       `json:"judgment_verdict"`
-	ApprovedBy      string       `json:"approved_by"`
-	ApprovedAt      *time.Time   `json:"approved_at"`
-	Iterations      int          `json:"iterations"`
-	CostEstimateUSD float64      `json:"cost_estimate_usd"`
-	Steps           []StepRecord `json:"steps,omitempty"`
+	Pipeline        string     `json:"pipeline,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	ConsideredFiles []string   `json:"considered_files"`
+	CheckedFindings []string   `json:"checked_findings"`
+	Patch           string     `json:"patch"`
+	JudgmentVerdict string     `json:"judgment_verdict"`
+	ApprovedBy      string     `json:"approved_by"`
+	ApprovedAt      *time.Time `json:"approved_at"`
+	Iterations      int        `json:"iterations"`
+	CostEstimateUSD float64    `json:"cost_estimate_usd"`
+	// ActualCostUSD is the sum of every generate Step's own ActualCostUSD
+	// that was reported (ADR-0011, docs/03-adrs/ADR-0011-cost-as-a-first-class-constraint.md)
+	// — nil until at least one Executor reports one, distinguishing "never
+	// reported" from "reported as zero." Reported Evidence only: it never
+	// gates Budget, which is enforced solely from CostEstimateUSD's
+	// pre-execution estimates. May be a partial total if only some of the
+	// Act's generate Steps' Executors could report a real cost — see
+	// ActualCostCoverage.
+	ActualCostUSD *float64     `json:"actual_cost_usd,omitempty"`
+	Steps         []StepRecord `json:"steps,omitempty"`
+}
+
+// ActualCostCoverage reports how many of Act's generate Steps recorded an
+// actual, post-execution cost (StepRecord.ActualCostUSD non-nil) against
+// how many generate Steps ran in total, so a caller can render
+// ActualCostUSD's total honestly — "actual cost for N of M generate
+// Steps" — rather than silently implying a partial sum is complete
+// (ADR-0011 Decision 3).
+func (a *Act) ActualCostCoverage() (reported, total int) {
+	for _, step := range a.Steps {
+		if step.Kind != StepKindGenerate {
+			continue
+		}
+		total++
+		if step.ActualCostUSD != nil {
+			reported++
+		}
+	}
+	return reported, total
 }
 
 // Step kinds a StepRecord may carry. RFC-0002 §4.2 closes this vocabulary at
@@ -63,6 +91,11 @@ type StepRecord struct {
 	Authority       string    `json:"authority,omitempty"`
 	StartedAt       time.Time `json:"started_at"`
 	FinishedAt      time.Time `json:"finished_at"`
+	// ActualCostUSD is a generate Step's own real, post-execution cost, if
+	// its Executor could report one (ADR-0011) — nil for every other Step
+	// kind, and nil for a generate Step whose Executor has no billing
+	// signal to report (e.g. executor/claude.ClaudeExecutor).
+	ActualCostUSD *float64 `json:"actual_cost_usd,omitempty"`
 }
 
 // Intent describes what was requested.
@@ -73,6 +106,13 @@ type Intent struct {
 // Outcome is what the executor produced.
 type Outcome struct {
 	Patch string
+	// ActualCostUSD is the real, post-execution cost of the Execute call
+	// that produced this Outcome, if the Executor can report one — nil
+	// when it cannot (ADR-0011, docs/03-adrs/ADR-0011-cost-as-a-first-class-constraint.md).
+	// Never used to gate Budget (see Budget's own doc comment below):
+	// CostEstimator's pre-execution estimate remains the sole enforcement
+	// signal; this is reported Evidence only.
+	ActualCostUSD *float64
 }
 
 // Budget is an enforceable ceiling on an Act — enforced as a constraint,
