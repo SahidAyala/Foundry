@@ -69,7 +69,22 @@ func NewWorkspace(repoPath string, branchName string) (*Workspace, error) {
 	// repoPath must not contend for the same name.
 	worktreeDir := filepath.Join(tmpDir, worktreeDirName(branchName))
 	if _, err := gitOutput(ctx, repoPath, "worktree", "add", "-b", branchName, worktreeDir, "HEAD"); err != nil {
+		// `worktree add` can fail after partially registering
+		// .git/worktrees/<name> (e.g. a disk-full error partway through
+		// populating the worktree) — removing tmpDir alone leaves that
+		// registration behind, exactly the scenario cleanup()'s own
+		// worktree-prune fallback already documents (a killed process can
+		// leave .git/worktrees/<name> registered after its directory is
+		// gone). `prune` only ever removes a registration whose directory
+		// no longer exists — it is always safe to attempt, best-effort,
+		// even when nothing was actually left behind (e.g. `worktree add`
+		// failed for an unrelated reason, such as branchName already
+		// existing). Deliberately not also deleting branchName here: unlike
+		// the worktree registration, a pre-existing branch of that name was
+		// not created by this failed call and must not be destroyed by its
+		// error path.
 		os.RemoveAll(tmpDir)
+		gitOutput(ctx, repoPath, "worktree", "prune")
 		return nil, fmt.Errorf("workspace: create worktree for branch %q: %w", branchName, err)
 	}
 
