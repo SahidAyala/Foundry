@@ -149,3 +149,53 @@ func TestREPL_PlainTextIsReportedNotSilentlyDropped(t *testing.T) {
 		t.Errorf("output = %q, want it to report plain text is not yet supported", out.String())
 	}
 }
+
+// panickyCommand is a CommandHandler whose Run always panics — used to
+// prove the REPL survives a panic anywhere in a command's dispatch chain,
+// not only a returned error.
+type panickyCommand struct{}
+
+func (panickyCommand) Run(ctx context.Context, s *session.Session, args string) error {
+	panic("simulated programming bug")
+}
+
+func (panickyCommand) Describe() string { return "panics unconditionally, for testing" }
+
+// TestREPL_PanicInCommandDoesNotStopSession covers a real gap: Run's own
+// doc comment promises "one failed slash command must never end the
+// session," but that guarantee held only for a returned error — a panic
+// anywhere in the dispatch chain (RunPipelineCommand -> cli.CLI.Do ->
+// Engine -> ...) previously took the whole interactive process down.
+func TestREPL_PanicInCommandDoesNotStopSession(t *testing.T) {
+	root := initGitRepo(t)
+	out := &bytes.Buffer{}
+	in := strings.NewReader("/boom\n/help\n/exit\n")
+
+	s, err := session.NewSession(context.Background(), root, in, out, newScriptedExecutorFactory(scriptedPatch))
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+
+	registry := session.NewCommandRegistry()
+	if err := registry.Register("boom", panickyCommand{}); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+	if err := registry.Register("help", session.HelpCommand{Registry: registry}); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+
+	repl := session.NewREPL(s, registry)
+	if err := repl.Run(context.Background()); err != nil {
+		t.Fatalf("Run failed: %v (a panic in /boom must be recovered, not propagated out of Run)", err)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "boom") || !strings.Contains(got, "panic") {
+		t.Errorf("output = %q, want it to report /boom's panic", got)
+	}
+	// The session must still be usable after the panic — /help (dispatched
+	// on the next line) must have actually run.
+	if !strings.Contains(got, "panics unconditionally") {
+		t.Errorf("output = %q, want /help (run after the panic) to have listed /boom's description", got)
+	}
+}
