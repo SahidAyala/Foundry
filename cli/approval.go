@@ -19,6 +19,12 @@ import (
 // returns approved=false. This is the trust boundary: nothing is applied or
 // recorded unless an Authority accepts.
 //
+// A patch longer than pagerThresholdLines is piped through $PAGER (see
+// maybePage) when out is an interactive terminal, so a large diff doesn't
+// scroll past what a human can review before the y/n prompt appears —
+// exactly the review surface this trust boundary depends on actually being
+// readable.
+//
 // If in is already a *bufio.Reader, PromptForApproval reads directly from
 // it instead of wrapping it in a new bufio.Reader. This matters the
 // moment a caller issues more than one approval prompt over the same
@@ -33,7 +39,9 @@ import (
 // exactly once per process) is unaffected either way.
 func PromptForApproval(in io.Reader, out io.Writer, act *domain.Act) (authority string, approved bool, err error) {
 	color := colorEnabled(out)
-	fmt.Fprintf(out, "\nProposed patch:\n%s\n", renderDiff(act.Patch, color))
+	if err := maybePage(out, color, "\nProposed patch:\n"+renderDiff(act.Patch, color)+"\n"); err != nil {
+		return "", false, fmt.Errorf("cli: write patch: %w", err)
+	}
 	fmt.Fprintf(out, "Verdict: %s\n", renderVerdict(act.JudgmentVerdict, color))
 	fmt.Fprint(out, "Approve and apply? (y/n): ")
 

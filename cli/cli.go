@@ -208,14 +208,17 @@ func (c *CLI) Log(ctx context.Context, limit int) error {
 	return nil
 }
 
-// Show writes the full recorded Act identified by actID, pretty-printed.
+// Show writes the full recorded Act identified by actID, pretty-printed —
+// piped through $PAGER (maybePage) when it is long and c.out is an
+// interactive terminal, so a large patch or findings dump doesn't scroll
+// past what a human can read.
 func (c *CLI) Show(ctx context.Context, actID string) error {
 	act, err := c.recorder.Read(ctx, actID)
 	if err != nil {
 		return fmt.Errorf("cli: show: %w", err)
 	}
-	fmt.Fprint(c.out, formatAct(act))
-	return nil
+	color := colorEnabled(c.out)
+	return maybePage(c.out, color, formatAct(act, color))
 }
 
 // Replay re-runs verifier against the recorded Act identified by actID —
@@ -237,20 +240,48 @@ func (c *CLI) Replay(ctx context.Context, actID string, verifier engine.Verifier
 }
 
 // formatAct renders a recorded Act for human review: identity, judgment,
-// approval, budget usage, the considered and checked Evidence, and the
-// patch as a unified diff.
-func formatAct(act *domain.Act) string {
+// approval, budget usage, the per-Step trace (RFC-0002 §4.5's StepRecord —
+// each declared Step's own verdict and duration, not only the flat
+// final-round view the fields below it carry), the considered and checked
+// Evidence, and the patch as a unified diff — tinted the same way the live
+// approval prompt (PromptForApproval) already is when color is true, so
+// `foundry show` stops being the one Act-review surface without it. A
+// multi-verify Pipeline (e.g. the built-in "review" Pipeline's independent
+// verify/verify-again Steps) already narrates each Step's verdict live via
+// ProgressReporter; the Steps section is what makes that same trace visible
+// again after the fact, from the Record alone. An "Actual cost" line
+// appears only when at least one generate Step's Executor reported a real,
+// post-execution cost (ADR-0011) — omitted entirely for an Act where none
+// did, rather than always showing a permanently-empty line.
+func formatAct(act *domain.Act, color bool) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Act:        %s\n", act.ID)
 	fmt.Fprintf(&b, "Created:    %s\n", act.CreatedAt.Format(time.RFC3339))
 	fmt.Fprintf(&b, "Intent:     %s\n", act.Intent)
-	fmt.Fprintf(&b, "Verdict:    %s\n", act.JudgmentVerdict)
+	fmt.Fprintf(&b, "Verdict:    %s\n", renderVerdict(act.JudgmentVerdict, color))
 	if act.ApprovedBy != "" && act.ApprovedAt != nil {
 		fmt.Fprintf(&b, "Approved:   by %s at %s\n", act.ApprovedBy, act.ApprovedAt.Format(time.RFC3339))
 	} else {
 		b.WriteString("Approved:   no\n")
 	}
 	fmt.Fprintf(&b, "Iterations: %d (estimated cost $%.2f)\n", act.Iterations, act.CostEstimateUSD)
+	if act.ActualCostUSD != nil {
+		reported, total := act.ActualCostCoverage()
+		fmt.Fprintf(&b, "Actual cost: $%.4f (reported for %d of %d generate Steps — ADR-0011)\n", *act.ActualCostUSD, reported, total)
+	}
+
+	b.WriteString("\nSteps:\n")
+	if len(act.Steps) == 0 {
+		b.WriteString("  (none)\n")
+	} else {
+		for _, step := range act.Steps {
+			fmt.Fprintf(&b, "  %-14s (%s)", step.StepID, step.Kind)
+			if label := renderStepVerdictLabel(step.Kind, step.JudgmentVerdict, color); label != "" {
+				fmt.Fprintf(&b, "  %s", label)
+			}
+			fmt.Fprintf(&b, "  %s\n", step.FinishedAt.Sub(step.StartedAt))
+		}
+	}
 
 	b.WriteString("\nConsidered evidence:\n")
 	if len(act.ConsideredFiles) == 0 {
@@ -276,7 +307,7 @@ func formatAct(act *domain.Act) string {
 	if act.Patch == "" {
 		b.WriteString("  (none)\n")
 	} else {
-		fmt.Fprintf(&b, "%s\n", strings.TrimRight(act.Patch, "\n"))
+		fmt.Fprintf(&b, "%s\n", renderDiff(strings.TrimRight(act.Patch, "\n"), color))
 	}
 	return b.String()
 }

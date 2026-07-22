@@ -70,6 +70,35 @@ func renderDiff(patch string, color bool) string {
 	return strings.Join(lines, "\n")
 }
 
+// renderStepVerdictLabel renders one StepRecord's own verdict for the
+// per-Step trace formatAct prints: a verify Step's pass/fail through
+// renderVerdict (identical tinting to the live approval prompt), an
+// approve Step's accept/reject through a matching tick/cross (renderVerdict
+// itself would mis-tint "accept" as a failure, since it only special-cases
+// the literal string "pass"), and no label at all for a generate/apply/
+// record Step, which carries no verdict.
+func renderStepVerdictLabel(kind, verdict string, color bool) string {
+	switch kind {
+	case "verify":
+		if verdict == "" {
+			return ""
+		}
+		return renderVerdict(verdict, color)
+	case "approve":
+		symbol, tint := "✗", ansiRed
+		if verdict == "accept" {
+			symbol, tint = "✓", ansiGreen
+		}
+		s := symbol + " " + verdict
+		if !color {
+			return s
+		}
+		return tint + s + ansiReset
+	default:
+		return ""
+	}
+}
+
 // formatReplayResult renders a replay.Result for human review: one line per
 // verify Step comparing its recorded and replayed verdict, then an overall
 // reproduced/diverged summary. This is a same-version replay report

@@ -810,7 +810,7 @@ func TestCLI_Show_PrintsFullAct(t *testing.T) {
 	if err := c.Show(context.Background(), "act-1"); err != nil {
 		t.Fatalf("Show failed: %v", err)
 	}
-	for _, want := range []string{"Act:        act-1", "Intent:     intent 1", "Verdict:    pass", "Patch:"} {
+	for _, want := range []string{"Act:        act-1", "Intent:     intent 1", "Verdict:    ✓ pass", "Patch:"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("Show output missing %q:\n%s", want, out.String())
 		}
