@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"foundry/domain"
 )
 
@@ -121,5 +123,36 @@ func TestProgressReporter_NoColorOnNonTerminal(t *testing.T) {
 	NewProgressReporter(&out).Gathering()
 	if strings.Contains(out.String(), "\x1b[") {
 		t.Errorf("output contains ANSI escapes for a non-terminal writer: %q", out.String())
+	}
+}
+
+// TestProgressReporter_StylesAreNotNoOps guards against the lipgloss v4
+// restyling silently degrading to plain text: it checks each style's own
+// declared properties (Style.GetBold/GetForeground — pure data, no
+// renderer or TTY detection involved) rather than rendered output, since
+// lipgloss.Style.Render is itself color-profile-aware and correctly
+// prints plain text once its renderer detects no real terminal — exactly
+// what `go test` looks like with no tty, and exactly why forcing an
+// explicit profile on a scratch renderer still rendered plain in an
+// earlier version of this test (lipgloss additionally checks TTY-ness,
+// not just the configured profile, before ever emitting an escape).
+// ProgressReporter's own p.color gate (TestProgressReporter_NoColorOnNonTerminal)
+// and the live pty validation this feature's own commit records already
+// cover that the real, end-to-end rendering path works against a genuine
+// terminal — this test only guards against a typo leaving one of these
+// styles accidentally trivial.
+func TestProgressReporter_StylesAreNotNoOps(t *testing.T) {
+	unset := lipgloss.NoColor{}
+	if !progressActionStyle.GetBold() || progressActionStyle.GetForeground() == unset {
+		t.Error("progressActionStyle is not bold/colored")
+	}
+	if !progressRepairStyle.GetBold() || progressRepairStyle.GetForeground() == unset {
+		t.Error("progressRepairStyle is not bold/colored")
+	}
+	if !progressErrorStyle.GetBold() || progressErrorStyle.GetForeground() == unset {
+		t.Error("progressErrorStyle is not bold/colored")
+	}
+	if progressDimStyle.GetForeground() == unset {
+		t.Error("progressDimStyle has no foreground color set")
 	}
 }
