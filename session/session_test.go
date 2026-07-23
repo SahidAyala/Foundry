@@ -98,6 +98,23 @@ func TestNewSession_ResolvesBuiltinPipelines(t *testing.T) {
 	}
 }
 
+// TestNewSession_NotInteractiveForNonFileIO confirms the gate ADR-0012's
+// rich REPL line editor depends on (Session.Interactive) computes false
+// for every non-*os.File input/output — exactly what every other test in
+// this package (and every existing test in session_test.go's own
+// suite) passes, so this documents why none of them ever exercise
+// cli.ReadInteractiveLine.
+func TestNewSession_NotInteractiveForNonFileIO(t *testing.T) {
+	root := initGitRepo(t)
+	s, err := session.NewSession(context.Background(), root, &bytes.Buffer{}, &bytes.Buffer{}, newScriptedExecutorFactory(scriptedPatch))
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	if s.Interactive {
+		t.Error("Interactive = true for a *bytes.Buffer-backed Session, want false")
+	}
+}
+
 func TestSession_Engine_UnknownPipelineNameFailsWithClearError(t *testing.T) {
 	root := initGitRepo(t)
 	s, err := session.NewSession(context.Background(), root, &bytes.Buffer{}, &bytes.Buffer{}, newScriptedExecutorFactory(scriptedPatch))

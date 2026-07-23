@@ -22,12 +22,31 @@ const (
 // device) — the only case where ANSI codes are emitted, so piped and test
 // output stays plain.
 func colorEnabled(out io.Writer) bool {
-	f, ok := out.(*os.File)
+	return isCharDevice(out)
+}
+
+// isCharDevice reports whether v is an *os.File connected to a real
+// terminal, as opposed to a redirected file, a pipe, or a test double
+// like *strings.Reader/*bytes.Buffer (neither of which is an *os.File at
+// all, so the type assertion alone already excludes every test in this
+// codebase).
+func isCharDevice(v any) bool {
+	f, ok := v.(*os.File)
 	if !ok {
 		return false
 	}
 	info, err := f.Stat()
 	return err == nil && info.Mode()&os.ModeCharDevice != 0
+}
+
+// IsInteractiveTerminal reports whether both in and out are connected to
+// a real terminal — the gate session.NewSession uses (ADR-0012) to decide
+// between ReadInteractiveLine's rich, completion-aware editor and the
+// plain line-at-a-time read every existing test exercises. Both sides
+// must be real: a redirected/piped input with a real terminal output (or
+// vice versa) is not an interactive session.
+func IsInteractiveTerminal(in io.Reader, out io.Writer) bool {
+	return isCharDevice(in) && isCharDevice(out)
 }
 
 // renderVerdict formats a machine verdict for human review: "✓ pass" for a

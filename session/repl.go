@@ -30,12 +30,13 @@ type REPL struct {
 	session  *Session
 	commands *CommandRegistry
 	renderer *cli.InteractiveRenderer
+	history  *cli.PromptHistory
 }
 
 // NewREPL wires a REPL over s and commands, rendering to s.Out via a new
 // InteractiveRenderer.
 func NewREPL(s *Session, commands *CommandRegistry) *REPL {
-	return &REPL{session: s, commands: commands, renderer: cli.NewInteractiveRenderer(s.Out)}
+	return &REPL{session: s, commands: commands, renderer: cli.NewInteractiveRenderer(s.Out), history: cli.NewPromptHistory()}
 }
 
 // Run drives the read loop until /exit, /quit, or end of input.
@@ -43,8 +44,7 @@ func (r *REPL) Run(ctx context.Context) error {
 	r.renderer.Banner(r.session.Root)
 
 	for {
-		r.renderer.Prompt()
-		line, readErr := r.session.In.ReadString('\n')
+		line, readErr := r.readLine()
 		if readErr != nil && readErr != io.EOF {
 			return fmt.Errorf("session: read input: %w", readErr)
 		}
@@ -56,6 +56,44 @@ func (r *REPL) Run(ctx context.Context) error {
 			return nil
 		}
 	}
+}
+
+// readLine acquires the next line of input. A real interactive terminal
+// (session.Interactive, ADR-0012) gets bubbletea's rich line editor —
+// Tab-completion over registered slash-command names and Up/Down history
+// recall within this process — which renders its own prompt; everything
+// else (every existing test's strings.Reader/bytes.Buffer, piped input,
+// `foundry < script`) falls back to the exact plain
+// bufio.Reader.ReadString read this loop always used, so none of that
+// needs to change. cli.ErrPromptEOF (Ctrl-C/Ctrl-D at the rich prompt) is
+// normalized to io.EOF, the meaning Run already handles from ReadString.
+func (r *REPL) readLine() (string, error) {
+	if r.session.Interactive {
+		line, err := cli.ReadInteractiveLine("foundry> ", r.candidateNames(), r.history)
+		if err != nil {
+			if errors.Is(err, cli.ErrPromptEOF) {
+				return "", io.EOF
+			}
+			return "", err
+		}
+		return line, nil
+	}
+	r.renderer.Prompt()
+	return r.session.In.ReadString('\n')
+}
+
+// candidateNames lists every slash command ReadInteractiveLine should
+// offer as a completion: r.commands.List() (the same vocabulary /help
+// renders), plus /exit and /quit — handleLine special-cases those two
+// rather than routing them through commands.Dispatch, so they are not
+// registered handlers and would otherwise be missing from completion.
+func (r *REPL) candidateNames() []string {
+	infos := r.commands.List()
+	names := make([]string, 0, len(infos)+2)
+	for _, info := range infos {
+		names = append(names, "/"+info.Name)
+	}
+	return append(names, "/exit", "/quit")
 }
 
 // handleLine processes one line already read from input. It returns

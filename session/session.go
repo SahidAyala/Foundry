@@ -7,6 +7,7 @@ import (
 	"io"
 	"path/filepath"
 
+	"foundry/cli"
 	"foundry/engine"
 	"foundry/gatherer"
 	"foundry/knowledge"
@@ -55,6 +56,15 @@ type Session struct {
 	// session's life — see the note on cli.PromptForApproval.
 	In  *bufio.Reader
 	Out io.Writer
+
+	// Interactive reports whether In and Out were both a real terminal
+	// character device at construction, before In was wrapped above —
+	// computed once here since bufio.Reader loses that information.
+	// REPL.Run uses it to choose ADR-0012's rich, completion-aware line
+	// editor over the plain line-at-a-time read every non-interactive
+	// caller (every existing test, piped input, `foundry < script`) still
+	// gets, unchanged.
+	Interactive bool
 
 	registry    *engine.PipelineRegistry
 	recorder    record.Recorder
@@ -122,6 +132,7 @@ func NewSession(ctx context.Context, root string, in io.Reader, out io.Writer, n
 		Root:        root,
 		In:          bufio.NewReader(in),
 		Out:         out,
+		Interactive: cli.IsInteractiveTerminal(in, out),
 		registry:    registry,
 		recorder:    recorder,
 		checkpoints: checkpoints,
