@@ -69,8 +69,8 @@ func pipelinesDir(root string) string {
 
 // Scaffold writes root's pipelines directory with one starter Pipeline
 // document per non-built-in slash command this build resolves by
-// default ("feature", "bugfix", "release" — "review" already exists as
-// a built-in and needs no starter). Each starter reproduces
+// default ("feature", "bugfix", "release", "issue" — "review" already
+// exists as a built-in and needs no starter). Each starter reproduces
 // engine.DefaultPipeline's own generate → verify, one-bounded-repair
 // shape under the slash command's name, ready for a project to edit —
 // it is a starting point, not a policy Scaffold expects to be kept as-is.
@@ -112,6 +112,7 @@ var starterDocuments = []starterDocument{
 	{filename: "feature.json", document: starterPipelineDocument("feature")},
 	{filename: "bugfix.json", document: starterPipelineDocument("bugfix")},
 	{filename: "release.json", document: starterPipelineDocument("release")},
+	{filename: "issue.json", document: starterPipelineDocument("issue")},
 }
 
 // starterPipelineDocument renders a minimal, valid PipelineDocument

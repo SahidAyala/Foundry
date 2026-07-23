@@ -36,11 +36,12 @@ Running `foundry` with no arguments opens an interactive session rooted at the c
 
 | Command | Effect |
 |---|---|
-| `/init` | Scaffolds `.foundry/pipelines/{feature,bugfix,release}.json` starter Pipeline documents. Safe to re-run — never overwrites a file that already exists. |
+| `/init` | Scaffolds `.foundry/pipelines/{feature,bugfix,release,issue}.json` starter Pipeline documents. Safe to re-run — never overwrites a file that already exists. |
 | `/feature "<intent>"` | Runs the `feature` Pipeline: `plan → approve-plan → implement → verify → approve-outcome → apply → record`. |
 | `/bug "<intent>"` | Runs the `bugfix` Pipeline: `implement → verify → approve → apply → record`. |
 | `/review "<intent>"` | Runs the built-in `review` Pipeline: two independent `verify` Steps against one Outcome. |
 | `/release "<intent>"` | Runs the `release` Pipeline: `prepare → verify → verify-checklist → approve → apply → record`, no repair. |
+| `/issue <id>` | Fetches issue `<id>` from your configured ticket provider (see below) and runs the `issue` Pipeline over its title and description, instead of typed text. |
 | `/help` | Lists every slash command this session understands, by name and one-line description. |
 | `/exit` or `/quit` | End the session. |
 
@@ -111,13 +112,15 @@ Amazon Q Developer was considered and deliberately skipped: AWS announced its en
   "docs_path": "docs/CHANGELOG.md",
   "require_approval_before_remote_publish": true,
   "remote_publish_token_env": "GH_TOKEN",
-  "request_copilot_review": true
+  "request_copilot_review": true,
+  "ticket_provider": "github"
 }
 ```
 
 - `docs_path` — enables the `project-doc` apply target, appending an Act's output to this file.
 - `require_approval_before_remote_publish` / `remote_publish_token_env` — enable the `remote-pr` apply target ([ADR-0010](../03-adrs/ADR-0010-vcs-pr-integration-and-apply-targets.md)), which pushes a branch and opens a pull request via `gh`. A Pipeline declaring `remote-pr` with no preceding `approve` Step is refused when it's loaded, not silently allowed to skip human approval.
 - `request_copilot_review` — after `remote-pr` opens a pull request, also ask GitHub Copilot to review it (`gh pr edit --add-reviewer @copilot`). Has no effect unless `remote_publish_token_env` is set too. Requires a paid Copilot plan on the repository/organization — Foundry can't detect whether that's available, so this defaults to off. A failure to request the review (no such plan, the feature not enabled) is printed as a warning but never fails the Act — the pull request itself has already been opened by that point.
+- `ticket_provider` — enables `/issue <id>`. `"github"` is the only supported value today (Jira is next); an unset `ticket_provider` makes `/issue` report a clear configuration error rather than guessing. GitHub needs no separate credential: it shells out to `gh issue view`, reusing the same authenticated `gh` session `remote_publish_token_env` already assumes is set up. `.foundry/pipelines/issue.json` (scaffolded by `/init` like every other starter) is the Pipeline `/issue` runs — edit it to target `remote-pr` on its `apply` Step if you want `/issue` to end by opening a pull request rather than applying locally.
 
 ## Authored Knowledge (optional)
 

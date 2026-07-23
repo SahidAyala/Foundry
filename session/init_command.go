@@ -34,6 +34,6 @@ func (InitCommand) Run(ctx context.Context, s *Session, args string) error {
 	if err := s.ReloadPipelines(ctx); err != nil {
 		return err
 	}
-	fmt.Fprintf(s.Out, "Initialized %s — edit its Pipeline documents to customize /feature, /bug, and /release.\n", project.PipelinesDir)
+	fmt.Fprintf(s.Out, "Initialized %s — edit its Pipeline documents to customize /feature, /bug, /release, and /issue.\n", project.PipelinesDir)
 	return nil
 }

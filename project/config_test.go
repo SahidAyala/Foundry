@@ -46,6 +46,22 @@ func TestLoadConfig_DecodesRemotePublishFields(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_DecodesTicketProvider(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".foundry"), 0o755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	writeFile(t, filepath.Join(root, ".foundry"), "config.json", `{"ticket_provider": "github"}`)
+
+	config, err := project.LoadConfig(root)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if config.TicketProvider != "github" {
+		t.Errorf("TicketProvider = %q, want %q", config.TicketProvider, "github")
+	}
+}
+
 func TestLoadConfig_DecodesValidFile(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".foundry"), 0o755); err != nil {

@@ -27,6 +27,12 @@ Not part of the M0–M7 depth sequence above — that table orders *the trust/kn
 
 Ratified via [ADR-0012](../03-adrs/ADR-0012-interactive-terminal-ux-and-first-dependency.md) (Accepted 2026-07-22) — Foundry's first-ever third-party dependency, confirmed by the maintainer personally. Implementation follows.
 
+## Parallel track: Ticket-driven Acts (`/issue`)
+
+Also orthogonal to the M0–M7 sequence: `/issue <id>` fetches an external ticket's content (an issue tracker — GitHub today, Jira planned next, per the maintainer's own stated priority) and uses it as an Act's Intent, instead of a human typing one. This is deliberately **not** a new Step kind — RFC-0002 §4.2's closed five (generate, verify, approve, apply, record) are unchanged; fetching happens before a Pipeline starts, the same way a slash command's own typed argument text already does. No new architectural decision was needed: this is a new implementation of the already-named "Context Source" extension point ([extensibility.md](../02-architecture/extensibility.md)), the same way adding another Executor vendor needs no new ADR.
+
+GitHub (`ticket/github`, reusing the same `gh` CLI session `vcs.GitHubPRApplier`'s own PR-opening already requires) is the only provider today. Jira is the next planned provider; GitLab and Asana after that, in the order the maintainer named as most common.
+
 ## Current implementation status
 
 The table above states the *plan*. For what has actually shipped per milestone, per RFC, and per architecture document — kept current as a living index rather than duplicated here — see [implementation-status.md](implementation-status.md). Getting-started instructions for what's usable today (install, dependencies, first run) live in [../04-guides/getting-started.md](../04-guides/getting-started.md).

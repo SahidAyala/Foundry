@@ -159,7 +159,11 @@ func (r *REPL) dispatchRecovered(ctx context.Context, cmd Command) (err error) {
 // per slash command a fresh project resolves out of the box — /feature,
 // /bug, /review, /release — matching the Pipeline names
 // project.ProjectLoader.Scaffold writes starters for ("feature",
-// "bugfix", "release") plus the "review" built-in. A project that
+// "bugfix", "release") plus the "review" built-in. /issue is the one
+// exception: an IssueCommand, not a RunPipelineCommand, since its Intent
+// text comes from a fetched ticket (Session.SetTicketFetcher) rather than
+// typed args — it reports a clear, named error if no ticket provider is
+// configured, rather than failing to resolve at all. A project that
 // authors its own additional Pipeline document can back a matching
 // slash command the same way; this registry is the default set, not
 // the only possible one.
@@ -175,6 +179,7 @@ func DefaultCommandRegistry() *CommandRegistry {
 	must("bug", RunPipelineCommand{PipelineName: "bugfix"})
 	must("review", RunPipelineCommand{PipelineName: "review"})
 	must("release", RunPipelineCommand{PipelineName: "release"})
+	must("issue", IssueCommand{PipelineName: "issue"})
 	// help is registered last so its own Registry pointer already sees
 	// every command above (registry is a pointer; Register mutates it
 	// in place, and help.Run only reads it later, at dispatch time).
