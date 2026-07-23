@@ -12,6 +12,7 @@ import (
 	"foundry/domain"
 	"foundry/engine"
 	"foundry/executor"
+	"foundry/project"
 	"foundry/session"
 )
 
@@ -112,6 +113,24 @@ func TestNewSession_NotInteractiveForNonFileIO(t *testing.T) {
 	}
 	if s.Interactive {
 		t.Error("Interactive = true for a *bytes.Buffer-backed Session, want false")
+	}
+}
+
+func TestSession_Initialized(t *testing.T) {
+	root := initGitRepo(t)
+	s, err := session.NewSession(context.Background(), root, &bytes.Buffer{}, &bytes.Buffer{}, newScriptedExecutorFactory(scriptedPatch))
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	if s.Initialized() {
+		t.Error("Initialized() = true before /init has ever run, want false")
+	}
+
+	if err := (project.ProjectLoader{}).Scaffold(root); err != nil {
+		t.Fatalf("Scaffold failed: %v", err)
+	}
+	if !s.Initialized() {
+		t.Error("Initialized() = false after Scaffold wrote .foundry/pipelines, want true")
 	}
 }
 

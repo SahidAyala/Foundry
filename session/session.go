@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 
 	"foundry/cli"
@@ -203,6 +204,16 @@ func (s *Session) Recorder() record.Recorder {
 // path (cmd/foundry/commands/do.go's wireEngine), which always wired one.
 func (s *Session) Checkpoints() *record.CheckpointStore {
 	return s.checkpoints
+}
+
+// Initialized reports whether /init has already scaffolded this project
+// — a project.PipelinesDir directory on disk, the same marker
+// session_test.go's own end-to-end tests already check for after running
+// /init. REPL.Run's banner (ADR-0012) uses this so a user opening a
+// fresh checkout is told plainly to run /init rather than guessing.
+func (s *Session) Initialized() bool {
+	info, err := os.Stat(filepath.Join(s.Root, project.PipelinesDir))
+	return err == nil && info.IsDir()
 }
 
 // Engine resolves pipelineName from the session's registry and returns a

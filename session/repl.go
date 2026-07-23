@@ -41,7 +41,7 @@ func NewREPL(s *Session, commands *CommandRegistry) *REPL {
 
 // Run drives the read loop until /exit, /quit, or end of input.
 func (r *REPL) Run(ctx context.Context) error {
-	r.renderer.Banner(r.session.Root)
+	r.renderer.Banner(r.session.Root, r.session.Initialized())
 
 	for {
 		line, readErr := r.readLine()
@@ -69,7 +69,7 @@ func (r *REPL) Run(ctx context.Context) error {
 // normalized to io.EOF, the meaning Run already handles from ReadString.
 func (r *REPL) readLine() (string, error) {
 	if r.session.Interactive {
-		line, err := cli.ReadInteractiveLine("foundry> ", r.candidateNames(), r.history)
+		line, err := cli.ReadInteractiveLine("foundry> ", r.candidates(), r.history)
 		if err != nil {
 			if errors.Is(err, cli.ErrPromptEOF) {
 				return "", io.EOF
@@ -82,18 +82,21 @@ func (r *REPL) readLine() (string, error) {
 	return r.session.In.ReadString('\n')
 }
 
-// candidateNames lists every slash command ReadInteractiveLine should
-// offer as a completion: r.commands.List() (the same vocabulary /help
+// candidates lists every slash command ReadInteractiveLine's "/" dropdown
+// menu should offer: r.commands.List() (the same vocabulary /help
 // renders), plus /exit and /quit — handleLine special-cases those two
 // rather than routing them through commands.Dispatch, so they are not
-// registered handlers and would otherwise be missing from completion.
-func (r *REPL) candidateNames() []string {
+// registered handlers and would otherwise be missing from the menu.
+func (r *REPL) candidates() []cli.CommandCandidate {
 	infos := r.commands.List()
-	names := make([]string, 0, len(infos)+2)
+	out := make([]cli.CommandCandidate, 0, len(infos)+2)
 	for _, info := range infos {
-		names = append(names, "/"+info.Name)
+		out = append(out, cli.CommandCandidate{Name: "/" + info.Name, Description: info.Description})
 	}
-	return append(names, "/exit", "/quit")
+	return append(out,
+		cli.CommandCandidate{Name: "/exit", Description: "End the session."},
+		cli.CommandCandidate{Name: "/quit", Description: "End the session."},
+	)
 }
 
 // handleLine processes one line already read from input. It returns

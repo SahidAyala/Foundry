@@ -11,10 +11,25 @@ import (
 
 func TestInteractiveRenderer_Banner(t *testing.T) {
 	var out bytes.Buffer
-	cli.NewInteractiveRenderer(&out).Banner("/path/to/project")
+	cli.NewInteractiveRenderer(&out).Banner("/path/to/project", false)
 
 	if !strings.Contains(out.String(), "/path/to/project") {
 		t.Errorf("output = %q, want it to name the project root", out.String())
+	}
+	if !strings.Contains(out.String(), "Not initialized") {
+		t.Errorf("output = %q, want it to say the project is not yet initialized", out.String())
+	}
+}
+
+func TestInteractiveRenderer_Banner_Initialized(t *testing.T) {
+	var out bytes.Buffer
+	cli.NewInteractiveRenderer(&out).Banner("/path/to/project", true)
+
+	if !strings.Contains(out.String(), "Initialized") {
+		t.Errorf("output = %q, want it to say the project is initialized", out.String())
+	}
+	if strings.Contains(out.String(), "Not initialized") {
+		t.Errorf("output = %q, want the not-yet-initialized message absent", out.String())
 	}
 }
 
