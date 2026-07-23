@@ -38,6 +38,14 @@ type Config struct {
 	// ExecutorConfig.APIKeyEnv's pattern. Empty means the project has not
 	// configured a "remote-pr" apply target at all.
 	RemotePublishTokenEnv string `json:"remote_publish_token_env"`
+
+	// RequestCopilotReview, when true, asks GitHub Copilot to review every
+	// pull request vcs.GitHubPRApplier opens (`gh pr edit --add-reviewer
+	// @copilot`). Requires a paid Copilot plan on the repository/
+	// organization and has no effect at all unless RemotePublishTokenEnv is
+	// also set — false (or the field's absence) means a project has not
+	// opted into this supplementary, best-effort request.
+	RequestCopilotReview bool `json:"request_copilot_review"`
 }
 
 // LoadConfig reads and decodes root's conventional configuration file

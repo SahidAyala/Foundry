@@ -215,6 +215,121 @@ func TestGitHubPRApplier_Apply_GHFailureAfterPushNamesTheDanglingBranch(t *testi
 	}
 }
 
+// recordedCall captures one invocation of ghRunner, for tests that need to
+// distinguish `gh pr create` from a later `gh pr edit --add-reviewer` call.
+type recordedCall struct {
+	args []string
+	env  []string
+}
+
+func TestGitHubPRApplier_Apply_RequestsCopilotReviewWhenEnabled(t *testing.T) {
+	repo := initGitRepoWithRemote(t)
+	t.Setenv("FOUNDRY_TEST_TOKEN", "shh-secret")
+
+	var calls []recordedCall
+	fakeRun := func(ctx context.Context, dir string, args []string, env []string, out io.Writer) error {
+		calls = append(calls, recordedCall{args: args, env: env})
+		if args[0] == "pr" && args[1] == "create" {
+			out.Write([]byte("https://github.com/example/repo/pull/1\n"))
+		}
+		return nil
+	}
+
+	a := GitHubPRApplier{TokenEnv: "FOUNDRY_TEST_TOKEN", RequestCopilotReview: true, run: fakeRun}
+	var out bytes.Buffer
+	a.Out = &out
+
+	act := &domain.Act{ID: "act-copilot", Intent: "test", Patch: replacePatch}
+	if err := a.Apply(context.Background(), repo, act); err != nil {
+		t.Fatalf("Apply failed: %v", err)
+	}
+
+	if len(calls) != 2 {
+		t.Fatalf("gh was called %d times, want 2 (pr create, then pr edit --add-reviewer)", len(calls))
+	}
+	reviewCall := calls[1]
+	wantBranch := "foundry/act-" + act.ID
+	wantArgs := []string{"pr", "edit", wantBranch, "--add-reviewer", "@copilot"}
+	if len(reviewCall.args) != len(wantArgs) {
+		t.Fatalf("second gh call args = %v, want %v", reviewCall.args, wantArgs)
+	}
+	for i := range wantArgs {
+		if reviewCall.args[i] != wantArgs[i] {
+			t.Errorf("second gh call args = %v, want %v", reviewCall.args, wantArgs)
+		}
+	}
+	if len(reviewCall.env) != 1 || reviewCall.env[0] != "GH_TOKEN=shh-secret" {
+		t.Errorf("second gh call env = %v, want exactly [GH_TOKEN=shh-secret]", reviewCall.env)
+	}
+}
+
+func TestGitHubPRApplier_Apply_DoesNotRequestReviewByDefault(t *testing.T) {
+	repo := initGitRepoWithRemote(t)
+	t.Setenv("FOUNDRY_TEST_TOKEN", "shh-secret")
+
+	var calls []recordedCall
+	fakeRun := func(ctx context.Context, dir string, args []string, env []string, out io.Writer) error {
+		calls = append(calls, recordedCall{args: args, env: env})
+		out.Write([]byte("https://github.com/example/repo/pull/1\n"))
+		return nil
+	}
+
+	// RequestCopilotReview left at its zero value (false).
+	a := GitHubPRApplier{TokenEnv: "FOUNDRY_TEST_TOKEN", run: fakeRun}
+	act := &domain.Act{ID: "act-no-review", Intent: "test", Patch: replacePatch}
+	if err := a.Apply(context.Background(), repo, act); err != nil {
+		t.Fatalf("Apply failed: %v", err)
+	}
+
+	if len(calls) != 1 {
+		t.Fatalf("gh was called %d times, want exactly 1 (pr create only) when RequestCopilotReview is false", len(calls))
+	}
+}
+
+// TestGitHubPRApplier_Apply_CopilotReviewFailureDoesNotFailApply covers the
+// deliberate best-effort design: a repository without Copilot code review
+// actually enabled (no paid plan, or the feature simply off) must not make
+// Foundry treat the whole Act as failed — the pull request itself already
+// exists by the time the review request is attempted.
+func TestGitHubPRApplier_Apply_CopilotReviewFailureDoesNotFailApply(t *testing.T) {
+	repo := initGitRepoWithRemote(t)
+	t.Setenv("FOUNDRY_TEST_TOKEN", "shh-secret")
+
+	fakeRun := func(ctx context.Context, dir string, args []string, env []string, out io.Writer) error {
+		if args[0] == "pr" && args[1] == "create" {
+			out.Write([]byte("https://github.com/example/repo/pull/1\n"))
+			return nil
+		}
+		return errors.New("Copilot code review is not available for this repository")
+	}
+
+	a := GitHubPRApplier{TokenEnv: "FOUNDRY_TEST_TOKEN", RequestCopilotReview: true, run: fakeRun}
+	var out bytes.Buffer
+	a.Out = &out
+
+	act := &domain.Act{ID: "act-review-fails", Intent: "test", Patch: replacePatch}
+	if err := a.Apply(context.Background(), repo, act); err != nil {
+		t.Fatalf("Apply failed: %v, want it to succeed despite the review-request failure", err)
+	}
+	if !strings.Contains(out.String(), "could not request a Copilot review") {
+		t.Errorf("Out = %q, want it to warn about the failed review request", out.String())
+	}
+	if !strings.Contains(out.String(), "Copilot code review is not available") {
+		t.Errorf("Out = %q, want it to include gh's own underlying error", out.String())
+	}
+
+	// The pull request's own branch must still be cleaned up locally --
+	// the review-request failure must not leave Apply behaving as if the
+	// whole thing failed.
+	list, err := gitOutputForTest(repo, "branch", "--list", "foundry/act-"+act.ID)
+	if err != nil {
+		t.Fatalf("git branch --list failed: %v", err)
+	}
+	if list != "" {
+		t.Errorf("local branch still exists after Apply, want it cleaned up despite the review-request failure")
+	}
+}
+
 // gitRemoteURL returns repo's configured "origin" remote path, so a test
 // can inspect the bare remote repository directly.
 func gitRemoteURL(t *testing.T, repo string) string {
