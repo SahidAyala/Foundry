@@ -89,6 +89,108 @@ func TestPromptModel_HistoryBrowsing(t *testing.T) {
 	}
 }
 
+func testCandidates() []CommandCandidate {
+	return []CommandCandidate{
+		{Name: "/feature", Description: "Run the \"feature\" Pipeline."},
+		{Name: "/bug", Description: "Run the \"bugfix\" Pipeline."},
+		{Name: "/help", Description: "List the slash commands."},
+	}
+}
+
+func TestPromptModel_MenuOpensOnSlashAndFiltersByPrefix(t *testing.T) {
+	m := newPromptModel("foundry> ", testCandidates(), nil)
+	if m.menuOpen {
+		t.Fatal("menu is open before any input, want closed")
+	}
+
+	m = typeString(t, m, "/")
+	if !m.menuOpen || len(m.filtered) != 3 {
+		t.Fatalf("after typing \"/\", menuOpen = %v, filtered = %d entries, want open with all 3", m.menuOpen, len(m.filtered))
+	}
+
+	m = typeString(t, m, "b")
+	if !m.menuOpen || len(m.filtered) != 1 || m.filtered[0].Name != "/bug" {
+		t.Fatalf("after typing \"/b\", filtered = %+v, want exactly [/bug]", m.filtered)
+	}
+}
+
+func TestPromptModel_MenuClosesOnSpaceOrNoLeadingSlash(t *testing.T) {
+	m := newPromptModel("foundry> ", testCandidates(), nil)
+	m = typeString(t, m, "/bu") // a partial, not-yet-exact prefix match
+	if !m.menuOpen {
+		t.Fatal("menu should be open after typing a matching, not-yet-complete prefix")
+	}
+
+	m = typeString(t, m, "g ") // finishes the name, then a space into its arguments
+	if m.menuOpen {
+		t.Error("menu stayed open after a space (into the command's arguments), want closed")
+	}
+}
+
+func TestPromptModel_MenuNavigationAndAccept(t *testing.T) {
+	m := newPromptModel("foundry> ", testCandidates(), nil)
+	m = typeString(t, m, "/")
+	if got := m.filtered[m.menuCursor].Name; got != "/feature" {
+		t.Fatalf("initial menu cursor = %q, want the first candidate %q", got, "/feature")
+	}
+
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = next.(promptModel)
+	if got := m.filtered[m.menuCursor].Name; got != "/bug" {
+		t.Fatalf("after Down, cursor = %q, want %q", got, "/bug")
+	}
+
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(promptModel)
+	if m.menuOpen {
+		t.Error("menu stayed open after Enter accepted a selection, want closed")
+	}
+	if got := m.input.Value(); got != "/bug " {
+		t.Errorf("input value after accepting = %q, want %q", got, "/bug ")
+	}
+	if m.submitted != "" {
+		t.Error("accepting a menu selection must not submit the line — only a later, unmenued Enter does")
+	}
+}
+
+// TestPromptModel_ExactMatchClosesMenuSoOneEnterSubmits is a regression
+// test for a real bug a live pty run surfaced: typing a command's name
+// out in full (e.g. "/exit", which no other candidate's name has as a
+// proper prefix) left the menu open, so the first Enter only "accepted"
+// the already-fully-typed selection (appending a trailing space) instead
+// of submitting the line — forcing a confusing second Enter for every
+// single command whenever the user typed instead of arrow-selected.
+func TestPromptModel_ExactMatchClosesMenuSoOneEnterSubmits(t *testing.T) {
+	m := newPromptModel("foundry> ", testCandidates(), nil)
+	m = typeString(t, m, "/bug")
+	if m.menuOpen {
+		t.Fatal("menu still open once the input exactly matches a candidate's name, want closed")
+	}
+
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	pm := next.(promptModel)
+	if pm.submitted != "/bug" {
+		t.Errorf("submitted = %q after one Enter on an exact match, want %q", pm.submitted, "/bug")
+	}
+	if cmd == nil {
+		t.Error("Update on Enter returned a nil tea.Cmd, want tea.Quit")
+	}
+}
+
+func TestPromptModel_EscClosesMenuWithoutClearingInput(t *testing.T) {
+	m := newPromptModel("foundry> ", testCandidates(), nil)
+	m = typeString(t, m, "/bu")
+
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = next.(promptModel)
+	if m.menuOpen {
+		t.Error("menu still open after Esc, want closed")
+	}
+	if got := m.input.Value(); got != "/bu" {
+		t.Errorf("input value after Esc = %q, want it unchanged at %q", got, "/bu")
+	}
+}
+
 // typeString feeds each rune of s through Update as a separate KeyRunes
 // message, exactly as bubbletea would deliver real keystrokes.
 func typeString(t *testing.T, m promptModel, s string) promptModel {

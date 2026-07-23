@@ -3,6 +3,9 @@ package cli
 import (
 	"fmt"
 	"io"
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 // InteractiveRenderer renders the REPL-level chrome around an
@@ -23,11 +26,47 @@ func NewInteractiveRenderer(out io.Writer) *InteractiveRenderer {
 	return &InteractiveRenderer{out: out, color: colorEnabled(out)}
 }
 
-// Banner writes a one-time startup message naming the project root a
-// session is running against.
-func (r *InteractiveRenderer) Banner(root string) {
-	fmt.Fprintf(r.out, "foundry — interactive session in %s\n", root)
-	fmt.Fprintln(r.out, "Type /init to get started, or /help for a list of commands.")
+var (
+	bannerTitleStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("208"))
+	bannerDimStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	bannerReadyStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	bannerNotYetStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	bannerBoxStyle    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("8")).Padding(0, 1)
+)
+
+const (
+	bannerReadyText  = "Initialized"
+	bannerNotYetText = "Not initialized — type /init to get started"
+)
+
+// Banner writes a one-time startup panel naming the project root a
+// session is running against, this build's real version identity
+// (BuildVersion — never a fabricated semantic version, ADR-0012), and
+// whether /init has already scaffolded this project (initialized) —
+// real, disk-derived facts, not decorative chrome. Piped or redirected
+// output (r.color false, e.g. every existing test) gets the same three
+// facts as plain lines, with no border or ANSI codes at all — the same
+// "plain when non-interactive" rule renderDiff/renderVerdict already
+// follow.
+func (r *InteractiveRenderer) Banner(root string, initialized bool) {
+	status := bannerNotYetText
+	if initialized {
+		status = bannerReadyText
+	}
+
+	if !r.color {
+		fmt.Fprintf(r.out, "Foundry %s\n%s\n%s\n", BuildVersion(), root, status)
+		return
+	}
+
+	title := bannerTitleStyle.Render("⚒ Foundry") + "  " + bannerDimStyle.Render(BuildVersion())
+	path := bannerDimStyle.Render(root)
+	statusStyle := bannerReadyStyle
+	if !initialized {
+		statusStyle = bannerNotYetStyle
+	}
+	body := strings.Join([]string{title, path, statusStyle.Render(status)}, "\n")
+	fmt.Fprintln(r.out, bannerBoxStyle.Render(body))
 }
 
 // Prompt writes the input prompt, without a trailing newline — the

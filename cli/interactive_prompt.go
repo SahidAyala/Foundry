@@ -16,6 +16,15 @@ import (
 // plain io.EOF from its non-interactive fallback path.
 var ErrPromptEOF = errors.New("cli: interactive prompt ended")
 
+// CommandCandidate is one slash command ReadInteractiveLine can offer in
+// its "/"-triggered dropdown menu: its full "/name" form (including the
+// leading slash) and one-line description, both shown side by side in
+// the menu exactly as /help already lists them (session.CommandInfo).
+type CommandCandidate struct {
+	Name        string
+	Description string
+}
+
 // PromptHistory holds the lines a REPL has already submitted during one
 // process's lifetime, most-recent-last, so ReadInteractiveLine can offer
 // arrow-key recall (ADR-0012 Decision 3, v1 scope). It is not persisted
@@ -50,16 +59,19 @@ func (h *PromptHistory) at(i int) (string, bool) {
 }
 
 // ReadInteractiveLine collects one line of input from a real terminal via
-// bubbletea's raw-mode line editor: Tab-completion (bubbles/textinput's
-// built-in inline suggestion) over candidates, and Up/Down arrow-key
-// recall through history. It owns the terminal only for the duration of
-// one line — bubbletea restores cooked mode before Run returns — so a
-// caller's own subsequent blocking reads (e.g. an approval prompt reading
-// from the same *bufio.Reader over os.Stdin) behave exactly as they did
-// before this existed.
+// bubbletea's raw-mode line editor: a full, arrow-navigable dropdown menu
+// of every candidate whose name has the current input as a prefix —
+// opening the moment the line starts with "/", filtering as the user
+// keeps typing, closing once the line no longer looks like a bare command
+// name (a space, or no longer a "/" prefix) — plus Up/Down arrow-key
+// recall through history when the menu isn't showing. It owns the
+// terminal only for the duration of one line — bubbletea restores cooked
+// mode before Run returns — so a caller's own subsequent blocking reads
+// (e.g. an approval prompt reading from the same *bufio.Reader over
+// os.Stdin) behave exactly as they did before this existed.
 //
 // Returns ErrPromptEOF on Ctrl-C or Ctrl-D instead of the submitted line.
-func ReadInteractiveLine(prompt string, candidates []string, history *PromptHistory) (string, error) {
+func ReadInteractiveLine(prompt string, candidates []CommandCandidate, history *PromptHistory) (string, error) {
 	m := newPromptModel(prompt, candidates, history)
 	p := tea.NewProgram(m)
 	final, err := p.Run()
@@ -75,13 +87,20 @@ func ReadInteractiveLine(prompt string, candidates []string, history *PromptHist
 	return fm.submitted, nil
 }
 
+var (
+	menuRowStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	menuSelectedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Background(lipgloss.Color("237")).Bold(true)
+)
+
 // promptModel is the bubbletea model backing ReadInteractiveLine: a
-// bubbles/textinput field for the line itself (which already implements
-// Tab-to-complete inline suggestions when ShowSuggestions is set), plus
-// this session's own Up/Down history browsing layered on top —
-// intercepted before textinput's own Update so its default KeyMap
-// (which binds Up/Down to *suggestion* cycling, not history) never sees
-// those keys.
+// bubbles/textinput field for the line itself, this session's own
+// Up/Down history browsing, and a "/"-triggered dropdown menu over every
+// registered slash command. Menu navigation and history browsing share
+// the Up/Down keys — whichever is active at the moment intercepts them
+// before textinput's own Update ever sees the keystroke, since
+// textinput's default KeyMap binds Up/Down to its own (single-line,
+// non-full-list) suggestion cycling, which this dropdown replaces
+// entirely rather than competing with.
 type promptModel struct {
 	input      textinput.Model
 	history    *PromptHistory
@@ -89,17 +108,28 @@ type promptModel struct {
 	draft      string
 	submitted  string
 	eof        bool
+
+	menu       []CommandCandidate // every offerable candidate, unfiltered
+	filtered   []CommandCandidate // menu, narrowed to the current input's prefix
+	menuCursor int
+	menuOpen   bool
+	nameWidth  int // longest candidate Name, for the menu's column alignment
 }
 
-func newPromptModel(prompt string, candidates []string, history *PromptHistory) promptModel {
+func newPromptModel(prompt string, candidates []CommandCandidate, history *PromptHistory) promptModel {
 	ti := textinput.New()
 	ti.Prompt = prompt
 	ti.Focus()
-	ti.ShowSuggestions = len(candidates) > 0
-	ti.SetSuggestions(candidates)
 	ti.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Bold(true)
-	ti.CompletionStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	return promptModel{input: ti, history: history, historyIdx: -1}
+
+	nameWidth := 0
+	for _, c := range candidates {
+		if len(c.Name) > nameWidth {
+			nameWidth = len(c.Name)
+		}
+	}
+
+	return promptModel{input: ti, history: history, historyIdx: -1, menu: candidates, nameWidth: nameWidth}
 }
 
 func (m promptModel) Init() tea.Cmd {
@@ -112,21 +142,110 @@ func (m promptModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlC, tea.KeyCtrlD:
 			m.eof = true
 			return m, tea.Quit
+		case tea.KeyEsc:
+			if m.menuOpen {
+				m.menuOpen = false
+				return m, nil
+			}
 		case tea.KeyEnter:
+			if m.menuOpen {
+				m.acceptMenuSelection()
+				return m, nil
+			}
 			m.submitted = m.input.Value()
 			return m, tea.Quit
+		case tea.KeyTab:
+			if m.menuOpen {
+				m.acceptMenuSelection()
+				return m, nil
+			}
 		case tea.KeyUp:
-			m.browseHistory(1)
+			if m.menuOpen {
+				m.moveMenuCursor(-1)
+			} else {
+				m.browseHistory(1)
+			}
 			return m, nil
 		case tea.KeyDown:
-			m.browseHistory(-1)
+			if m.menuOpen {
+				m.moveMenuCursor(1)
+			} else {
+				m.browseHistory(-1)
+			}
 			return m, nil
 		}
 	}
 
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
+	m.refreshMenu()
 	return m, cmd
+}
+
+// refreshMenu recomputes which candidates the current input matches,
+// called after every keystroke that reaches textinput itself (typing,
+// deleting, pasting). The menu shows only while the line still looks like
+// a bare command name being typed: it must start with "/" and must not
+// yet contain a space — the moment the user is past the command name
+// into its arguments, or has erased the leading "/", the menu closes.
+func (m *promptModel) refreshMenu() {
+	value := m.input.Value()
+	if !strings.HasPrefix(value, "/") || strings.ContainsAny(value, " \t") {
+		m.menuOpen = false
+		m.filtered = nil
+		return
+	}
+
+	m.filtered = m.filtered[:0]
+	for _, c := range m.menu {
+		if strings.HasPrefix(c.Name, value) {
+			m.filtered = append(m.filtered, c)
+		}
+	}
+
+	// Once the line already spells out a candidate's name exactly, there
+	// is nothing left to complete or disambiguate — close the menu so a
+	// single Enter submits the line immediately. Without this, finishing
+	// a command by typing it out in full (rather than picking it from the
+	// menu) would still need two Enters: one to "accept" a selection that
+	// was already spelled out, and only the second to actually submit.
+	for _, c := range m.filtered {
+		if c.Name == value {
+			m.menuOpen = false
+			m.filtered = nil
+			return
+		}
+	}
+
+	m.menuOpen = len(m.filtered) > 0
+	if m.menuCursor >= len(m.filtered) {
+		m.menuCursor = 0
+	}
+}
+
+// acceptMenuSelection completes the input to the highlighted candidate's
+// full name plus a trailing space — ready for the user to keep typing
+// its arguments — and closes the menu, mirroring how Claude Code's own
+// "/" command menu behaves on Tab or Enter.
+func (m *promptModel) acceptMenuSelection() {
+	if len(m.filtered) == 0 {
+		m.menuOpen = false
+		return
+	}
+	m.input.SetValue(m.filtered[m.menuCursor].Name + " ")
+	m.input.CursorEnd()
+	m.menuOpen = false
+	m.filtered = nil
+}
+
+// moveMenuCursor moves delta steps through the filtered candidate list,
+// wrapping at either end.
+func (m *promptModel) moveMenuCursor(delta int) {
+	n := len(m.filtered)
+	if n == 0 {
+		return
+	}
+	m.menuCursor = ((m.menuCursor+delta)%n + n) % n
 }
 
 // browseHistory moves delta steps through history (positive = older,
@@ -158,5 +277,20 @@ func (m *promptModel) browseHistory(delta int) {
 }
 
 func (m promptModel) View() string {
-	return m.input.View()
+	if !m.menuOpen || len(m.filtered) == 0 {
+		return m.input.View()
+	}
+
+	var b strings.Builder
+	b.WriteString(m.input.View())
+	for i, c := range m.filtered {
+		b.WriteByte('\n')
+		row := fmt.Sprintf("%-*s  %s", m.nameWidth, c.Name, c.Description)
+		if i == m.menuCursor {
+			b.WriteString(menuSelectedStyle.Render("▸ " + row))
+		} else {
+			b.WriteString(menuRowStyle.Render("  " + row))
+		}
+	}
+	return b.String()
 }

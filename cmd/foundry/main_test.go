@@ -278,7 +278,7 @@ func TestRun_NoArgs_StartsInteractiveSession(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("run(nil) exit code = %d, want 0; output:\n%s", code, out.String())
 	}
-	if !strings.Contains(out.String(), "interactive session") {
+	if !strings.Contains(out.String(), "Foundry") {
 		t.Errorf("output missing the session banner, got:\n%s", out.String())
 	}
 }
