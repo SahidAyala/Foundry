@@ -93,8 +93,9 @@ func TestBuildExecutorRegistry_ConstructsAndRegistersEachEntry(t *testing.T) {
 	}`)
 
 	var gotConfig project.ExecutorConfig
-	construct := func(cfg project.ExecutorConfig) (engine.Executor, error) {
-		gotConfig = cfg
+	var gotWorkspace string
+	construct := func(cfg project.ExecutorConfig, workspace string) (engine.Executor, error) {
+		gotConfig, gotWorkspace = cfg, workspace
 		return stubExecutor{name: "constructed"}, nil
 	}
 
@@ -104,6 +105,9 @@ func TestBuildExecutorRegistry_ConstructsAndRegistersEachEntry(t *testing.T) {
 	}
 	if gotConfig.Vendor != "openai" || gotConfig.Model != "gpt-5" {
 		t.Errorf("construct received %+v, want vendor=openai model=gpt-5", gotConfig)
+	}
+	if gotWorkspace != root {
+		t.Errorf("construct received workspace %q, want %q", gotWorkspace, root)
 	}
 	exec, err := registry.Get("openai-gpt5")
 	if err != nil {
@@ -123,7 +127,7 @@ func TestBuildExecutorRegistry_ConstructErrorIsWrappedWithName(t *testing.T) {
 		"broken": {"vendor": "unsupported-vendor"}
 	}`)
 
-	construct := func(cfg project.ExecutorConfig) (engine.Executor, error) {
+	construct := func(cfg project.ExecutorConfig, workspace string) (engine.Executor, error) {
 		return nil, errors.New("unsupported vendor")
 	}
 

@@ -11,6 +11,7 @@ import (
 	"foundry/engine"
 	"foundry/executor/claude"
 	"foundry/executor/gemini"
+	"foundry/executor/geminicli"
 	"foundry/executor/openai"
 	"foundry/project"
 	"foundry/session"
@@ -31,23 +32,35 @@ func claudeExecutor(workspace string) engine.Executor {
 // namedExecutor is the production vendor-dispatch factory (ADR-0005
 // Decision 5, docs/03-adrs/ADR-0005-executor-contract-and-capability-model.md):
 // it constructs a named, project-configured Executor from a
-// project.ExecutorConfig decoded out of a project's .foundry/executors.json.
-// This is the one place in the whole binary that knows executor/openai or
-// executor/gemini exist — project, session, and cmd/foundry/commands stay
-// vendor-agnostic, calling only this function through the
-// project.ExecutorConstructor seam. Adding gemini here needed no new
-// architectural decision: ADR-0005's Executor contract and ADR-0006's
-// explicit-pin routing already cover any number of named vendors, the same
-// way openai's own addition did. An unrecognized vendor is a clear, named
-// configuration error rather than a silent no-op.
-func namedExecutor(cfg project.ExecutorConfig) (engine.Executor, error) {
+// project.ExecutorConfig decoded out of a project's .foundry/executors.json,
+// and the project's workspace directory (needed by a subprocess-based
+// vendor like executor/geminicli — a pure HTTP vendor like executor/openai
+// or executor/gemini simply ignores it). This is the one place in the whole
+// binary that knows which concrete vendor packages exist — project,
+// session, and cmd/foundry/commands stay vendor-agnostic, calling only this
+// function through the project.ExecutorConstructor seam.
+//
+// "gemini" resolves to executor/geminicli, not executor/gemini's own HTTP
+// API-key path — the maintainer's own framing was that a raw API key
+// should be a last resort, not the default: the Gemini CLI's "Sign in with
+// Google" login (cached to disk, reused headlessly on later runs — see
+// executor/geminicli's own package doc) needs no key Foundry ever reads.
+// "gemini-api" names that HTTP path explicitly, for environments where no
+// browser is ever available to complete that one-time login. Adding either
+// needed no new architectural decision: ADR-0005's Executor contract and
+// ADR-0006's explicit-pin routing already cover any number of named
+// vendors. An unrecognized vendor is a clear, named configuration error
+// rather than a silent no-op.
+func namedExecutor(cfg project.ExecutorConfig, workspace string) (engine.Executor, error) {
 	switch cfg.Vendor {
 	case "openai":
 		return openai.NewExecutor(cfg.Model, os.Getenv(cfg.APIKeyEnv)), nil
 	case "gemini":
+		return geminicli.NewExecutor(workspace, cfg.Model), nil
+	case "gemini-api":
 		return gemini.NewExecutor(cfg.Model, os.Getenv(cfg.APIKeyEnv)), nil
 	default:
-		return nil, fmt.Errorf("foundry: unsupported executor vendor %q (supported: %q, %q)", cfg.Vendor, "openai", "gemini")
+		return nil, fmt.Errorf("foundry: unsupported executor vendor %q (supported: %q, %q, %q)", cfg.Vendor, "openai", "gemini", "gemini-api")
 	}
 }
 
