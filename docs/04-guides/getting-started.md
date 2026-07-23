@@ -80,11 +80,14 @@ To pin a Pipeline Step to a vendor other than the default Claude Code Executor, 
   "gpt": { "vendor": "openai", "model": "gpt-4.1", "api_key_env": "OPENAI_API_KEY" },
   "flash": { "vendor": "gemini", "model": "gemini-3.5-flash" },
   "flash-ci": { "vendor": "gemini-api", "model": "gemini-3.5-flash", "api_key_env": "GEMINI_API_KEY" },
-  "local-llama": { "vendor": "openai-compatible", "model": "llama3", "base_url": "http://localhost:11434/v1/chat/completions" }
+  "local-llama": { "vendor": "openai-compatible", "model": "llama3", "base_url": "http://localhost:11434/v1/chat/completions" },
+  "gh-copilot": { "vendor": "copilot" }
 }
 ```
 
-Then reference the name (`"gpt"`/`"flash"`/`"flash-ci"`/`"local-llama"` above) from a Step's `executor` field in a Pipeline document — see [pipelines.md](pipelines.md). A missing `executors.json` means only the default Executor exists; nothing above is required to use Foundry at all. `openai`, `gemini`, `gemini-api`, and `openai-compatible` are the supported vendors today ([ADR-0005](../03-adrs/ADR-0005-executor-contract-and-capability-model.md)); an unrecognized vendor is a clear configuration error, not a silent fallback.
+Then reference the name (`"gpt"`/`"flash"`/`"flash-ci"`/`"local-llama"`/`"gh-copilot"` above) from a Step's `executor` field in a Pipeline document — see [pipelines.md](pipelines.md). A missing `executors.json` means only the default Executor exists; nothing above is required to use Foundry at all. `openai`, `gemini`, `gemini-api`, `copilot`, and `openai-compatible` are the supported vendors today ([ADR-0005](../03-adrs/ADR-0005-executor-contract-and-capability-model.md)); an unrecognized vendor is a clear configuration error, not a silent fallback.
+
+`copilot` runs the [GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli) (`copilot`, GA since 2026-02-25) the same "delegate auth to the vendor's own CLI" way `gemini` does — it reads no key Foundry manages; the CLI reads its own `COPILOT_GITHUB_TOKEN` or reuses an interactive `gh auth login` session. Unlike Claude Code and the Gemini CLI, the Copilot CLI is genuinely agentic (it ships its own file/shell tools) — this Executor deliberately grants it none and additionally checks the workspace's `git status` before and after every call, refusing outright if anything changed, so a real or future change in the CLI's own default behavior can never bypass Foundry's own approval gate silently. **This vendor has not been validated against a real `copilot` CLI** (none installed in this environment) — try it cautiously, and watch the first few runs closely, before trusting it in an unattended Pipeline.
 
 `openai-compatible` reuses the same client as `openai` against any endpoint that speaks the same Chat Completions request/response shape — `base_url` is required. This covers, among others:
 
