@@ -53,16 +53,20 @@ func LoadExecutorConfig(root string) (map[string]ExecutorConfig, error) {
 }
 
 // ExecutorConstructor constructs a real vendor Executor from its decoded
-// ExecutorConfig — the vendor-dispatch seam a composition root supplies
-// (ADR-0005 Decision 5,
+// ExecutorConfig and the project's workspace directory — the vendor-dispatch
+// seam a composition root supplies (ADR-0005 Decision 5,
 // docs/03-adrs/ADR-0005-executor-contract-and-capability-model.md),
 // mirroring how a plain func(workspace string) engine.Executor already
-// supplies the single default Executor. Only cmd/foundry/main.go —
-// Foundry's true composition root — knows which concrete vendor packages
-// (executor/claude, executor/openai, ...) exist; project stays
-// vendor-agnostic and only calls whatever ExecutorConstructor it is
-// handed.
-type ExecutorConstructor func(cfg ExecutorConfig) (engine.Executor, error)
+// supplies the single default Executor. workspace exists so a
+// subprocess-based named vendor (e.g. executor/geminicli, which must run in
+// a specific directory the same way executor/claude does) can be
+// constructed correctly — a pure HTTP-API vendor (executor/openai,
+// executor/gemini) simply ignores it, exactly as executor/openai's own
+// NewExecutor already takes no workspace parameter at all. Only
+// cmd/foundry/main.go — Foundry's true composition root — knows which
+// concrete vendor packages exist; project stays vendor-agnostic and only
+// calls whatever ExecutorConstructor it is handed.
+type ExecutorConstructor func(cfg ExecutorConfig, workspace string) (engine.Executor, error)
 
 // BuildExecutorRegistry reads root's ExecutorsFile (via LoadExecutorConfig)
 // and constructs an engine.ExecutorRegistry from it, calling construct once
@@ -86,7 +90,7 @@ func BuildExecutorRegistry(root string, construct ExecutorConstructor) (*engine.
 		return nil, fmt.Errorf("project: %s declares %d executor(s), but this caller supports constructing none", ExecutorsFile, len(config))
 	}
 	for name, cfg := range config {
-		exec, err := construct(cfg)
+		exec, err := construct(cfg, root)
 		if err != nil {
 			return nil, fmt.Errorf("project: build executor %q: %w", name, err)
 		}

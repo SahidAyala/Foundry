@@ -42,7 +42,7 @@ func TestSession_EngineRoutesPinnedStepToNamedExecutor(t *testing.T) {
 	}
 
 	pinned := &sequencedExecutor{patches: []string{scriptedPatch}}
-	construct := func(cfg project.ExecutorConfig) (engine.Executor, error) {
+	construct := func(cfg project.ExecutorConfig, workspace string) (engine.Executor, error) {
 		if cfg.Vendor != "test" {
 			t.Fatalf("construct received vendor %q, want %q", cfg.Vendor, "test")
 		}
@@ -92,7 +92,7 @@ func TestSession_EngineRoutesUnpinnedStepToDefault(t *testing.T) {
 		t.Fatalf("write executors config: %v", err)
 	}
 
-	construct := func(cfg project.ExecutorConfig) (engine.Executor, error) {
+	construct := func(cfg project.ExecutorConfig, workspace string) (engine.Executor, error) {
 		return &sequencedExecutor{patches: []string{scriptedPatch}}, nil
 	}
 

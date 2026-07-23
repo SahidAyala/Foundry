@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"foundry/executor/gemini"
+	"foundry/executor/geminicli"
 	"foundry/executor/openai"
 	"foundry/project"
 )
@@ -16,7 +17,7 @@ func TestNamedExecutor_OpenAIVendorConstructsOpenAIExecutor(t *testing.T) {
 		Vendor:    "openai",
 		Model:     "gpt-5.1",
 		APIKeyEnv: "FOUNDRY_TEST_OPENAI_KEY",
-	})
+	}, "/repo")
 	if err != nil {
 		t.Fatalf("namedExecutor failed: %v", err)
 	}
@@ -25,29 +26,46 @@ func TestNamedExecutor_OpenAIVendorConstructsOpenAIExecutor(t *testing.T) {
 	}
 }
 
-// TestNamedExecutor_GeminiVendorConstructsGeminiExecutor confirms
-// namedExecutor's vendor dispatch recognizes "gemini" (executor/gemini's
-// addition alongside "openai") — no new architectural decision was needed
-// for this, per ADR-0005/ADR-0006 already covering any number of named
-// vendors.
-func TestNamedExecutor_GeminiVendorConstructsGeminiExecutor(t *testing.T) {
+// TestNamedExecutor_GeminiVendorConstructsGeminiCLIExecutor confirms
+// namedExecutor's vendor dispatch resolves "gemini" to executor/geminicli
+// (the Gemini CLI subprocess, no API key ever read by Foundry) rather than
+// executor/gemini's own raw-API-key HTTP path — the maintainer's own
+// framing was that a raw API key should be a last resort, not the default.
+func TestNamedExecutor_GeminiVendorConstructsGeminiCLIExecutor(t *testing.T) {
+	exec, err := namedExecutor(project.ExecutorConfig{
+		Vendor: "gemini",
+		Model:  "gemini-3.5-flash",
+	}, "/repo")
+	if err != nil {
+		t.Fatalf("namedExecutor failed: %v", err)
+	}
+	if _, ok := exec.(*geminicli.Executor); !ok {
+		t.Errorf("namedExecutor(vendor=gemini) = %T, want *geminicli.Executor", exec)
+	}
+}
+
+// TestNamedExecutor_GeminiAPIVendorConstructsGeminiExecutor confirms the
+// explicitly-named "gemini-api" vendor still resolves to executor/gemini's
+// HTTP API-key path, for environments where no browser is ever available
+// to complete the Gemini CLI's one-time "Sign in with Google" login.
+func TestNamedExecutor_GeminiAPIVendorConstructsGeminiExecutor(t *testing.T) {
 	t.Setenv("FOUNDRY_TEST_GEMINI_KEY", "test-key-value")
 
 	exec, err := namedExecutor(project.ExecutorConfig{
-		Vendor:    "gemini",
+		Vendor:    "gemini-api",
 		Model:     "gemini-3.5-flash",
 		APIKeyEnv: "FOUNDRY_TEST_GEMINI_KEY",
-	})
+	}, "/repo")
 	if err != nil {
 		t.Fatalf("namedExecutor failed: %v", err)
 	}
 	if _, ok := exec.(*gemini.Executor); !ok {
-		t.Errorf("namedExecutor(vendor=gemini) = %T, want *gemini.Executor", exec)
+		t.Errorf("namedExecutor(vendor=gemini-api) = %T, want *gemini.Executor", exec)
 	}
 }
 
 func TestNamedExecutor_UnknownVendorFails(t *testing.T) {
-	_, err := namedExecutor(project.ExecutorConfig{Vendor: "some-future-vendor"})
+	_, err := namedExecutor(project.ExecutorConfig{Vendor: "some-future-vendor"}, "/repo")
 	if err == nil {
 		t.Fatal("namedExecutor with an unrecognized vendor returned nil error")
 	}

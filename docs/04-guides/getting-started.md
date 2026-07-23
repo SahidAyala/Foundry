@@ -9,7 +9,8 @@
 | [Go](https://go.dev/dl/) 1.21+ | Building the binary | Build-time only — not required after `foundry` is installed. |
 | `git` | Every Act | Foundry isolates each Act's patch on a throwaway branch (`workspace.NewWorkspace`). The target directory must already be a git repository with at least one commit — Foundry never runs `git init` for you. |
 | [Claude Code CLI](https://github.com/anthropics/claude-code) (`claude`), installed and authenticated | The default Executor | `foundry do` and the interactive session call `claude -p` as a subprocess. Foundry reads no API key for it — authentication is Claude Code's own. This is the only Executor available with zero extra configuration. |
-| An OpenAI or Gemini API key *(optional)* | A second, named Executor | Only needed if you want to pin specific Pipeline Steps to OpenAI or Gemini instead of Claude Code — see [Configuring a second Executor](#configuring-a-second-executor-optional) below. Gemini's API has a genuinely free tier. |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) (`gemini`), installed and signed in *(optional)* | A second, named Executor, no API key | Only needed if you want to pin specific Pipeline Steps to Gemini. Run `gemini` once and pick "Sign in with Google" — Foundry never reads an API key for it, the same way it never reads one for Claude Code. Gemini's free tier needs no credit card. |
+| An OpenAI or Gemini API key *(optional, last resort)* | A second, named Executor, no CLI/browser login | Only needed for `openai` or `gemini-api` (see [Configuring a second Executor](#configuring-a-second-executor-optional) below) — CI or any environment where a one-time browser login is never possible. Prefer the Gemini CLI row above when you can. |
 | `gh` CLI, authenticated *(optional)* | The `remote-pr` apply target | Only needed if a Pipeline opens a pull request directly ([ADR-0010](../03-adrs/ADR-0010-vcs-pr-integration-and-apply-targets.md)). Not required for local use. |
 
 ## Install
@@ -77,11 +78,14 @@ To pin a Pipeline Step to a vendor other than the default Claude Code Executor, 
 ```json
 {
   "gpt": { "vendor": "openai", "model": "gpt-4.1", "api_key_env": "OPENAI_API_KEY" },
-  "flash": { "vendor": "gemini", "model": "gemini-3.5-flash", "api_key_env": "GEMINI_API_KEY" }
+  "flash": { "vendor": "gemini", "model": "gemini-3.5-flash" },
+  "flash-ci": { "vendor": "gemini-api", "model": "gemini-3.5-flash", "api_key_env": "GEMINI_API_KEY" }
 }
 ```
 
-Then reference the name (`"gpt"`/`"flash"` above) from a Step's `executor` field in a Pipeline document — see [pipelines.md](pipelines.md). A missing `executors.json` means only the default Executor exists; nothing above is required to use Foundry at all. `openai` and `gemini` are the supported vendors today ([ADR-0005](../03-adrs/ADR-0005-executor-contract-and-capability-model.md)); an unrecognized vendor is a clear configuration error, not a silent fallback. Gemini's API has a genuinely free tier for its Flash models (no credit card required) — [ai.google.dev/gemini-api/docs/pricing](https://ai.google.dev/gemini-api/docs/pricing) has current limits.
+Then reference the name (`"gpt"`/`"flash"`/`"flash-ci"` above) from a Step's `executor` field in a Pipeline document — see [pipelines.md](pipelines.md). A missing `executors.json` means only the default Executor exists; nothing above is required to use Foundry at all. `openai`, `gemini`, and `gemini-api` are the supported vendors today ([ADR-0005](../03-adrs/ADR-0005-executor-contract-and-capability-model.md)); an unrecognized vendor is a clear configuration error, not a silent fallback.
+
+`gemini` (recommended) runs the Gemini CLI as a subprocess, the same way the default Claude Code Executor does — it needs no `api_key_env` at all, since the CLI's own cached "Sign in with Google" login (`gemini`, run once interactively) is reused for every later headless call. `gemini-api` calls Gemini's REST API directly with a raw key instead — kept available deliberately as a last resort for environments where a one-time browser login is never possible (e.g. some CI runners), not as the default path. Gemini's free tier needs no credit card for either — [ai.google.dev/gemini-api/docs/pricing](https://ai.google.dev/gemini-api/docs/pricing) has current limits.
 
 ## Project configuration (optional)
 
