@@ -48,11 +48,30 @@ type Config struct {
 	RequestCopilotReview bool `json:"request_copilot_review"`
 
 	// TicketProvider names which external ticketing system the
-	// interactive session's /issue command fetches from ("github" today;
-	// more are planned — see docs/00-overview/implementation-status.md).
-	// Empty means /issue is not configured; it reports a clear,
-	// named error if invoked rather than guessing a provider.
+	// interactive session's /issue command fetches from ("github" or
+	// "jira" today; GitLab and Asana are planned — see
+	// docs/00-overview/implementation-status.md). Empty means /issue is
+	// not configured; it reports a clear, named error if invoked rather
+	// than guessing a provider.
 	TicketProvider string `json:"ticket_provider"`
+
+	// JiraBaseURL is a Jira Cloud site's own base URL (e.g.
+	// "https://yourcompany.atlassian.net") — required when TicketProvider
+	// is "jira"; ignored otherwise.
+	JiraBaseURL string `json:"jira_base_url"`
+
+	// JiraEmail is the Atlassian account email ticket/jira authenticates
+	// as (Basic Auth's username half) — required when TicketProvider is
+	// "jira"; ignored otherwise.
+	JiraEmail string `json:"jira_email"`
+
+	// JiraAPITokenEnv names the environment variable ticket/jira reads its
+	// Atlassian API token from at Fetch time (id.atlassian.com/manage/
+	// api-tokens) — never persisted, logged, or passed through
+	// domain.Intent or any recorded Evidence, mirroring
+	// ExecutorConfig.APIKeyEnv's pattern. Required when TicketProvider is
+	// "jira"; ignored otherwise.
+	JiraAPITokenEnv string `json:"jira_api_token_env"`
 }
 
 // LoadConfig reads and decodes root's conventional configuration file

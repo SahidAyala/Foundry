@@ -31,7 +31,7 @@ Ratified via [ADR-0012](../03-adrs/ADR-0012-interactive-terminal-ux-and-first-de
 
 Also orthogonal to the M0–M7 sequence: `/issue <id>` fetches an external ticket's content (an issue tracker — GitHub today, Jira planned next, per the maintainer's own stated priority) and uses it as an Act's Intent, instead of a human typing one. This is deliberately **not** a new Step kind — RFC-0002 §4.2's closed five (generate, verify, approve, apply, record) are unchanged; fetching happens before a Pipeline starts, the same way a slash command's own typed argument text already does. No new architectural decision was needed: this is a new implementation of the already-named "Context Source" extension point ([extensibility.md](../02-architecture/extensibility.md)), the same way adding another Executor vendor needs no new ADR.
 
-GitHub (`ticket/github`, reusing the same `gh` CLI session `vcs.GitHubPRApplier`'s own PR-opening already requires) is the only provider today. Jira is the next planned provider; GitLab and Asana after that, in the order the maintainer named as most common.
+GitHub (`ticket/github`, reusing the same `gh` CLI session `vcs.GitHubPRApplier`'s own PR-opening already requires) and Jira (`ticket/jira`, a pure HTTP call — Jira has no equivalent already-authenticated CLI to piggyback on, so it needs its own Basic Auth credential) are both shipped. GitLab and Asana are next, in the order the maintainer named as most common.
 
 ## Current implementation status
 

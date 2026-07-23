@@ -18,6 +18,7 @@ import (
 	"foundry/session"
 	"foundry/ticket"
 	githubticket "foundry/ticket/github"
+	jiraticket "foundry/ticket/jira"
 )
 
 func main() {
@@ -94,15 +95,21 @@ func namedExecutor(cfg project.ExecutorConfig, workspace string) (engine.Executo
 // system boundary (docs/02-architecture/system-context.md). "github"
 // resolves to ticket/github, reusing the exact same already-authenticated
 // gh CLI session vcs.GitHubPRApplier's own PR-opening already requires —
-// Foundry reads no separate credential for it. Only runSession calls
-// this, and only when project.Config.TicketProvider is set — /issue is
-// entirely opt-in, exactly like RequestCopilotReview.
+// Foundry reads no separate credential for it. "jira" resolves to
+// ticket/jira, a pure HTTP call authenticating with Basic Auth
+// (cfg.JiraEmail plus an API token resolved from cfg.JiraAPITokenEnv) —
+// Jira has no equivalent already-authenticated CLI session to piggyback
+// on the way GitHub's gh does. Only runSession calls this, and only when
+// project.Config.TicketProvider is set — /issue is entirely opt-in,
+// exactly like RequestCopilotReview.
 func newTicketFetcher(cfg project.Config, workspace string) (ticket.Fetcher, error) {
 	switch cfg.TicketProvider {
 	case "github":
 		return githubticket.NewFetcher(workspace), nil
+	case "jira":
+		return jiraticket.NewFetcher(cfg.JiraBaseURL, cfg.JiraEmail, os.Getenv(cfg.JiraAPITokenEnv)), nil
 	default:
-		return nil, fmt.Errorf("foundry: unsupported ticket provider %q (supported: %q)", cfg.TicketProvider, "github")
+		return nil, fmt.Errorf("foundry: unsupported ticket provider %q (supported: %q, %q)", cfg.TicketProvider, "github", "jira")
 	}
 }
 
