@@ -25,7 +25,7 @@ Each milestone is independently useful. A project could stop at M1 and have a ri
 
 Not part of the M0–M7 depth sequence above — that table orders *the trust/knowledge lifecycle*, each milestone deliberately gating the next (RFC-0002 §9's Phase 0 pattern). This track is orthogonal: it makes the *existing* interactive session (already [ADR-0009](../03-adrs/ADR-0009-cli-and-output-contract.md)'s ratified primary interface) more pleasant to use — autocomplete over slash commands, live suggestions, styled output, closer to Claude Code/Codex/OpenCode's own terminal experience — without changing what an Act is, how it's judged, or any trust-model concept. It neither blocks nor is blocked by M6/M7.
 
-Gated on [ADR-0012](../03-adrs/ADR-0012-interactive-terminal-ux-and-first-dependency.md) (Proposed, not yet ratified) — Foundry's first-ever third-party dependency, a real precedent the maintainer must ratify personally, not something an AI agent self-ratifies.
+Ratified via [ADR-0012](../03-adrs/ADR-0012-interactive-terminal-ux-and-first-dependency.md) (Accepted 2026-07-22) — Foundry's first-ever third-party dependency, confirmed by the maintainer personally. Implementation follows.
 
 ## Current implementation status
 
