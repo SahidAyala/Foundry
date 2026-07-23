@@ -6,11 +6,20 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 
 	"foundry/cli"
 )
+
+// HistoryFile is the conventional location, relative to a project root,
+// where a REPL's PromptHistory persists across process runs (ADR-0012
+// v3). Unlike .foundry/acts, .foundry/pipelines, and .foundry/knowledge,
+// this file is not durable Evidence or Authored Knowledge — it is
+// personal, ephemeral convenience state (what a user happened to type),
+// so a project should gitignore it rather than commit it.
+const HistoryFile = ".foundry/history"
 
 // REPL is the interactive session's read loop: it reads one line at a
 // time from the Session's input, renders a prompt via an
@@ -34,9 +43,11 @@ type REPL struct {
 }
 
 // NewREPL wires a REPL over s and commands, rendering to s.Out via a new
-// InteractiveRenderer.
+// InteractiveRenderer, and loading any prior HistoryFile this project
+// already has (empty if none — see LoadPromptHistory).
 func NewREPL(s *Session, commands *CommandRegistry) *REPL {
-	return &REPL{session: s, commands: commands, renderer: cli.NewInteractiveRenderer(s.Out), history: cli.NewPromptHistory()}
+	history := cli.LoadPromptHistory(filepath.Join(s.Root, HistoryFile))
+	return &REPL{session: s, commands: commands, renderer: cli.NewInteractiveRenderer(s.Out), history: history}
 }
 
 // Run drives the read loop until /exit, /quit, or end of input.

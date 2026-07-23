@@ -43,9 +43,13 @@ Running `foundry` with no arguments opens an interactive session rooted at the c
 | `/help` | Lists every slash command this session understands, by name and one-line description. |
 | `/exit` or `/quit` | End the session. |
 
+When run from a real terminal ([ADR-0012](../03-adrs/ADR-0012-interactive-terminal-ux-and-first-dependency.md)), the prompt opens a full, arrow-navigable menu of the table above the moment you type `/`, filtering as you keep typing; Up/Down also recalls previously submitted lines, remembered across runs in `.foundry/history` (see below). Piped or redirected input/output (scripting, tests) falls back to a plain prompt with no menu or recall.
+
 Each Pipeline's `verify` Step(s) must pass before you're ever asked to approve anything — a failing verification stops the attempt (and retries once, bounded, if the Pipeline declares repair) rather than reaching approval. When it does reach an `approve` Step, you'll see the proposed patch and its verdict, then a `y/n` prompt; declining leaves your repository untouched. On approval, the patch is applied and the Act is recorded immutably under `.foundry/acts/` in your repository. A patch longer than 40 lines is piped through `$PAGER` (falling back to `less -R`) so it doesn't scroll past what you can read before deciding — `foundry show`'s output gets the same treatment.
 
 Per [ADR-0002](../03-adrs/ADR-0002-persistence-content-addressing-and-on-disk-layout.md): commit `.foundry/acts/` to your project's own repository — it is durable audit history, the same way `.foundry/pipelines/` already is, not a disposable cache. `.foundry/acts/*/checkpoint.json` (an interrupted Act's in-progress state, `foundry resume`'s own bookkeeping) is the one exception — it has no audit value once superseded or deleted, so you may gitignore `**/checkpoint.json` if you prefer.
+
+The session also remembers what you've typed across runs, in `.foundry/history` (ADR-0012) — arrow-key recall survives closing and reopening `foundry`. Unlike the paths above, this one is personal, ephemeral convenience state, not audit-worthy Evidence or Knowledge; gitignore `.foundry/history` rather than committing it.
 
 Plain text typed at the prompt (not a slash command) is not yet supported — use one of the commands above.
 

@@ -3,6 +3,8 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -25,28 +27,69 @@ type CommandCandidate struct {
 	Description string
 }
 
-// PromptHistory holds the lines a REPL has already submitted during one
-// process's lifetime, most-recent-last, so ReadInteractiveLine can offer
-// arrow-key recall (ADR-0012 Decision 3, v1 scope). It is not persisted
-// across process runs — cross-session history is explicitly a later
-// increment, not this one.
+// PromptHistory holds the lines a REPL has already submitted, most-recent-
+// last, so ReadInteractiveLine can offer arrow-key recall (ADR-0012
+// Decision 3). NewPromptHistory's history is in-memory only, scoped to
+// one process; LoadPromptHistory's also persists to disk, so a later
+// session's arrow-key recall survives this process ending.
 type PromptHistory struct {
 	entries []string
+	path    string // "" means in-memory only, no persistence
 }
 
-// NewPromptHistory returns an empty PromptHistory.
+// NewPromptHistory returns an empty, in-memory-only PromptHistory.
 func NewPromptHistory() *PromptHistory {
 	return &PromptHistory{}
 }
 
+// LoadPromptHistory returns a PromptHistory pre-populated from path's
+// existing lines (one submitted line per line, oldest first), and
+// remembers path so Add appends every new line back to it — ADR-0012's
+// own v1 Decision 3 named persistent cross-session history as a later
+// increment; this is that increment. A missing file, or one this process
+// cannot read, is not fatal: history is a convenience that must never
+// block a session from starting, so both cases just return an empty,
+// path-remembering history instead of an error.
+func LoadPromptHistory(path string) *PromptHistory {
+	h := &PromptHistory{path: path}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return h
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.TrimSpace(line) != "" {
+			h.entries = append(h.entries, line)
+		}
+	}
+	return h
+}
+
 // Add appends line to the history, in submission order. A blank line (or
 // one that is only whitespace) is not recorded — there is nothing useful
-// to recall from it.
+// to recall from it. If this PromptHistory was built via
+// LoadPromptHistory, line is also appended to its file immediately
+// (append-only, never rewritten wholesale, so a crash mid-session loses
+// at most nothing already flushed) — best-effort: a write failure (a
+// missing/unwritable directory, a full disk) is silently ignored rather
+// than surfaced, since losing history persistence must never break the
+// interactive session itself over a purely cosmetic convenience.
 func (h *PromptHistory) Add(line string) {
 	if h == nil || strings.TrimSpace(line) == "" {
 		return
 	}
 	h.entries = append(h.entries, line)
+	if h.path == "" {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(h.path), 0o755); err != nil {
+		return
+	}
+	f, err := os.OpenFile(h.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	fmt.Fprintln(f, line)
 }
 
 // at returns the entry i steps back from the most recent submission (0
