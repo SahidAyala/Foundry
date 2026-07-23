@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -30,6 +32,53 @@ func TestPromptHistory_NilSafe(t *testing.T) {
 	h.Add("/feature") // must not panic
 	if _, ok := h.at(0); ok {
 		t.Error("at(0) on a nil *PromptHistory reported ok=true, want false")
+	}
+}
+
+func TestLoadPromptHistory_MissingFileIsEmpty(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".foundry", "history")
+	h := LoadPromptHistory(path)
+	if _, ok := h.at(0); ok {
+		t.Error("at(0) on a freshly loaded, never-written history reported ok=true, want false")
+	}
+}
+
+func TestLoadPromptHistory_ReadsExistingLines(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "history")
+	if err := os.WriteFile(path, []byte("/feature add x\n/review\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	h := LoadPromptHistory(path)
+	if got, ok := h.at(0); !ok || got != "/review" {
+		t.Errorf("at(0) = %q, %v, want %q, true (most recent)", got, ok, "/review")
+	}
+	if got, ok := h.at(1); !ok || got != "/feature add x" {
+		t.Errorf("at(1) = %q, %v, want %q, true", got, ok, "/feature add x")
+	}
+}
+
+func TestPromptHistory_AddPersistsAcrossLoads(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".foundry", "history") // parent dir does not exist yet
+	first := LoadPromptHistory(path)
+	first.Add("/feature add x")
+	first.Add("/review")
+
+	second := LoadPromptHistory(path)
+	if got, ok := second.at(0); !ok || got != "/review" {
+		t.Errorf("reloaded at(0) = %q, %v, want %q, true", got, ok, "/review")
+	}
+	if got, ok := second.at(1); !ok || got != "/feature add x" {
+		t.Errorf("reloaded at(1) = %q, %v, want %q, true", got, ok, "/feature add x")
+	}
+}
+
+func TestNewPromptHistory_AddDoesNotPersist(t *testing.T) {
+	h := NewPromptHistory()
+	h.Add("/feature add x") // must not panic or attempt any filesystem write
+	if got, ok := h.at(0); !ok || got != "/feature add x" {
+		t.Errorf("at(0) = %q, %v, want %q, true (in-memory only)", got, ok, "/feature add x")
 	}
 }
 
