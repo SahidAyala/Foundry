@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** — drafted 2026-07-22, awaiting the maintainer's ratification under [ADR-0000](ADR-0000-governance-and-ratification-process.md). Unlike ADR-0007/ADR-0011/ADR-0008, this one is deliberately **not** self-ratified: it introduces Foundry's first external Go dependency, a real, binding precedent, and [ADR-0000](ADR-0000-governance-and-ratification-process.md)'s lightweight process still requires the maintainer's own act of ratifying, not an AI agent's. |
-| **Date** | Drafted 2026-07-22 |
+| **Status** | **Accepted** — ratified 2026-07-22 under [ADR-0000](ADR-0000-governance-and-ratification-process.md), the same day it was drafted. The maintainer confirmed `bubbletea`/`bubbles`/`lipgloss` directly, having reviewed the alternative of a hand-rolled line editor. |
+| **Date** | Drafted 2026-07-22; ratified 2026-07-22 |
 | **Deciders** | The project's sole maintainer, under [ADR-0000](ADR-0000-governance-and-ratification-process.md); drafted AI-assisted |
 | **Ratifies** | A new roadmap item, not an existing backlog row: a richer interactive-session terminal experience (autocomplete for slash commands, live suggestions, styled output) comparable to Claude Code / Codex / OpenCode's own CLIs — and, as a direct consequence, whether Foundry may depend on external Go modules at all. |
 | **Gates** | [roadmap.md](../00-overview/roadmap.md)'s new "Interactive terminal UX" parallel track (see Migration Strategy); [ADR-0001](ADR-0001-language-and-toolchain.md)'s R1 (single static binary) and its own flagged, not-yet-decided "Dependency & supply-chain policy" item (Future ADR Dependencies, point 3). |
@@ -48,6 +48,6 @@
 
 ## Review Checklist
 
-- [ ] Maintainer has confirmed `charmbracelet/bubbletea`/`bubbles`/`lipgloss` (vs. an alternative, e.g. a hand-rolled `golang.org/x/term`-based line editor, or `chzyer/readline`) as the preferred dependency.
-- [ ] R1 (static binary, `CGO_ENABLED=0`) re-confirmed against the actual `go build` output once the dependency is vendored.
-- [ ] Confirmed no import of `bubbletea`/`bubbles`/`lipgloss` leaks outside `session/`+`cli/`.
+- [x] Maintainer has confirmed `charmbracelet/bubbletea`/`bubbles`/`lipgloss` (vs. an alternative, e.g. a hand-rolled `golang.org/x/term`-based line editor, or `chzyer/readline`) as the preferred dependency.
+- [x] R1 (static binary, `CGO_ENABLED=0`) re-confirmed against the actual `go build` output once the dependency is vendored.
+- [x] Confirmed no import of `bubbletea`/`bubbles`/`lipgloss` leaks outside `session/`+`cli/`.
