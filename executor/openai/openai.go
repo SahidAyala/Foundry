@@ -85,10 +85,23 @@ type Executor struct {
 // directly and never reads the environment itself, keeping this package
 // decoupled from the project package exactly as executor/claude is.
 func NewExecutor(model, apiKey string) *Executor {
+	return NewExecutorWithEndpoint(model, apiKey, defaultEndpoint)
+}
+
+// NewExecutorWithEndpoint is NewExecutor against a caller-chosen endpoint
+// instead of OpenAI's own — for any service that speaks the same Chat
+// Completions request/response shape (Ollama, Groq, DeepSeek, and several
+// other providers all document explicit OpenAI-compatible endpoints; a
+// project opts into one of these via the "openai-compatible" vendor in
+// .foundry/executors.json, which requires base_url). apiKey may be empty
+// for an endpoint with no auth of its own (e.g. a local Ollama instance) —
+// the request still carries an empty "Authorization: Bearer " header,
+// which such an endpoint simply ignores.
+func NewExecutorWithEndpoint(model, apiKey, endpoint string) *Executor {
 	return &Executor{
 		model:    model,
 		apiKey:   apiKey,
-		endpoint: defaultEndpoint,
+		endpoint: endpoint,
 		timeout:  defaultTimeout,
 		doer:     http.DefaultClient,
 	}

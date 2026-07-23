@@ -79,11 +79,23 @@ To pin a Pipeline Step to a vendor other than the default Claude Code Executor, 
 {
   "gpt": { "vendor": "openai", "model": "gpt-4.1", "api_key_env": "OPENAI_API_KEY" },
   "flash": { "vendor": "gemini", "model": "gemini-3.5-flash" },
-  "flash-ci": { "vendor": "gemini-api", "model": "gemini-3.5-flash", "api_key_env": "GEMINI_API_KEY" }
+  "flash-ci": { "vendor": "gemini-api", "model": "gemini-3.5-flash", "api_key_env": "GEMINI_API_KEY" },
+  "local-llama": { "vendor": "openai-compatible", "model": "llama3", "base_url": "http://localhost:11434/v1/chat/completions" }
 }
 ```
 
-Then reference the name (`"gpt"`/`"flash"`/`"flash-ci"` above) from a Step's `executor` field in a Pipeline document — see [pipelines.md](pipelines.md). A missing `executors.json` means only the default Executor exists; nothing above is required to use Foundry at all. `openai`, `gemini`, and `gemini-api` are the supported vendors today ([ADR-0005](../03-adrs/ADR-0005-executor-contract-and-capability-model.md)); an unrecognized vendor is a clear configuration error, not a silent fallback.
+Then reference the name (`"gpt"`/`"flash"`/`"flash-ci"`/`"local-llama"` above) from a Step's `executor` field in a Pipeline document — see [pipelines.md](pipelines.md). A missing `executors.json` means only the default Executor exists; nothing above is required to use Foundry at all. `openai`, `gemini`, `gemini-api`, and `openai-compatible` are the supported vendors today ([ADR-0005](../03-adrs/ADR-0005-executor-contract-and-capability-model.md)); an unrecognized vendor is a clear configuration error, not a silent fallback.
+
+`openai-compatible` reuses the same client as `openai` against any endpoint that speaks the same Chat Completions request/response shape — `base_url` is required. This covers, among others:
+
+| Provider | `base_url` | Notes |
+|---|---|---|
+| [Ollama](https://ollama.com) | `http://localhost:11434/v1/chat/completions` | Fully local and free — no signup, no key, no rate limit; needs the model already pulled (`ollama pull llama3`) and reasonable local hardware. `api_key_env` can be left unset. |
+| [Groq](https://groq.com) | `https://api.groq.com/openai/v1/chat/completions` | Free tier, very fast inference, open (Llama-class) models. |
+| [DeepSeek](https://platform.deepseek.com) | `https://api.deepseek.com/chat/completions` | Not free, but inexpensive, and a genuinely strong coding model. |
+| [GitHub Models](https://docs.github.com/en/github-models) | check current docs for the exact endpoint | Free tier; authenticates with a GitHub PAT — the same credential class `remote_publish_token_env` already uses for `gh`. |
+
+Amazon Q Developer was considered and deliberately skipped: AWS announced its end-of-support in 2026, closing new signups (including its free tier) — not a fit to build against.
 
 `gemini` (recommended) runs the Gemini CLI as a subprocess, the same way the default Claude Code Executor does — it needs no `api_key_env` at all, since the CLI's own cached "Sign in with Google" login (`gemini`, run once interactively) is reused for every later headless call. `gemini-api` calls Gemini's REST API directly with a raw key instead — kept available deliberately as a last resort for environments where a one-time browser login is never possible (e.g. some CI runners), not as the default path. Gemini's free tier needs no credit card for either — [ai.google.dev/gemini-api/docs/pricing](https://ai.google.dev/gemini-api/docs/pricing) has current limits.
 

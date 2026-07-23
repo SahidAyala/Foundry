@@ -49,6 +49,32 @@ func TestLoadExecutorConfig_DecodesValidFile(t *testing.T) {
 	}
 }
 
+// TestLoadExecutorConfig_DecodesBaseURL covers the "openai-compatible"
+// vendor's own field (Ollama, Groq, DeepSeek, ... — anything speaking the
+// same Chat Completions shape at a different endpoint).
+func TestLoadExecutorConfig_DecodesBaseURL(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".foundry"), 0o755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	writeFile(t, filepath.Join(root, ".foundry"), "executors.json", `{
+		"local-llama": {"vendor": "openai-compatible", "model": "llama3", "base_url": "http://localhost:11434/v1/chat/completions"}
+	}`)
+
+	config, err := project.LoadExecutorConfig(root)
+	if err != nil {
+		t.Fatalf("LoadExecutorConfig failed: %v", err)
+	}
+	got, ok := config["local-llama"]
+	if !ok {
+		t.Fatalf("LoadExecutorConfig() = %+v, want a %q entry", config, "local-llama")
+	}
+	want := project.ExecutorConfig{Vendor: "openai-compatible", Model: "llama3", BaseURL: "http://localhost:11434/v1/chat/completions"}
+	if got != want {
+		t.Errorf("config[%q] = %+v, want %+v", "local-llama", got, want)
+	}
+}
+
 func TestLoadExecutorConfig_MalformedFileFails(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".foundry"), 0o755); err != nil {

@@ -120,6 +120,55 @@ func successFixture(t *testing.T, content string) string {
 	return string(body)
 }
 
+func TestNewExecutor_UsesDefaultEndpoint(t *testing.T) {
+	e := NewExecutor("gpt-5.1", "test-key")
+	if e.endpoint != defaultEndpoint {
+		t.Errorf("endpoint = %q, want the default %q", e.endpoint, defaultEndpoint)
+	}
+}
+
+// TestNewExecutorWithEndpoint_UsesGivenEndpoint covers the "openai-compatible"
+// vendor's whole reason to exist: any service speaking the same Chat
+// Completions shape (Ollama, Groq, DeepSeek, ...) reuses this exact client
+// by pointing it at their own endpoint instead of OpenAI's.
+func TestNewExecutorWithEndpoint_UsesGivenEndpoint(t *testing.T) {
+	e := NewExecutorWithEndpoint("llama-3.3-70b", "test-key", "http://localhost:11434/v1/chat/completions")
+	if e.endpoint != "http://localhost:11434/v1/chat/completions" {
+		t.Errorf("endpoint = %q, want the given custom endpoint", e.endpoint)
+	}
+
+	body := successFixture(t, "```diff\n"+sampleDiff+"```\n")
+	d := &fakeDoer{resp: jsonResponse(http.StatusOK, body)}
+	e.doer = d
+	e.timeout = time.Minute
+
+	if _, err := e.Execute(context.Background(), &domain.Intent{Text: "x"}, nil); err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if d.gotReq.URL.String() != "http://localhost:11434/v1/chat/completions" {
+		t.Errorf("request URL = %q, want the custom endpoint", d.gotReq.URL.String())
+	}
+}
+
+// TestNewExecutorWithEndpoint_EmptyAPIKeyStillSendsAuthHeader covers Ollama's
+// no-auth-required case: apiKey may be empty, and Execute must not treat
+// that as an error — the resulting empty-value Authorization header is
+// simply ignored by an endpoint with no auth of its own.
+func TestNewExecutorWithEndpoint_EmptyAPIKeyStillSendsAuthHeader(t *testing.T) {
+	e := NewExecutorWithEndpoint("llama3", "", "http://localhost:11434/v1/chat/completions")
+	body := successFixture(t, "```diff\n"+sampleDiff+"```\n")
+	d := &fakeDoer{resp: jsonResponse(http.StatusOK, body)}
+	e.doer = d
+	e.timeout = time.Minute
+
+	if _, err := e.Execute(context.Background(), &domain.Intent{Text: "x"}, nil); err != nil {
+		t.Fatalf("Execute failed with an empty API key: %v", err)
+	}
+	if got := d.gotReq.Header.Get("Authorization"); got != "Bearer " {
+		t.Errorf("Authorization header = %q, want %q (empty key, still sent)", got, "Bearer ")
+	}
+}
+
 func TestExecute_Success(t *testing.T) {
 	body := successFixture(t, "```diff\n"+sampleDiff+"```\n")
 	d := &fakeDoer{resp: jsonResponse(http.StatusOK, body)}
