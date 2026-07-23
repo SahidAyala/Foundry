@@ -95,12 +95,14 @@ Then reference the name (`"gpt"`/`"flash"`/`"flash-ci"` above) from a Step's `ex
 {
   "docs_path": "docs/CHANGELOG.md",
   "require_approval_before_remote_publish": true,
-  "remote_publish_token_env": "GH_TOKEN"
+  "remote_publish_token_env": "GH_TOKEN",
+  "request_copilot_review": true
 }
 ```
 
 - `docs_path` — enables the `project-doc` apply target, appending an Act's output to this file.
 - `require_approval_before_remote_publish` / `remote_publish_token_env` — enable the `remote-pr` apply target ([ADR-0010](../03-adrs/ADR-0010-vcs-pr-integration-and-apply-targets.md)), which pushes a branch and opens a pull request via `gh`. A Pipeline declaring `remote-pr` with no preceding `approve` Step is refused when it's loaded, not silently allowed to skip human approval.
+- `request_copilot_review` — after `remote-pr` opens a pull request, also ask GitHub Copilot to review it (`gh pr edit --add-reviewer @copilot`). Has no effect unless `remote_publish_token_env` is set too. Requires a paid Copilot plan on the repository/organization — Foundry can't detect whether that's available, so this defaults to off. A failure to request the review (no such plan, the feature not enabled) is printed as a warning but never fails the Act — the pull request itself has already been opened by that point.
 
 ## Authored Knowledge (optional)
 

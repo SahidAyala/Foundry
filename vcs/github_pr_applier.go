@@ -50,12 +50,29 @@ type GitHubPRApplier struct {
 	// silently.
 	Out io.Writer
 
-	// run is the seam createPullRequest calls through instead of shelling
-	// out directly, so tests never require a real gh binary, network
-	// access, or GitHub credentials. Nil means runGH, the real subprocess
-	// implementation.
+	// RequestCopilotReview, when true, asks GitHub Copilot to review the
+	// pull request (`gh pr edit --add-reviewer @copilot`, GA since
+	// 2026-03-11) immediately after Apply successfully opens it. This
+	// requires a paid Copilot plan on the repository/organization (GitHub
+	// Docs, "Using GitHub Copilot code review") — Foundry has no way to
+	// detect whether that's actually available, so it defaults to false
+	// rather than guessing. A failure to request the review is surfaced to
+	// Out as a warning, never returned as an Apply error: the pull request
+	// — Foundry's actual terminal action (ADR-0010 Decision 5) — has
+	// already, successfully, been created by the time this runs.
+	RequestCopilotReview bool
+
+	// run is the seam createPullRequest and requestCopilotReview call
+	// through instead of shelling out directly, so tests never require a
+	// real gh binary, network access, or GitHub credentials. Nil means
+	// runGH, the real subprocess implementation.
 	run ghRunner
 }
+
+// copilotReviewer is the handle `gh pr edit --add-reviewer` expects to
+// request a Copilot code review (github.blog/changelog,
+// "Request Copilot code review from GitHub CLI", 2026-03-11).
+const copilotReviewer = "@copilot"
 
 var _ engine.Applier = GitHubPRApplier{}
 
@@ -105,6 +122,17 @@ func (a GitHubPRApplier) Apply(ctx context.Context, workspaceRoot string, act *d
 			err, ws.BranchName(), defaultRemote, ws.BranchName())
 	}
 
+	if a.RequestCopilotReview {
+		if err := requestCopilotReview(ctx, run, workspaceRoot, ws.BranchName(), token); err != nil {
+			// Best-effort, deliberately: the pull request itself already
+			// exists by this point. A repository without Copilot code
+			// review actually enabled (no paid plan, or the feature simply
+			// off) must not make Foundry treat the whole Act as failed over
+			// this supplementary, opt-in nice-to-have.
+			fmt.Fprintf(out, "vcs: github-pr: could not request a Copilot review (continuing; the pull request was already opened): %v\n", err)
+		}
+	}
+
 	if err := ws.Clean(ctx); err != nil {
 		return fmt.Errorf("vcs: github-pr: %w", err)
 	}
@@ -128,6 +156,23 @@ func createPullRequest(ctx context.Context, run ghRunner, repoPath, branch strin
 	env := []string{"GH_TOKEN=" + token}
 	if err := run(ctx, repoPath, args, env, out); err != nil {
 		return fmt.Errorf("gh pr create: %w", err)
+	}
+	return nil
+}
+
+// requestCopilotReview shells out to `gh pr edit <branch> --add-reviewer
+// @copilot` via run, adding Copilot as a requested reviewer on the pull
+// request already opened for branch. It authenticates the same way
+// createPullRequest does: token through GH_TOKEN, set only for this one
+// subprocess call. Output is discarded (io.Discard) rather than mixed into
+// Out — this is a supplementary, best-effort call the caller already
+// wraps in its own warning message on failure, and gh's own confirmation
+// text on success adds nothing a caller needs to see.
+func requestCopilotReview(ctx context.Context, run ghRunner, repoPath, branch, token string) error {
+	args := []string{"pr", "edit", branch, "--add-reviewer", copilotReviewer}
+	env := []string{"GH_TOKEN=" + token}
+	if err := run(ctx, repoPath, args, env, io.Discard); err != nil {
+		return fmt.Errorf("gh pr edit --add-reviewer %s: %w", copilotReviewer, err)
 	}
 	return nil
 }

@@ -166,7 +166,7 @@ func buildApplierRegistry(cfg project.Config) (*engine.ApplierRegistry, error) {
 		}
 	}
 	if cfg.RemotePublishTokenEnv != "" {
-		if err := appliers.Register(engine.ApplyTargetRemotePR, vcs.GitHubPRApplier{TokenEnv: cfg.RemotePublishTokenEnv}); err != nil {
+		if err := appliers.Register(engine.ApplyTargetRemotePR, vcs.GitHubPRApplier{TokenEnv: cfg.RemotePublishTokenEnv, RequestCopilotReview: cfg.RequestCopilotReview}); err != nil {
 			return nil, err
 		}
 	}
