@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"foundry/executor/gemini"
 	"foundry/executor/openai"
 	"foundry/project"
 )
@@ -21,6 +22,27 @@ func TestNamedExecutor_OpenAIVendorConstructsOpenAIExecutor(t *testing.T) {
 	}
 	if _, ok := exec.(*openai.Executor); !ok {
 		t.Errorf("namedExecutor(vendor=openai) = %T, want *openai.Executor", exec)
+	}
+}
+
+// TestNamedExecutor_GeminiVendorConstructsGeminiExecutor confirms
+// namedExecutor's vendor dispatch recognizes "gemini" (executor/gemini's
+// addition alongside "openai") — no new architectural decision was needed
+// for this, per ADR-0005/ADR-0006 already covering any number of named
+// vendors.
+func TestNamedExecutor_GeminiVendorConstructsGeminiExecutor(t *testing.T) {
+	t.Setenv("FOUNDRY_TEST_GEMINI_KEY", "test-key-value")
+
+	exec, err := namedExecutor(project.ExecutorConfig{
+		Vendor:    "gemini",
+		Model:     "gemini-3.5-flash",
+		APIKeyEnv: "FOUNDRY_TEST_GEMINI_KEY",
+	})
+	if err != nil {
+		t.Fatalf("namedExecutor failed: %v", err)
+	}
+	if _, ok := exec.(*gemini.Executor); !ok {
+		t.Errorf("namedExecutor(vendor=gemini) = %T, want *gemini.Executor", exec)
 	}
 }
 

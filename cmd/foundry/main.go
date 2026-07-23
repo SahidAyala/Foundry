@@ -10,6 +10,7 @@ import (
 	"foundry/cmd/foundry/commands"
 	"foundry/engine"
 	"foundry/executor/claude"
+	"foundry/executor/gemini"
 	"foundry/executor/openai"
 	"foundry/project"
 	"foundry/session"
@@ -31,18 +32,22 @@ func claudeExecutor(workspace string) engine.Executor {
 // Decision 5, docs/03-adrs/ADR-0005-executor-contract-and-capability-model.md):
 // it constructs a named, project-configured Executor from a
 // project.ExecutorConfig decoded out of a project's .foundry/executors.json.
-// This is the one place in the whole binary that knows executor/openai
-// exists — project, session, and cmd/foundry/commands stay vendor-agnostic,
-// calling only this function through the project.ExecutorConstructor seam.
-// "openai" is the only supported vendor today (RFC-0004 §2.3's recommended
-// second vendor); an unrecognized vendor is a clear, named configuration
-// error rather than a silent no-op.
+// This is the one place in the whole binary that knows executor/openai or
+// executor/gemini exist — project, session, and cmd/foundry/commands stay
+// vendor-agnostic, calling only this function through the
+// project.ExecutorConstructor seam. Adding gemini here needed no new
+// architectural decision: ADR-0005's Executor contract and ADR-0006's
+// explicit-pin routing already cover any number of named vendors, the same
+// way openai's own addition did. An unrecognized vendor is a clear, named
+// configuration error rather than a silent no-op.
 func namedExecutor(cfg project.ExecutorConfig) (engine.Executor, error) {
 	switch cfg.Vendor {
 	case "openai":
 		return openai.NewExecutor(cfg.Model, os.Getenv(cfg.APIKeyEnv)), nil
+	case "gemini":
+		return gemini.NewExecutor(cfg.Model, os.Getenv(cfg.APIKeyEnv)), nil
 	default:
-		return nil, fmt.Errorf("foundry: unsupported executor vendor %q (only %q is supported today)", cfg.Vendor, "openai")
+		return nil, fmt.Errorf("foundry: unsupported executor vendor %q (supported: %q, %q)", cfg.Vendor, "openai", "gemini")
 	}
 }
 

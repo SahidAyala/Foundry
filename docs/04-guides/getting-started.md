@@ -9,7 +9,7 @@
 | [Go](https://go.dev/dl/) 1.21+ | Building the binary | Build-time only — not required after `foundry` is installed. |
 | `git` | Every Act | Foundry isolates each Act's patch on a throwaway branch (`workspace.NewWorkspace`). The target directory must already be a git repository with at least one commit — Foundry never runs `git init` for you. |
 | [Claude Code CLI](https://github.com/anthropics/claude-code) (`claude`), installed and authenticated | The default Executor | `foundry do` and the interactive session call `claude -p` as a subprocess. Foundry reads no API key for it — authentication is Claude Code's own. This is the only Executor available with zero extra configuration. |
-| An OpenAI API key *(optional)* | A second, named Executor | Only needed if you want to pin specific Pipeline Steps to OpenAI instead of Claude Code — see [Configuring a second Executor](#configuring-a-second-executor-optional) below. |
+| An OpenAI or Gemini API key *(optional)* | A second, named Executor | Only needed if you want to pin specific Pipeline Steps to OpenAI or Gemini instead of Claude Code — see [Configuring a second Executor](#configuring-a-second-executor-optional) below. Gemini's API has a genuinely free tier. |
 | `gh` CLI, authenticated *(optional)* | The `remote-pr` apply target | Only needed if a Pipeline opens a pull request directly ([ADR-0010](../03-adrs/ADR-0010-vcs-pr-integration-and-apply-targets.md)). Not required for local use. |
 
 ## Install
@@ -76,11 +76,12 @@ To pin a Pipeline Step to a vendor other than the default Claude Code Executor, 
 
 ```json
 {
-  "gpt": { "vendor": "openai", "model": "gpt-4.1", "api_key_env": "OPENAI_API_KEY" }
+  "gpt": { "vendor": "openai", "model": "gpt-4.1", "api_key_env": "OPENAI_API_KEY" },
+  "flash": { "vendor": "gemini", "model": "gemini-3.5-flash", "api_key_env": "GEMINI_API_KEY" }
 }
 ```
 
-Then reference the name (`"gpt"` above) from a Step's `executor` field in a Pipeline document — see [pipelines.md](pipelines.md). A missing `executors.json` means only the default Executor exists; nothing above is required to use Foundry at all. `openai` is the only supported vendor today ([ADR-0005](../03-adrs/ADR-0005-executor-contract-and-capability-model.md)); an unrecognized vendor is a clear configuration error, not a silent fallback.
+Then reference the name (`"gpt"`/`"flash"` above) from a Step's `executor` field in a Pipeline document — see [pipelines.md](pipelines.md). A missing `executors.json` means only the default Executor exists; nothing above is required to use Foundry at all. `openai` and `gemini` are the supported vendors today ([ADR-0005](../03-adrs/ADR-0005-executor-contract-and-capability-model.md)); an unrecognized vendor is a clear configuration error, not a silent fallback. Gemini's API has a genuinely free tier for its Flash models (no credit card required) — [ai.google.dev/gemini-api/docs/pricing](https://ai.google.dev/gemini-api/docs/pricing) has current limits.
 
 ## Project configuration (optional)
 
@@ -117,6 +118,6 @@ Real: it builds a real patch through a real Executor against a real repository, 
 
 ## Troubleshooting
 
-- **`claude: executable "claude" not found in PATH`** — install the Claude Code CLI, or configure a named OpenAI Executor above and pin every `generate` Step to it.
+- **`claude: executable "claude" not found in PATH`** — install the Claude Code CLI, or configure a named OpenAI or Gemini Executor above and pin every `generate` Step to it.
 - **Foundry refuses to start in a directory** — the target must already be a git repository with at least one commit; `foundry` does not initialize one for you.
 - **A Pipeline with a `remote-pr` apply Step fails to load** — if `require_approval_before_remote_publish` is `true` in `.foundry/config.json`, that Pipeline must declare an `approve` Step before the `remote-pr` one, or registration refuses it outright.
