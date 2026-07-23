@@ -16,6 +16,8 @@ import (
 	"foundry/executor/openai"
 	"foundry/project"
 	"foundry/session"
+	"foundry/ticket"
+	githubticket "foundry/ticket/github"
 )
 
 func main() {
@@ -87,6 +89,23 @@ func namedExecutor(cfg project.ExecutorConfig, workspace string) (engine.Executo
 	}
 }
 
+// newTicketFetcher is the production ticket-fetcher vendor-dispatch
+// factory (mirroring namedExecutor's own shape) for /issue's own external
+// system boundary (docs/02-architecture/system-context.md). "github"
+// resolves to ticket/github, reusing the exact same already-authenticated
+// gh CLI session vcs.GitHubPRApplier's own PR-opening already requires —
+// Foundry reads no separate credential for it. Only runSession calls
+// this, and only when project.Config.TicketProvider is set — /issue is
+// entirely opt-in, exactly like RequestCopilotReview.
+func newTicketFetcher(cfg project.Config, workspace string) (ticket.Fetcher, error) {
+	switch cfg.TicketProvider {
+	case "github":
+		return githubticket.NewFetcher(workspace), nil
+	default:
+		return nil, fmt.Errorf("foundry: unsupported ticket provider %q (supported: %q)", cfg.TicketProvider, "github")
+	}
+}
+
 // run's newNamedExecutor is variadic (pass zero or one) so every existing
 // caller — production and test — that never configures a named Executor
 // keeps compiling and behaving identically; only main's own call above
@@ -141,6 +160,20 @@ func runSession(ctx context.Context, stdin io.Reader, stdout io.Writer, newExecu
 	if err != nil {
 		fmt.Fprintln(stdout, err)
 		return 1
+	}
+
+	cfg, err := project.LoadConfig(root)
+	if err != nil {
+		fmt.Fprintln(stdout, err)
+		return 1
+	}
+	if cfg.TicketProvider != "" {
+		fetcher, err := newTicketFetcher(cfg, root)
+		if err != nil {
+			fmt.Fprintln(stdout, err)
+			return 1
+		}
+		s.SetTicketFetcher(fetcher)
 	}
 
 	repl := session.NewREPL(s, session.DefaultCommandRegistry())

@@ -14,6 +14,7 @@ import (
 	"foundry/knowledge"
 	"foundry/project"
 	"foundry/record"
+	"foundry/ticket"
 	"foundry/vcs"
 	"foundry/verify"
 	"foundry/workspace"
@@ -67,15 +68,16 @@ type Session struct {
 	// gets, unchanged.
 	Interactive bool
 
-	registry    *engine.PipelineRegistry
-	recorder    record.Recorder
-	checkpoints *record.CheckpointStore
-	gatherer    engine.Gatherer
-	verifier    engine.Verifier
-	executor    engine.Executor
-	executors   *engine.ExecutorRegistry
-	appliers    *engine.ApplierRegistry
-	cfg         project.Config
+	registry      *engine.PipelineRegistry
+	recorder      record.Recorder
+	checkpoints   *record.CheckpointStore
+	gatherer      engine.Gatherer
+	verifier      engine.Verifier
+	executor      engine.Executor
+	executors     *engine.ExecutorRegistry
+	appliers      *engine.ApplierRegistry
+	cfg           project.Config
+	ticketFetcher ticket.Fetcher
 }
 
 // NewSession resolves root's full Pipeline registry (built-in plus
@@ -204,6 +206,16 @@ func (s *Session) Recorder() record.Recorder {
 // path (cmd/foundry/commands/do.go's wireEngine), which always wired one.
 func (s *Session) Checkpoints() *record.CheckpointStore {
 	return s.checkpoints
+}
+
+// SetTicketFetcher attaches fetcher as /issue's ticket-fetching backend
+// (the composition root builds one from project.Config.TicketProvider via
+// a project.TicketFetcherConstructor, the same seam SetRouter/SetApplier
+// mirror for Engine). Optional: if never called, IssueCommand.Run reports
+// a clear "no ticket provider configured" error rather than a nil-pointer
+// panic.
+func (s *Session) SetTicketFetcher(fetcher ticket.Fetcher) {
+	s.ticketFetcher = fetcher
 }
 
 // Initialized reports whether /init has already scaffolded this project

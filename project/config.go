@@ -46,6 +46,13 @@ type Config struct {
 	// also set — false (or the field's absence) means a project has not
 	// opted into this supplementary, best-effort request.
 	RequestCopilotReview bool `json:"request_copilot_review"`
+
+	// TicketProvider names which external ticketing system the
+	// interactive session's /issue command fetches from ("github" today;
+	// more are planned — see docs/00-overview/implementation-status.md).
+	// Empty means /issue is not configured; it reports a clear,
+	// named error if invoked rather than guessing a provider.
+	TicketProvider string `json:"ticket_provider"`
 }
 
 // LoadConfig reads and decodes root's conventional configuration file

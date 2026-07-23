@@ -65,7 +65,7 @@ func TestWireEngine_ResolvesProjectLocalPipeline(t *testing.T) {
 
 	newExecutor := func(workspace string) engine.Executor { return executor.NewScriptedExecutor("") }
 
-	for _, name := range []string{"default", "review", "feature", "bugfix", "release"} {
+	for _, name := range []string{"default", "review", "feature", "bugfix", "release", "issue"} {
 		eng, _, _, err := wireEngine(context.Background(), root, strings.NewReader(""), &bytes.Buffer{}, newExecutor, nil, name)
 		if err != nil {
 			t.Errorf("wireEngine(%q) failed: %v", name, err)

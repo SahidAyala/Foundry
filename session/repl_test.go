@@ -124,7 +124,7 @@ func TestREPL_HelpListsRegisteredCommands(t *testing.T) {
 	}
 
 	got := out.String()
-	for _, name := range []string{"/init", "/feature", "/bug", "/review", "/release", "/help"} {
+	for _, name := range []string{"/init", "/feature", "/bug", "/review", "/release", "/issue", "/help"} {
 		if !strings.Contains(got, name) {
 			t.Errorf("output = %q, want it to list %s", got, name)
 		}

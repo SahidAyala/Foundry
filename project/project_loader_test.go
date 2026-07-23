@@ -76,7 +76,7 @@ func TestProjectLoader_Scaffold_CreatesStarterDocuments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadRegistry after Scaffold failed: %v", err)
 	}
-	for _, name := range []string{"feature", "bugfix", "release"} {
+	for _, name := range []string{"feature", "bugfix", "release", "issue"} {
 		if _, err := registry.Get(name); err != nil {
 			t.Errorf("Get(%q) failed after Scaffold: %v", name, err)
 		}
