@@ -64,6 +64,34 @@ func TestNamedExecutor_GeminiAPIVendorConstructsGeminiExecutor(t *testing.T) {
 	}
 }
 
+// TestNamedExecutor_OpenAICompatibleVendorConstructsOpenAIExecutor covers
+// the general escape hatch for any Chat-Completions-compatible endpoint
+// (Ollama, Groq, DeepSeek, ...) — one client reused against a caller-named
+// base_url instead of a near-duplicate package per vendor.
+func TestNamedExecutor_OpenAICompatibleVendorConstructsOpenAIExecutor(t *testing.T) {
+	exec, err := namedExecutor(project.ExecutorConfig{
+		Vendor:  "openai-compatible",
+		Model:   "llama3",
+		BaseURL: "http://localhost:11434/v1/chat/completions",
+	}, "/repo")
+	if err != nil {
+		t.Fatalf("namedExecutor failed: %v", err)
+	}
+	if _, ok := exec.(*openai.Executor); !ok {
+		t.Errorf("namedExecutor(vendor=openai-compatible) = %T, want *openai.Executor", exec)
+	}
+}
+
+func TestNamedExecutor_OpenAICompatibleVendorRequiresBaseURL(t *testing.T) {
+	_, err := namedExecutor(project.ExecutorConfig{Vendor: "openai-compatible", Model: "llama3"}, "/repo")
+	if err == nil {
+		t.Fatal("namedExecutor(vendor=openai-compatible) with no base_url returned nil error")
+	}
+	if !strings.Contains(err.Error(), "base_url") {
+		t.Errorf("error = %q, want it to name the missing base_url field", err)
+	}
+}
+
 func TestNamedExecutor_UnknownVendorFails(t *testing.T) {
 	_, err := namedExecutor(project.ExecutorConfig{Vendor: "some-future-vendor"}, "/repo")
 	if err == nil {

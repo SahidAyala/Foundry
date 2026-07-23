@@ -25,6 +25,12 @@ type ExecutorConfig struct {
 	Vendor    string `json:"vendor"`
 	Model     string `json:"model"`
 	APIKeyEnv string `json:"api_key_env"`
+
+	// BaseURL names the endpoint an "openai-compatible" vendor's Executor
+	// calls instead of OpenAI's own — required for that vendor (Ollama,
+	// Groq, DeepSeek, and others document an explicit OpenAI-compatible
+	// endpoint); ignored by every other vendor.
+	BaseURL string `json:"base_url"`
 }
 
 // LoadExecutorConfig reads and decodes root's conventional Executor

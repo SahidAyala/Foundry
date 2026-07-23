@@ -46,11 +46,18 @@ func claudeExecutor(workspace string) engine.Executor {
 // Google" login (cached to disk, reused headlessly on later runs — see
 // executor/geminicli's own package doc) needs no key Foundry ever reads.
 // "gemini-api" names that HTTP path explicitly, for environments where no
-// browser is ever available to complete that one-time login. Adding either
-// needed no new architectural decision: ADR-0005's Executor contract and
-// ADR-0006's explicit-pin routing already cover any number of named
-// vendors. An unrecognized vendor is a clear, named configuration error
-// rather than a silent no-op.
+// browser is ever available to complete that one-time login.
+//
+// "openai-compatible" reuses executor/openai's own Chat-Completions client
+// against a caller-named base_url instead of writing a near-duplicate
+// package per vendor: Ollama (free, local, no key), Groq, DeepSeek, and
+// several other providers all document an explicit OpenAI-compatible
+// endpoint, so one client already covers all of them.
+//
+// Adding any of this needed no new architectural decision: ADR-0005's
+// Executor contract and ADR-0006's explicit-pin routing already cover any
+// number of named vendors. An unrecognized vendor is a clear, named
+// configuration error rather than a silent no-op.
 func namedExecutor(cfg project.ExecutorConfig, workspace string) (engine.Executor, error) {
 	switch cfg.Vendor {
 	case "openai":
@@ -59,8 +66,13 @@ func namedExecutor(cfg project.ExecutorConfig, workspace string) (engine.Executo
 		return geminicli.NewExecutor(workspace, cfg.Model), nil
 	case "gemini-api":
 		return gemini.NewExecutor(cfg.Model, os.Getenv(cfg.APIKeyEnv)), nil
+	case "openai-compatible":
+		if cfg.BaseURL == "" {
+			return nil, fmt.Errorf("foundry: vendor %q requires base_url in .foundry/executors.json (e.g. Ollama, Groq, DeepSeek — any endpoint speaking the Chat Completions shape)", cfg.Vendor)
+		}
+		return openai.NewExecutorWithEndpoint(cfg.Model, os.Getenv(cfg.APIKeyEnv), cfg.BaseURL), nil
 	default:
-		return nil, fmt.Errorf("foundry: unsupported executor vendor %q (supported: %q, %q, %q)", cfg.Vendor, "openai", "gemini", "gemini-api")
+		return nil, fmt.Errorf("foundry: unsupported executor vendor %q (supported: %q, %q, %q, %q)", cfg.Vendor, "openai", "gemini", "gemini-api", "openai-compatible")
 	}
 }
 
