@@ -10,6 +10,7 @@ import (
 	"foundry/cmd/foundry/commands"
 	"foundry/engine"
 	"foundry/executor/claude"
+	"foundry/executor/copilotcli"
 	"foundry/executor/gemini"
 	"foundry/executor/geminicli"
 	"foundry/executor/openai"
@@ -54,6 +55,14 @@ func claudeExecutor(workspace string) engine.Executor {
 // several other providers all document an explicit OpenAI-compatible
 // endpoint, so one client already covers all of them.
 //
+// "copilot" resolves to executor/copilotcli, delegating generate Steps (not
+// just PR review — see vcs.GitHubPRApplier's own RequestCopilotReview) to
+// the GitHub Copilot CLI, the same "delegate auth to the vendor's own CLI"
+// pattern as "gemini". Unlike Claude Code and the Gemini CLI, the Copilot
+// CLI is genuinely agentic — see executor/copilotcli's own package doc for
+// the specific safeguard (no tool grants, plus a git-status check) this
+// demands, and why it has not been validated live in this environment.
+//
 // Adding any of this needed no new architectural decision: ADR-0005's
 // Executor contract and ADR-0006's explicit-pin routing already cover any
 // number of named vendors. An unrecognized vendor is a clear, named
@@ -66,13 +75,15 @@ func namedExecutor(cfg project.ExecutorConfig, workspace string) (engine.Executo
 		return geminicli.NewExecutor(workspace, cfg.Model), nil
 	case "gemini-api":
 		return gemini.NewExecutor(cfg.Model, os.Getenv(cfg.APIKeyEnv)), nil
+	case "copilot":
+		return copilotcli.NewExecutor(workspace, cfg.Model), nil
 	case "openai-compatible":
 		if cfg.BaseURL == "" {
 			return nil, fmt.Errorf("foundry: vendor %q requires base_url in .foundry/executors.json (e.g. Ollama, Groq, DeepSeek — any endpoint speaking the Chat Completions shape)", cfg.Vendor)
 		}
 		return openai.NewExecutorWithEndpoint(cfg.Model, os.Getenv(cfg.APIKeyEnv), cfg.BaseURL), nil
 	default:
-		return nil, fmt.Errorf("foundry: unsupported executor vendor %q (supported: %q, %q, %q, %q)", cfg.Vendor, "openai", "gemini", "gemini-api", "openai-compatible")
+		return nil, fmt.Errorf("foundry: unsupported executor vendor %q (supported: %q, %q, %q, %q, %q)", cfg.Vendor, "openai", "gemini", "gemini-api", "copilot", "openai-compatible")
 	}
 }
 

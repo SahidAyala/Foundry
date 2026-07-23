@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"foundry/executor/copilotcli"
 	"foundry/executor/gemini"
 	"foundry/executor/geminicli"
 	"foundry/executor/openai"
@@ -61,6 +62,20 @@ func TestNamedExecutor_GeminiAPIVendorConstructsGeminiExecutor(t *testing.T) {
 	}
 	if _, ok := exec.(*gemini.Executor); !ok {
 		t.Errorf("namedExecutor(vendor=gemini-api) = %T, want *gemini.Executor", exec)
+	}
+}
+
+// TestNamedExecutor_CopilotVendorConstructsCopilotCLIExecutor confirms
+// namedExecutor's vendor dispatch resolves "copilot" to executor/copilotcli
+// — delegating generate Steps to the GitHub Copilot CLI, not just PR review
+// (vcs.GitHubPRApplier's own RequestCopilotReview).
+func TestNamedExecutor_CopilotVendorConstructsCopilotCLIExecutor(t *testing.T) {
+	exec, err := namedExecutor(project.ExecutorConfig{Vendor: "copilot"}, "/repo")
+	if err != nil {
+		t.Fatalf("namedExecutor failed: %v", err)
+	}
+	if _, ok := exec.(*copilotcli.Executor); !ok {
+		t.Errorf("namedExecutor(vendor=copilot) = %T, want *copilotcli.Executor", exec)
 	}
 }
 
