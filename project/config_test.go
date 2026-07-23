@@ -62,6 +62,33 @@ func TestLoadConfig_DecodesTicketProvider(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_DecodesJiraFields(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".foundry"), 0o755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	writeFile(t, filepath.Join(root, ".foundry"), "config.json", `{
+		"ticket_provider": "jira",
+		"jira_base_url": "https://example.atlassian.net",
+		"jira_email": "someone@example.com",
+		"jira_api_token_env": "JIRA_API_TOKEN"
+	}`)
+
+	config, err := project.LoadConfig(root)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if config.JiraBaseURL != "https://example.atlassian.net" {
+		t.Errorf("JiraBaseURL = %q, want %q", config.JiraBaseURL, "https://example.atlassian.net")
+	}
+	if config.JiraEmail != "someone@example.com" {
+		t.Errorf("JiraEmail = %q, want %q", config.JiraEmail, "someone@example.com")
+	}
+	if config.JiraAPITokenEnv != "JIRA_API_TOKEN" {
+		t.Errorf("JiraAPITokenEnv = %q, want %q", config.JiraAPITokenEnv, "JIRA_API_TOKEN")
+	}
+}
+
 func TestLoadConfig_DecodesValidFile(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".foundry"), 0o755); err != nil {

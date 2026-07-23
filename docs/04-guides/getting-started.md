@@ -120,7 +120,20 @@ Amazon Q Developer was considered and deliberately skipped: AWS announced its en
 - `docs_path` — enables the `project-doc` apply target, appending an Act's output to this file.
 - `require_approval_before_remote_publish` / `remote_publish_token_env` — enable the `remote-pr` apply target ([ADR-0010](../03-adrs/ADR-0010-vcs-pr-integration-and-apply-targets.md)), which pushes a branch and opens a pull request via `gh`. A Pipeline declaring `remote-pr` with no preceding `approve` Step is refused when it's loaded, not silently allowed to skip human approval.
 - `request_copilot_review` — after `remote-pr` opens a pull request, also ask GitHub Copilot to review it (`gh pr edit --add-reviewer @copilot`). Has no effect unless `remote_publish_token_env` is set too. Requires a paid Copilot plan on the repository/organization — Foundry can't detect whether that's available, so this defaults to off. A failure to request the review (no such plan, the feature not enabled) is printed as a warning but never fails the Act — the pull request itself has already been opened by that point.
-- `ticket_provider` — enables `/issue <id>`. `"github"` is the only supported value today (Jira is next); an unset `ticket_provider` makes `/issue` report a clear configuration error rather than guessing. GitHub needs no separate credential: it shells out to `gh issue view`, reusing the same authenticated `gh` session `remote_publish_token_env` already assumes is set up. `.foundry/pipelines/issue.json` (scaffolded by `/init` like every other starter) is the Pipeline `/issue` runs — edit it to target `remote-pr` on its `apply` Step if you want `/issue` to end by opening a pull request rather than applying locally.
+- `ticket_provider` — enables `/issue <id>`. `"github"` or `"jira"` today (GitLab and Asana are planned); an unset `ticket_provider` makes `/issue` report a clear configuration error rather than guessing. GitHub needs no separate credential: it shells out to `gh issue view`, reusing the same authenticated `gh` session `remote_publish_token_env` already assumes is set up. `.foundry/pipelines/issue.json` (scaffolded by `/init` like every other starter) is the Pipeline `/issue` runs — edit it to target `remote-pr` on its `apply` Step if you want `/issue` to end by opening a pull request rather than applying locally.
+
+Jira additionally needs, since it has no equivalent already-authenticated CLI session to reuse:
+
+```json
+{
+  "ticket_provider": "jira",
+  "jira_base_url": "https://yourcompany.atlassian.net",
+  "jira_email": "you@yourcompany.com",
+  "jira_api_token_env": "JIRA_API_TOKEN"
+}
+```
+
+`jira_api_token_env` names the environment variable holding an Atlassian API token (not your account password) — generate one at [id.atlassian.com/manage/api-tokens](https://id.atlassian.com/manage-profile/security/api-tokens). **This path has not been validated against a real Jira site** (no Jira Cloud account or API token in this environment) — the GitHub path above has been, live, against a real issue.
 
 ## Authored Knowledge (optional)
 
