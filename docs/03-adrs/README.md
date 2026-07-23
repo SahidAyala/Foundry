@@ -23,7 +23,11 @@
 
 Each owns one or more **compatibility surfaces** (expensive to change after release). *Numbering is provisional and not yet ratified.*
 
-**Empty.** Every backlog row identified so far has been drafted and ratified — see [implementation-status.md](../00-overview/implementation-status.md) for what remains genuinely unbuilt (a mechanism/versioning ADR still needs writing once [ADR-0008](ADR-0008-extension-isolation-and-contract-versioning.md)'s named trigger fires; capability-based negotiation once [ADR-0006](ADR-0006-routing-and-policy.md)'s named trigger fires). A new backlog row is added here the moment a genuinely new architectural decision is identified as needed.
+| ADR | Decision | Notes |
+|---|---|---|
+| [ADR-0012](ADR-0012-interactive-terminal-ux-and-first-dependency.md) | Interactive terminal UX & Foundry's first third-party dependency (`charmbracelet/bubbletea`/`bubbles`/`lipgloss`, confined to `session/`+`cli/`, for slash-command autocomplete and styled output) | Drafted 2026-07-22. Awaiting the maintainer's own ratification — deliberately not self-ratified, since it's the project's first external dependency. |
+
+Otherwise **empty** — every other backlog row identified so far has been drafted and ratified — see [implementation-status.md](../00-overview/implementation-status.md) for what remains genuinely unbuilt (a mechanism/versioning ADR still needs writing once [ADR-0008](ADR-0008-extension-isolation-and-contract-versioning.md)'s named trigger fires; capability-based negotiation once [ADR-0006](ADR-0006-routing-and-policy.md)'s named trigger fires). A new backlog row is added here the moment a genuinely new architectural decision is identified as needed.
 
 ## Status definitions
 
