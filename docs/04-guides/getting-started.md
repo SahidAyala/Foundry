@@ -120,9 +120,18 @@ Amazon Q Developer was considered and deliberately skipped: AWS announced its en
 - `docs_path` — enables the `project-doc` apply target, appending an Act's output to this file.
 - `require_approval_before_remote_publish` / `remote_publish_token_env` — enable the `remote-pr` apply target ([ADR-0010](../03-adrs/ADR-0010-vcs-pr-integration-and-apply-targets.md)), which pushes a branch and opens a pull request via `gh`. A Pipeline declaring `remote-pr` with no preceding `approve` Step is refused when it's loaded, not silently allowed to skip human approval.
 - `request_copilot_review` — after `remote-pr` opens a pull request, also ask GitHub Copilot to review it (`gh pr edit --add-reviewer @copilot`). Has no effect unless `remote_publish_token_env` is set too. Requires a paid Copilot plan on the repository/organization — Foundry can't detect whether that's available, so this defaults to off. A failure to request the review (no such plan, the feature not enabled) is printed as a warning but never fails the Act — the pull request itself has already been opened by that point.
-- `ticket_provider` — enables `/issue <id>`. `"github"` or `"jira"` today (GitLab and Asana are planned); an unset `ticket_provider` makes `/issue` report a clear configuration error rather than guessing. GitHub needs no separate credential: it shells out to `gh issue view`, reusing the same authenticated `gh` session `remote_publish_token_env` already assumes is set up. `.foundry/pipelines/issue.json` (scaffolded by `/init` like every other starter) is the Pipeline `/issue` runs — edit it to target `remote-pr` on its `apply` Step if you want `/issue` to end by opening a pull request rather than applying locally.
+- `ticket_provider` — enables `/issue <id>`. `"github"`, `"jira"`, `"gitlab"`, or `"asana"` today; an unset `ticket_provider` makes `/issue` report a clear configuration error rather than guessing. `.foundry/pipelines/issue.json` (scaffolded by `/init` like every other starter) is the Pipeline `/issue` runs — edit it to target `remote-pr` on its `apply` Step if you want `/issue` to end by opening a pull request rather than applying locally.
 
-Jira additionally needs, since it has no equivalent already-authenticated CLI session to reuse:
+GitHub and GitLab need no separate credential — they shell out to `gh issue view` / `glab issue view`, reusing whichever authenticated CLI session is already set up (the same `gh` session `remote_publish_token_env` already assumes for GitHub):
+
+```json
+{ "ticket_provider": "github" }
+```
+```json
+{ "ticket_provider": "gitlab" }
+```
+
+Jira and Asana have no equivalent CLI to reuse, so they need their own credentials:
 
 ```json
 {
@@ -133,7 +142,18 @@ Jira additionally needs, since it has no equivalent already-authenticated CLI se
 }
 ```
 
-`jira_api_token_env` names the environment variable holding an Atlassian API token (not your account password) — generate one at [id.atlassian.com/manage/api-tokens](https://id.atlassian.com/manage-profile/security/api-tokens). **This path has not been validated against a real Jira site** (no Jira Cloud account or API token in this environment) — the GitHub path above has been, live, against a real issue.
+`jira_api_token_env` names the environment variable holding an Atlassian API token (not your account password) — generate one at [id.atlassian.com/manage/api-tokens](https://id.atlassian.com/manage-profile/security/api-tokens).
+
+```json
+{
+  "ticket_provider": "asana",
+  "asana_api_token_env": "ASANA_API_TOKEN"
+}
+```
+
+`asana_api_token_env` names the environment variable holding an Asana Personal Access Token — generate one from your Asana profile settings. Unlike Jira, Asana needs no separate base URL: its API has one fixed global endpoint regardless of workspace.
+
+**Only the GitHub path above has been validated against a real ticket** — live, against a real GitHub issue. Jira, GitLab, and Asana are fixture-tested against their vendors' own documented request/response shapes only; none of the three has a real account/token/CLI available in this environment to validate against live.
 
 ## Authored Knowledge (optional)
 

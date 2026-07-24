@@ -48,8 +48,8 @@ type Config struct {
 	RequestCopilotReview bool `json:"request_copilot_review"`
 
 	// TicketProvider names which external ticketing system the
-	// interactive session's /issue command fetches from ("github" or
-	// "jira" today; GitLab and Asana are planned — see
+	// interactive session's /issue command fetches from — "github",
+	// "jira", "gitlab", or "asana" today (see
 	// docs/00-overview/implementation-status.md). Empty means /issue is
 	// not configured; it reports a clear, named error if invoked rather
 	// than guessing a provider.
@@ -72,6 +72,16 @@ type Config struct {
 	// ExecutorConfig.APIKeyEnv's pattern. Required when TicketProvider is
 	// "jira"; ignored otherwise.
 	JiraAPITokenEnv string `json:"jira_api_token_env"`
+
+	// AsanaAPITokenEnv names the environment variable ticket/asana reads
+	// its Personal Access Token from at Fetch time
+	// (developers.asana.com/docs/personal-access-token) — never
+	// persisted, logged, or passed through domain.Intent or any recorded
+	// Evidence, mirroring ExecutorConfig.APIKeyEnv's pattern. Required
+	// when TicketProvider is "asana"; ignored otherwise. Unlike Jira,
+	// Asana needs no separate base URL — its API has one fixed endpoint
+	// (app.asana.com) regardless of workspace.
+	AsanaAPITokenEnv string `json:"asana_api_token_env"`
 }
 
 // LoadConfig reads and decodes root's conventional configuration file
