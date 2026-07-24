@@ -162,6 +162,9 @@ func TestDecodePipelineDocument_OmittedRouterFieldsDecodeToZeroValues(t *testing
 	if step.Model != "" {
 		t.Errorf("Model = %q, want empty string", step.Model)
 	}
+	if step.Preferred != nil {
+		t.Errorf("Preferred = %#v, want nil", step.Preferred)
+	}
 	if step.FeedsForward {
 		t.Error("FeedsForward = true, want false")
 	}
@@ -228,6 +231,38 @@ func TestDecodePipelineDocument_ModelDecodes(t *testing.T) {
 	}
 	if step.Model != "claude-sonnet-5" {
 		t.Errorf("Model = %q, want %q", step.Model, "claude-sonnet-5")
+	}
+}
+
+// TestDecodePipelineDocument_PreferredDecodes covers ADR-0013's (Proposed)
+// fourth increment: Step.Preferred, an ordered list of Model IDs, decodes
+// alongside Model and Executor without any of the three interpreting the
+// others — Router.Resolve's own precedence (Preferred[0] wins) is its
+// concern, not the decoder's.
+func TestDecodePipelineDocument_PreferredDecodes(t *testing.T) {
+	data := []byte(`{
+		"name": "preferred",
+		"steps": [
+			{
+				"id": "generate",
+				"kind": "generate",
+				"model": "claude-sonnet-5",
+				"preferred": ["claude-opus-4-8", "claude-sonnet-5", "gemini-3.1-pro"]
+			}
+		]
+	}`)
+
+	got, err := engine.DecodePipelineDocument(data)
+	if err != nil {
+		t.Fatalf("DecodePipelineDocument failed: %v", err)
+	}
+	step := got.Steps[0]
+	if step.Model != "claude-sonnet-5" {
+		t.Errorf("Model = %q, want %q", step.Model, "claude-sonnet-5")
+	}
+	wantPreferred := []string{"claude-opus-4-8", "claude-sonnet-5", "gemini-3.1-pro"}
+	if !reflect.DeepEqual(step.Preferred, wantPreferred) {
+		t.Errorf("Preferred = %#v, want %#v", step.Preferred, wantPreferred)
 	}
 }
 

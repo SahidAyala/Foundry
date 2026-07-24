@@ -45,12 +45,18 @@ type PipelineDocument struct {
 // "executor" is resolved by Router against a configured model.Registry —
 // model wins when both are present; a document that predates Model, or
 // simply never sets it, keeps its exact current executor-only behavior.
+// Preferred is optional too (ADR-0013, Proposed, fourth increment): an
+// ordered list of Model IDs, the first of which wins over Model when both
+// are present — Router.Resolve picks Preferred[0] with no availability
+// check; the rest of the list is inert today, reserved for a future
+// availability-aware increment.
 type StepDocument struct {
 	ID           string            `json:"id"`
 	Kind         string            `json:"kind"`
 	Capability   map[string]string `json:"capability,omitempty"`
 	Executor     string            `json:"executor,omitempty"`
 	Model        string            `json:"model,omitempty"`
+	Preferred    []string          `json:"preferred,omitempty"`
 	FeedsForward bool              `json:"feeds_forward,omitempty"`
 	Target       string            `json:"target,omitempty"`
 }
@@ -198,6 +204,7 @@ func (doc PipelineDocument) toPipeline() (Pipeline, error) {
 			Capability:   s.Capability,
 			Executor:     s.Executor,
 			Model:        s.Model,
+			Preferred:    s.Preferred,
 			FeedsForward: s.FeedsForward,
 			Target:       s.Target,
 		}
