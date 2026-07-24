@@ -45,20 +45,25 @@ type PipelineDocument struct {
 // "executor" is resolved by Router against a configured model.Registry —
 // model wins when both are present; a document that predates Model, or
 // simply never sets it, keeps its exact current executor-only behavior.
-// Preferred is optional too (ADR-0013, Proposed, fourth increment): an
-// ordered list of Model IDs, the first of which wins over Model when both
-// are present — Router.Resolve picks Preferred[0] with no availability
-// check; the rest of the list is inert today, reserved for a future
-// availability-aware increment.
+// Preferred is optional too (ADR-0013, Proposed, fourth/sixth increments):
+// an ordered list of Model IDs, the first of which wins over Model when
+// both are present — Router.Resolve picks Preferred[0], and automatic
+// failover (sixth increment) tries the next entry on a retryable
+// execution failure. RequireCapabilities is optional too (ADR-0013,
+// Proposed, seventh increment): a list of capability names every
+// candidate selected from Model/Preferred must support, verified before
+// any Execute call — see pipelines.md's own "Capability-aware model
+// resolution" section.
 type StepDocument struct {
-	ID           string            `json:"id"`
-	Kind         string            `json:"kind"`
-	Capability   map[string]string `json:"capability,omitempty"`
-	Executor     string            `json:"executor,omitempty"`
-	Model        string            `json:"model,omitempty"`
-	Preferred    []string          `json:"preferred,omitempty"`
-	FeedsForward bool              `json:"feeds_forward,omitempty"`
-	Target       string            `json:"target,omitempty"`
+	ID                  string            `json:"id"`
+	Kind                string            `json:"kind"`
+	Capability          map[string]string `json:"capability,omitempty"`
+	Executor            string            `json:"executor,omitempty"`
+	Model               string            `json:"model,omitempty"`
+	Preferred           []string          `json:"preferred,omitempty"`
+	RequireCapabilities []string          `json:"require_capabilities,omitempty"`
+	FeedsForward        bool              `json:"feeds_forward,omitempty"`
+	Target              string            `json:"target,omitempty"`
 }
 
 // RepairPolicyDocument is a Pipeline's declarative repair bound. A document
@@ -199,14 +204,15 @@ func (doc PipelineDocument) toPipeline() (Pipeline, error) {
 			return Pipeline{}, fmt.Errorf("engine: pipeline document %q: step %q: unrecognized kind %q", doc.Name, s.ID, s.Kind)
 		}
 		steps[i] = Step{
-			ID:           s.ID,
-			Kind:         s.Kind,
-			Capability:   s.Capability,
-			Executor:     s.Executor,
-			Model:        s.Model,
-			Preferred:    s.Preferred,
-			FeedsForward: s.FeedsForward,
-			Target:       s.Target,
+			ID:                  s.ID,
+			Kind:                s.Kind,
+			Capability:          s.Capability,
+			Executor:            s.Executor,
+			Model:               s.Model,
+			Preferred:           s.Preferred,
+			RequireCapabilities: s.RequireCapabilities,
+			FeedsForward:        s.FeedsForward,
+			Target:              s.Target,
 		}
 		ids[s.ID] = true
 	}

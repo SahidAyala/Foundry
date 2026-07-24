@@ -117,3 +117,18 @@ func (r Router) ResolveModel(id string) (Executor, error) {
 	}
 	return r.registry.Get(info.Executor)
 }
+
+// ModelInfo returns id's catalog model.Info from r's attached
+// model.Registry, without resolving it to an Executor — used by
+// capability-aware model resolution (ADR-0013, Proposed, seventh
+// increment) to inspect a candidate's Capabilities before deciding
+// whether it may be selected at all, distinct from actually resolving
+// and running it. A clear, named error if no model.Registry is attached
+// or id is not registered in it — the same failure shape Resolve/
+// ResolveModel already produce for an unknown model.
+func (r Router) ModelInfo(id string) (model.Info, error) {
+	if r.models == nil {
+		return model.Info{}, fmt.Errorf("model %q is set, but no model registry is configured", id)
+	}
+	return r.models.Get(id)
+}

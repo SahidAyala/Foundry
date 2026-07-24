@@ -349,3 +349,50 @@ func TestRouter_ResolveModel_NoRegistryConfiguredFails(t *testing.T) {
 		t.Fatal("ResolveModel with no model.Registry configured returned nil error")
 	}
 }
+
+// TestRouter_ModelInfo_ReturnsRegisteredInfo covers ADR-0013's seventh
+// increment (Proposed): ModelInfo lets a caller inspect a candidate's
+// catalog Capabilities without resolving it to an Executor at all — used
+// by capability-aware model resolution.
+func TestRouter_ModelInfo_ReturnsRegisteredInfo(t *testing.T) {
+	executors := engine.NewExecutorRegistry()
+	def := &captureExecutor{}
+
+	models := model.NewRegistry()
+	want := model.Info{ID: "claude-sonnet-5", Executor: "claude-vendor", Capabilities: model.Capabilities{ToolUse: true}}
+	if err := models.Register(want); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+
+	router := engine.NewRouter(executors, def).WithModels(models)
+
+	got, err := router.ModelInfo("claude-sonnet-5")
+	if err != nil {
+		t.Fatalf("ModelInfo failed: %v", err)
+	}
+	if got != want {
+		t.Errorf("ModelInfo = %+v, want %+v", got, want)
+	}
+}
+
+func TestRouter_ModelInfo_UnknownModelFails(t *testing.T) {
+	executors := engine.NewExecutorRegistry()
+	def := &captureExecutor{}
+	router := engine.NewRouter(executors, def).WithModels(model.NewRegistry())
+
+	_, err := router.ModelInfo("does-not-exist")
+	if err == nil {
+		t.Fatal("ModelInfo with an unregistered model returned nil error")
+	}
+}
+
+func TestRouter_ModelInfo_NoRegistryConfiguredFails(t *testing.T) {
+	executors := engine.NewExecutorRegistry()
+	def := &captureExecutor{}
+	router := engine.NewRouter(executors, def)
+
+	_, err := router.ModelInfo("claude-sonnet-5")
+	if err == nil {
+		t.Fatal("ModelInfo with no model.Registry configured returned nil error")
+	}
+}
