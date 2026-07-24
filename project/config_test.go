@@ -111,6 +111,32 @@ func TestLoadConfig_DecodesAsanaAPITokenEnv(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_DecodesAIReviewFields(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".foundry"), 0o755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	writeFile(t, filepath.Join(root, ".foundry"), "config.json", `{
+		"ai_review_model": "gpt-5.1",
+		"ai_review_base_url": "https://api.openai.com/v1/chat/completions",
+		"ai_review_api_key_env": "OPENAI_API_KEY"
+	}`)
+
+	config, err := project.LoadConfig(root)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if config.AIReviewModel != "gpt-5.1" {
+		t.Errorf("AIReviewModel = %q, want %q", config.AIReviewModel, "gpt-5.1")
+	}
+	if config.AIReviewBaseURL != "https://api.openai.com/v1/chat/completions" {
+		t.Errorf("AIReviewBaseURL = %q, want %q", config.AIReviewBaseURL, "https://api.openai.com/v1/chat/completions")
+	}
+	if config.AIReviewAPIKeyEnv != "OPENAI_API_KEY" {
+		t.Errorf("AIReviewAPIKeyEnv = %q, want %q", config.AIReviewAPIKeyEnv, "OPENAI_API_KEY")
+	}
+}
+
 func TestLoadConfig_DecodesValidFile(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".foundry"), 0o755); err != nil {

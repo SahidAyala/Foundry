@@ -99,6 +99,30 @@ func TestNewSession_ResolvesBuiltinPipelines(t *testing.T) {
 	}
 }
 
+// TestNewSession_AIReviewModelRequiresBaseURL covers a real configuration
+// gap: ai_review_model names an OpenAI-Chat-Completions-compatible model,
+// but there is no single "default" endpoint across vendors (OpenAI,
+// Gemini's API, Ollama, Groq, DeepSeek all differ) to fall back to —
+// setting the model without the endpoint must be a clear, named
+// configuration error, not a nil verifier silently doing nothing.
+func TestNewSession_AIReviewModelRequiresBaseURL(t *testing.T) {
+	root := initGitRepo(t)
+	if err := os.MkdirAll(filepath.Join(root, ".foundry"), 0o755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".foundry", "config.json"), []byte(`{"ai_review_model": "gpt-5.1"}`), 0o644); err != nil {
+		t.Fatalf("write config.json: %v", err)
+	}
+
+	_, err := session.NewSession(context.Background(), root, &bytes.Buffer{}, &bytes.Buffer{}, newScriptedExecutorFactory(scriptedPatch))
+	if err == nil {
+		t.Fatal("NewSession with ai_review_model but no ai_review_base_url returned nil error")
+	}
+	if !strings.Contains(err.Error(), "ai_review_base_url") {
+		t.Errorf("error = %q, want it to name the missing ai_review_base_url field", err)
+	}
+}
+
 // TestNewSession_NotInteractiveForNonFileIO confirms the gate ADR-0012's
 // rich REPL line editor depends on (Session.Interactive) computes false
 // for every non-*os.File input/output — exactly what every other test in

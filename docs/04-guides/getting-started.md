@@ -155,6 +155,24 @@ Jira and Asana have no equivalent CLI to reuse, so they need their own credentia
 
 **Only the GitHub path above has been validated against a real ticket** — live, against a real GitHub issue. Jira, GitLab, and Asana are fixture-tested against their vendors' own documented request/response shapes only; none of the three has a real account/token/CLI available in this environment to validate against live.
 
+## AI code review (optional)
+
+`ai_review_model` adds a second, non-deterministic verify Step alongside the Gate every Pipeline already runs — it never replaces the deterministic checks (`go build`/`go test`/etc.), only supplements them, per [trust.md](../02-architecture/trust.md)'s stated preference for deterministic checks first. Its findings become considered Context for the next generate attempt through the same repair mechanism a failed deterministic check already uses — no new Pipeline Step kind needed.
+
+```json
+{
+  "ai_review_model": "gpt-5.1",
+  "ai_review_base_url": "https://api.openai.com/v1/chat/completions",
+  "ai_review_api_key_env": "OPENAI_API_KEY"
+}
+```
+
+- `ai_review_model` — the model name to ask for review. Leaving this unset (the default) means no AI review layer is added at all, exactly as if the feature didn't exist.
+- `ai_review_base_url` — required whenever `ai_review_model` is set. Any OpenAI-Chat-Completions-compatible endpoint works: OpenAI, Gemini's API, Ollama (local, no key needed), Groq, DeepSeek — the same shape the `openai-compatible` Executor vendor already uses. There is no single default endpoint to fall back to across vendors, so a model with no base URL is a clear configuration error, not a silent no-op.
+- `ai_review_api_key_env` — names the environment variable holding the endpoint's credential. May be left unset for a key-less local endpoint (e.g. Ollama).
+
+A response the reviewer can't parse into a clear pass/fail verdict is always treated as a failure, never silently passed through — the raw response text is preserved in the failed verdict's findings for debugging. **Not validated live**: no real OpenAI/Gemini/Ollama/Groq/DeepSeek endpoint or key is available in this environment; tested against fixture HTTP responses shaped like the documented Chat Completions API only.
+
 ## Authored Knowledge (optional)
 
 A Pipeline's `apply` Step can declare `"target": "knowledge-note"` to write its output as a plain Markdown file under `.foundry/knowledge/`, one per contributing Act. A later Act's naive lexical retrieval automatically surfaces relevant notes back into its own considered Evidence — no separate indexing step needed. See [../02-architecture/knowledge.md](../02-architecture/knowledge.md) and [RFC-0005](../01-rfcs/RFC-0005-authored-knowledge-retrieval.md) (still Draft — Proposed as an RFC, though the store's own format and durability questions are ratified by [ADR-0007](../03-adrs/ADR-0007-knowledge-and-semantic-store.md)).

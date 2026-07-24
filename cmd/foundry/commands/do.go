@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 
 	"foundry/cli"
@@ -16,6 +17,7 @@ import (
 	"foundry/record"
 	"foundry/vcs"
 	"foundry/verify"
+	"foundry/verify/aireview"
 	"foundry/workspace"
 )
 
@@ -111,11 +113,23 @@ func wireEngine(ctx context.Context, repoPath string, stdin io.Reader, stdout io
 
 	// Validators judge the proposed patch, not the developer's checkout:
 	// the Gate runs inside a staged worktree with the patch applied.
-	verifier := workspace.NewStagedVerifier(gate)
+	var verifier engine.Verifier = workspace.NewStagedVerifier(gate)
 
 	cfg, err := project.LoadConfig(repoPath)
 	if err != nil {
 		return nil, nil, nil, err
+	}
+
+	// AIReviewModel is a supplementary, non-deterministic verify Step
+	// composed alongside the deterministic Gate above — never replacing
+	// it (docs/02-architecture/trust.md's stated preference for
+	// deterministic checks first). Empty means this feature is entirely
+	// off, exactly as if it did not exist.
+	if cfg.AIReviewModel != "" {
+		if cfg.AIReviewBaseURL == "" {
+			return nil, nil, nil, fmt.Errorf("foundry: ai_review_model is set but ai_review_base_url is not, in .foundry/config.json")
+		}
+		verifier = verify.Compose(verifier, aireview.NewVerifier(cfg.AIReviewModel, os.Getenv(cfg.AIReviewAPIKeyEnv), cfg.AIReviewBaseURL))
 	}
 
 	pipelines, err := (project.ProjectLoader{}).LoadRegistry(ctx, repoPath, cfg)

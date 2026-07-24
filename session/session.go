@@ -17,6 +17,7 @@ import (
 	"foundry/ticket"
 	"foundry/vcs"
 	"foundry/verify"
+	"foundry/verify/aireview"
 	"foundry/workspace"
 )
 
@@ -116,6 +117,19 @@ func NewSession(ctx context.Context, root string, in io.Reader, out io.Writer, n
 	if err != nil {
 		return nil, fmt.Errorf("session: build verification gate: %w", err)
 	}
+	var verifier engine.Verifier = workspace.NewStagedVerifier(gate)
+
+	// AIReviewModel is a supplementary, non-deterministic verify Step
+	// composed alongside the deterministic Gate above — never replacing
+	// it (docs/02-architecture/trust.md's stated preference for
+	// deterministic checks first). Empty means this feature is entirely
+	// off, exactly as if it did not exist.
+	if cfg.AIReviewModel != "" {
+		if cfg.AIReviewBaseURL == "" {
+			return nil, fmt.Errorf("session: ai_review_model is set but ai_review_base_url is not, in .foundry/config.json")
+		}
+		verifier = verify.Compose(verifier, aireview.NewVerifier(cfg.AIReviewModel, os.Getenv(cfg.AIReviewAPIKeyEnv), cfg.AIReviewBaseURL))
+	}
 
 	var construct project.ExecutorConstructor
 	if len(newNamedExecutor) > 0 {
@@ -140,7 +154,7 @@ func NewSession(ctx context.Context, root string, in io.Reader, out io.Writer, n
 		recorder:    recorder,
 		checkpoints: checkpoints,
 		gatherer:    gatherer.Compose(gatherer.NewNaiveGatherer(root), knowledge.NewGatherer(root)),
-		verifier:    workspace.NewStagedVerifier(gate),
+		verifier:    verifier,
 		executor:    newExecutor(root),
 		executors:   executors,
 		appliers:    appliers,
