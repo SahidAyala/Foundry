@@ -17,7 +17,9 @@ import (
 	"foundry/project"
 	"foundry/session"
 	"foundry/ticket"
+	asanaticket "foundry/ticket/asana"
 	githubticket "foundry/ticket/github"
+	gitlabticket "foundry/ticket/gitlab"
 	jiraticket "foundry/ticket/jira"
 )
 
@@ -92,24 +94,35 @@ func namedExecutor(cfg project.ExecutorConfig, workspace string) (engine.Executo
 
 // newTicketFetcher is the production ticket-fetcher vendor-dispatch
 // factory (mirroring namedExecutor's own shape) for /issue's own external
-// system boundary (docs/02-architecture/system-context.md). "github"
-// resolves to ticket/github, reusing the exact same already-authenticated
-// gh CLI session vcs.GitHubPRApplier's own PR-opening already requires —
-// Foundry reads no separate credential for it. "jira" resolves to
-// ticket/jira, a pure HTTP call authenticating with Basic Auth
-// (cfg.JiraEmail plus an API token resolved from cfg.JiraAPITokenEnv) —
-// Jira has no equivalent already-authenticated CLI session to piggyback
-// on the way GitHub's gh does. Only runSession calls this, and only when
-// project.Config.TicketProvider is set — /issue is entirely opt-in,
-// exactly like RequestCopilotReview.
+// system boundary (docs/02-architecture/system-context.md), covering all
+// four providers the maintainer asked for, in the order named as most
+// common: "github" resolves to ticket/github, reusing the exact same
+// already-authenticated gh CLI session vcs.GitHubPRApplier's own
+// PR-opening already requires — Foundry reads no separate credential for
+// it. "jira" resolves to ticket/jira, a pure HTTP call authenticating
+// with Basic Auth (cfg.JiraEmail plus an API token resolved from
+// cfg.JiraAPITokenEnv) — Jira has no equivalent already-authenticated CLI
+// session to piggyback on. "gitlab" resolves to ticket/gitlab, mirroring
+// GitHub's own approach by shelling out to the glab CLI's own
+// already-authenticated session instead of a raw token. "asana" resolves
+// to ticket/asana, a pure HTTP call like Jira's (a Bearer Personal Access
+// Token resolved from cfg.AsanaAPITokenEnv) — Asana has no CLI
+// convention either, and unlike Jira needs no separate base URL, since
+// its API has one fixed global endpoint. Only runSession calls this, and
+// only when project.Config.TicketProvider is set — /issue is entirely
+// opt-in, exactly like RequestCopilotReview.
 func newTicketFetcher(cfg project.Config, workspace string) (ticket.Fetcher, error) {
 	switch cfg.TicketProvider {
 	case "github":
 		return githubticket.NewFetcher(workspace), nil
 	case "jira":
 		return jiraticket.NewFetcher(cfg.JiraBaseURL, cfg.JiraEmail, os.Getenv(cfg.JiraAPITokenEnv)), nil
+	case "gitlab":
+		return gitlabticket.NewFetcher(workspace), nil
+	case "asana":
+		return asanaticket.NewFetcher(os.Getenv(cfg.AsanaAPITokenEnv)), nil
 	default:
-		return nil, fmt.Errorf("foundry: unsupported ticket provider %q (supported: %q, %q)", cfg.TicketProvider, "github", "jira")
+		return nil, fmt.Errorf("foundry: unsupported ticket provider %q (supported: %q, %q, %q, %q)", cfg.TicketProvider, "github", "jira", "gitlab", "asana")
 	}
 }
 

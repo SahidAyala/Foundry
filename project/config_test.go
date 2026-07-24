@@ -89,6 +89,28 @@ func TestLoadConfig_DecodesJiraFields(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_DecodesAsanaAPITokenEnv(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".foundry"), 0o755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	writeFile(t, filepath.Join(root, ".foundry"), "config.json", `{
+		"ticket_provider": "asana",
+		"asana_api_token_env": "ASANA_API_TOKEN"
+	}`)
+
+	config, err := project.LoadConfig(root)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if config.TicketProvider != "asana" {
+		t.Errorf("TicketProvider = %q, want %q", config.TicketProvider, "asana")
+	}
+	if config.AsanaAPITokenEnv != "ASANA_API_TOKEN" {
+		t.Errorf("AsanaAPITokenEnv = %q, want %q", config.AsanaAPITokenEnv, "ASANA_API_TOKEN")
+	}
+}
+
 func TestLoadConfig_DecodesValidFile(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".foundry"), 0o755); err != nil {
