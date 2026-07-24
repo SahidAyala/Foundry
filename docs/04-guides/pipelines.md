@@ -64,6 +64,26 @@ Per [ADR-0013](../03-adrs/ADR-0013-model-registry.md) (Proposed, fourth and sixt
 - **This only actually helps once a real Executor's errors are classified.** As of this writing, no `executor/*` package emits the classification failover needs — the mechanism is fully implemented and tested (via fakes), but dormant against every real vendor until a separate, per-vendor mapping decision is made.
 - **An empty `preferred: []` is treated as absent**, falling through to `model`/`executor` unaffected.
 
+### Capability-aware model resolution
+
+Per [ADR-0013](../03-adrs/ADR-0013-model-registry.md) (Proposed, seventh increment): a `generate` Step can name `require_capabilities` — a list of capability names every candidate selected from `model`/`preferred` must support:
+
+```json
+{
+  "id": "implement",
+  "kind": "generate",
+  "preferred": ["claude-haiku-4-5", "claude-opus-4-8"],
+  "require_capabilities": ["structured_output", "tool_use", "thinking"]
+}
+```
+
+- **Only a candidate whose catalogued `Capabilities` support every named requirement may be selected — checked once, up front, before any execution.** In the example above, if `claude-haiku-4-5` doesn't support `thinking`, it is never even attempted; `claude-opus-4-8` (assuming it supports all three) is selected directly.
+- **If no candidate qualifies, this fails immediately with a validation error — before any cost estimate, Budget charge, or model call happens at all.** Nothing is ever executed in that case.
+- **Capability names match `model.Capabilities`' own field names**: `tool_use`, `thinking`, `streaming`, `multimodal`, `structured_output`. An unrecognized name is always treated as unsatisfied — never silently ignored — so a typo'd requirement fails clearly rather than passing vacuously.
+- **Automatic failover (above) only ever moves between capability-verified candidates.** A `preferred` entry excluded for lacking a required capability is never tried, not even as a failover target.
+- **`require_capabilities` has no effect on a Step naming only `executor` (or nothing at all).** Capabilities live on `model.Info`, keyed by Model ID — a plain Executor pin has no associated Model ID to check them against, so resolution proceeds exactly as it always did for that kind of Step.
+- **This is a narrow, static form of capability matching** — a fixed, hand-curated catalog checked once against a fixed list, not a dynamic negotiation protocol, not a scoring/ranking policy, and not connected to `HealthManager`'s runtime health state. See the ADR's own Context for how this relates to [ADR-0006](../03-adrs/ADR-0006-routing-and-policy.md)'s previously-deferred capability-based routing.
+
 ## What's shipped, and why each is shaped the way it is
 
 Two Pipelines are built into the Engine itself (`engine/pipelines/`, embedded by `engine.BuiltinPipelineSource`); four more are this repository's own project-level Pipelines (`.foundry/pipelines/`, loaded by `project.FilesystemPipelineSource` alongside the built-ins). All six are real, decodable, tested documents — not illustrations.
