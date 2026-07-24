@@ -82,6 +82,29 @@ type Config struct {
 	// Asana needs no separate base URL — its API has one fixed endpoint
 	// (app.asana.com) regardless of workspace.
 	AsanaAPITokenEnv string `json:"asana_api_token_env"`
+
+	// AIReviewModel, when set, adds a supplementary, non-deterministic
+	// verify.aireview.Verifier alongside the deterministic Gate every
+	// Pipeline already runs (composed via verify.Compose, never
+	// replacing it — docs/02-architecture/trust.md's stated preference
+	// for deterministic checks first). Empty means no AI review layer is
+	// added at all, exactly as if this feature did not exist.
+	AIReviewModel string `json:"ai_review_model"`
+
+	// AIReviewBaseURL is the OpenAI-Chat-Completions-compatible endpoint
+	// verify/aireview calls (the same shape the "openai-compatible"
+	// Executor vendor already establishes — OpenAI, Gemini's API,
+	// Ollama, Groq, DeepSeek, or any other endpoint speaking it).
+	// Required whenever AIReviewModel is set; there is no single
+	// "default" endpoint across vendors to fall back to.
+	AIReviewBaseURL string `json:"ai_review_base_url"`
+
+	// AIReviewAPIKeyEnv names the environment variable verify/aireview
+	// reads its credential from at Verify time — never persisted, logged,
+	// or passed through domain.Intent or any recorded Evidence, mirroring
+	// ExecutorConfig.APIKeyEnv's pattern. May be left empty for an
+	// endpoint with no auth of its own (e.g. a local Ollama instance).
+	AIReviewAPIKeyEnv string `json:"ai_review_api_key_env"`
 }
 
 // LoadConfig reads and decodes root's conventional configuration file

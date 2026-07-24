@@ -3,6 +3,8 @@ package commands
 import (
 	"bytes"
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -74,5 +76,30 @@ func TestWireEngine_ResolvesProjectLocalPipeline(t *testing.T) {
 		if eng == nil {
 			t.Errorf("wireEngine(%q) returned a nil Engine", name)
 		}
+	}
+}
+
+// TestWireEngine_AIReviewModelRequiresBaseURL covers a real configuration
+// gap: ai_review_model names an OpenAI-Chat-Completions-compatible model,
+// but there is no single "default" endpoint across vendors (OpenAI,
+// Gemini's API, Ollama, Groq, DeepSeek all differ) to fall back to —
+// setting the model without the endpoint must be a clear, named
+// configuration error, not a nil verifier silently doing nothing.
+func TestWireEngine_AIReviewModelRequiresBaseURL(t *testing.T) {
+	root := t.TempDir()
+	if err := (project.ProjectLoader{}).Scaffold(root); err != nil {
+		t.Fatalf("Scaffold failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".foundry", "config.json"), []byte(`{"ai_review_model": "gpt-5.1"}`), 0o644); err != nil {
+		t.Fatalf("write config.json: %v", err)
+	}
+
+	newExecutor := func(workspace string) engine.Executor { return executor.NewScriptedExecutor("") }
+	_, _, _, err := wireEngine(context.Background(), root, strings.NewReader(""), &bytes.Buffer{}, newExecutor, nil, "default")
+	if err == nil {
+		t.Fatal("wireEngine with ai_review_model but no ai_review_base_url returned nil error")
+	}
+	if !strings.Contains(err.Error(), "ai_review_base_url") {
+		t.Errorf("error = %q, want it to name the missing ai_review_base_url field", err)
 	}
 }
