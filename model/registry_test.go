@@ -23,6 +23,68 @@ func TestRegistry_RegisterAndGet(t *testing.T) {
 	}
 }
 
+// TestRegistry_RegisterAndGet_RoundTripsCapabilitiesLimitsQuality covers
+// ADR-0013's third increment (Proposed): Capabilities/Limits/Quality are
+// plain data, round-tripping through Register/Get exactly like every
+// other Info field — Info stays a comparable struct (no slice/map fields)
+// so this is provable with plain equality, the same as
+// TestRegistry_RegisterAndGet above.
+func TestRegistry_RegisterAndGet_RoundTripsCapabilitiesLimitsQuality(t *testing.T) {
+	r := model.NewRegistry()
+	info := model.Info{
+		ID: "claude-sonnet-5", Executor: "claude", Provider: "Anthropic", DisplayName: "Claude Sonnet 5",
+		Capabilities: model.Capabilities{ToolUse: true, Thinking: true, Streaming: true, Multimodal: true, StructuredOutput: true},
+		Limits:       model.Limits{MaxContext: 200000},
+		Quality:      model.Quality{Reasoning: 4, Coding: 5, Review: 4},
+	}
+	if err := r.Register(info); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+
+	got, err := r.Get("claude-sonnet-5")
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	if got != info {
+		t.Errorf("Get(%q) = %+v, want %+v", "claude-sonnet-5", got, info)
+	}
+	if !got.Capabilities.ToolUse || !got.Capabilities.Thinking {
+		t.Errorf("Capabilities = %+v, want ToolUse and Thinking both true", got.Capabilities)
+	}
+	if got.Limits.MaxContext != 200000 {
+		t.Errorf("Limits.MaxContext = %d, want 200000", got.Limits.MaxContext)
+	}
+	if got.Quality.Coding != 5 {
+		t.Errorf("Quality.Coding = %d, want 5", got.Quality.Coding)
+	}
+}
+
+// TestRegistry_ZeroValueCapabilitiesLimitsQualityMeansUnrated covers a
+// model registered without any of the new fields (e.g. copilot-default,
+// executor/copilotcli.SupportedModels) — the zero value must round-trip
+// as "not rated," not fail Register or silently default to something else.
+func TestRegistry_ZeroValueCapabilitiesLimitsQualityMeansUnrated(t *testing.T) {
+	r := model.NewRegistry()
+	info := model.Info{ID: "copilot-default", Executor: "copilot"}
+	if err := r.Register(info); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+
+	got, err := r.Get("copilot-default")
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	if got.Capabilities != (model.Capabilities{}) {
+		t.Errorf("Capabilities = %+v, want the zero value", got.Capabilities)
+	}
+	if got.Limits != (model.Limits{}) {
+		t.Errorf("Limits = %+v, want the zero value", got.Limits)
+	}
+	if got.Quality != (model.Quality{}) {
+		t.Errorf("Quality = %+v, want the zero value", got.Quality)
+	}
+}
+
 func TestRegistry_Get_UnregisteredIDFails(t *testing.T) {
 	r := model.NewRegistry()
 	_, err := r.Get("does-not-exist")

@@ -36,11 +36,67 @@ import (
 // Each model belongs to exactly one Executor: Register refuses a second
 // entry for an ID already registered, even under a different Executor,
 // rather than silently overwriting or duplicating it.
+//
+// Capabilities, Limits, and Quality are pure catalog metadata (ADR-0013,
+// Proposed, third increment): they describe a model, nothing more.
+// Nothing in Foundry reads them yet — no routing decision, no validation,
+// no execution-path behavior consults these fields today. They exist so a
+// future, separately-decided PR (e.g. capability-aware routing, once
+// ADR-0006's own named trigger fires) has real data to build from, the
+// same "expose now, consume later" shape ADR-0013's original Executor/
+// Model split already established. Every field defaults to its zero value
+// (false, 0) when omitted — an Info literal written before these fields
+// existed decodes and behaves identically.
 type Info struct {
 	ID          string
 	Executor    string
 	Provider    string
 	DisplayName string
+
+	Capabilities Capabilities
+	Limits       Limits
+	Quality      Quality
+}
+
+// Capabilities records which named abilities a model is known to support.
+// Hand-curated per model, the same "will drift as vendors ship new
+// versions" caveat SupportedModels()'s own price-table-style entries
+// already carry — not fetched from any vendor's live capability-listing
+// API. Zero value (all false) means "not confirmed to support this,"
+// never "confirmed not to."
+type Capabilities struct {
+	// ToolUse: the model can call caller-provided functions/tools
+	// (function calling).
+	ToolUse bool
+	// Thinking: the model has an extended, distinct reasoning/"thinking"
+	// mode, separate from its default response generation.
+	Thinking bool
+	// Streaming: the model's Executor can receive its response
+	// incrementally rather than only as one complete response.
+	Streaming bool
+	// Multimodal: the model accepts non-text input (e.g. images).
+	Multimodal bool
+	// StructuredOutput: the model can be constrained to emit a specific
+	// output shape (e.g. JSON mode / a declared schema).
+	StructuredOutput bool
+}
+
+// Limits records a model's known operating limits.
+type Limits struct {
+	// MaxContext is the model's documented context window, in tokens.
+	// Zero means "not recorded," never "no limit."
+	MaxContext int
+}
+
+// Quality is a hand-assigned, relative rating on a fixed 1 (weakest) to 5
+// (strongest) scale for each named dimension — a coarse, subjective
+// judgment call recorded once per model, not a benchmark score, and not
+// comparable across a model's own Provider's other product lines with any
+// precision. Zero means "not rated," never "lowest quality."
+type Quality struct {
+	Reasoning int
+	Coding    int
+	Review    int
 }
 
 // Registry is an in-memory catalog of Info entries, keyed by ID.
