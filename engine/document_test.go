@@ -165,6 +165,9 @@ func TestDecodePipelineDocument_OmittedRouterFieldsDecodeToZeroValues(t *testing
 	if step.Preferred != nil {
 		t.Errorf("Preferred = %#v, want nil", step.Preferred)
 	}
+	if step.RequireCapabilities != nil {
+		t.Errorf("RequireCapabilities = %#v, want nil", step.RequireCapabilities)
+	}
 	if step.FeedsForward {
 		t.Error("FeedsForward = true, want false")
 	}
@@ -263,6 +266,36 @@ func TestDecodePipelineDocument_PreferredDecodes(t *testing.T) {
 	wantPreferred := []string{"claude-opus-4-8", "claude-sonnet-5", "gemini-3.1-pro"}
 	if !reflect.DeepEqual(step.Preferred, wantPreferred) {
 		t.Errorf("Preferred = %#v, want %#v", step.Preferred, wantPreferred)
+	}
+}
+
+// TestDecodePipelineDocument_RequireCapabilitiesDecodes covers ADR-0013's
+// (Proposed) seventh increment: Step.RequireCapabilities, a list of
+// capability names, decodes alongside Preferred without either
+// interpreting the other — Router's own capability-filtering logic
+// (engine/failover.go's filterCapableCandidates) is its concern, not the
+// decoder's.
+func TestDecodePipelineDocument_RequireCapabilitiesDecodes(t *testing.T) {
+	data := []byte(`{
+		"name": "capability-required",
+		"steps": [
+			{
+				"id": "generate",
+				"kind": "generate",
+				"preferred": ["claude-opus-4-8", "gemini-3.1-pro"],
+				"require_capabilities": ["structured_output", "tool_use", "thinking"]
+			}
+		]
+	}`)
+
+	got, err := engine.DecodePipelineDocument(data)
+	if err != nil {
+		t.Fatalf("DecodePipelineDocument failed: %v", err)
+	}
+	step := got.Steps[0]
+	wantRequired := []string{"structured_output", "tool_use", "thinking"}
+	if !reflect.DeepEqual(step.RequireCapabilities, wantRequired) {
+		t.Errorf("RequireCapabilities = %#v, want %#v", step.RequireCapabilities, wantRequired)
 	}
 }
 

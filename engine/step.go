@@ -13,18 +13,18 @@ package engine
 // (docs/04-guides/multi-executor-router-implementation-plan.md Pieces 1 and
 // 4): all four are additive and zero-valued by default, so a Step literal
 // or PipelineDocument written before they existed keeps its exact current
-// behavior. Capability is carried but not yet interpreted by any Router
-// policy — Piece 1's Router (router.go) is explicit-pin-only;
-// capability-based negotiation is RFC-0002 §7 layer 2, out of scope until a
-// real multi-Executor Pipeline motivates it. Executor is the explicit pin a
-// Router resolves against an ExecutorRegistry; empty means "the Engine's
-// default Executor," exactly what every Step meant before Executor existed.
-// FeedsForward, when true, has runSteps append the immediately-preceding
-// Step's recorded output to this Step's Context — never an arbitrarily
-// named earlier Step, per RFC-0004 §3. Target is meaningful only for a
-// domain.StepKindApply Step: which Applier resolves it — ApplyTargetLocal
-// (the empty string, the default, today's only behavior — the Engine's
-// single configured Applier) or a name registered in an ApplierRegistry
+// behavior. Capability (the free-form map[string]string) is still carried
+// but not yet interpreted by any Router policy — genuinely unused, not to
+// be confused with RequireCapabilities below, a distinct, later field.
+// Executor is the explicit pin a Router resolves against an
+// ExecutorRegistry; empty means "the Engine's default Executor," exactly
+// what every Step meant before Executor existed. FeedsForward, when true,
+// has runSteps append the immediately-preceding Step's recorded output to
+// this Step's Context — never an arbitrarily named earlier Step, per
+// RFC-0004 §3. Target is meaningful only for a domain.StepKindApply Step:
+// which Applier resolves it — ApplyTargetLocal (the empty string, the
+// default, today's only behavior — the Engine's single configured
+// Applier) or a name registered in an ApplierRegistry
 // (ApplyTargetKnowledgeNote, ApplyTargetProjectDoc — RFC-0004 §2.6).
 //
 // Model is ADR-0013's Model Registry seam (docs/03-adrs/ADR-0013-model-registry.md,
@@ -35,23 +35,37 @@ package engine
 // zero-value-compatible pattern every other Router field already follows.
 //
 // Preferred is ADR-0013's fourth-increment addition (Proposed): an ordered
-// list of Model IDs, the first of which wins over Model when both are set
-// — Router.Resolve always picks Preferred[0] with no availability check of
-// any kind (no probing whether that model is actually reachable, no
-// fallback to a later entry, no retry if it fails to resolve). The rest of
-// the list is inert today, carried only so a future, separately-decided
-// increment can add real availability-aware fallback without another
-// migration. An empty or absent Preferred falls through to Model exactly
-// as before this field existed.
+// list of Model IDs, the first of which wins over Model when both are
+// set. Automatic model failover (ADR-0013's sixth increment) tries the
+// next entry on a retryable execution failure (rate limit, temporary
+// unavailability, timeout) — never for authentication, an invalid model,
+// or unsupported capability, and never as a preemptive availability
+// check (a failure is only ever discovered by actually attempting the
+// call). An empty or absent Preferred falls through to Model exactly as
+// before this field existed.
+//
+// RequireCapabilities is ADR-0013's seventh-increment addition (Proposed):
+// a list of capability names (see model.Capabilities' own field names,
+// e.g. "tool_use", "thinking", "structured_output") every candidate
+// selected from Model/Preferred must support. Verified once, up front,
+// against static Model Registry catalog data — before any Execute call —
+// so a Step never even attempts a model it's already known can't do what
+// the Step needs; if no candidate qualifies, Resolve-time fails with a
+// validation error and nothing is executed. Has no effect on a Step
+// naming only Executor (or nothing at all): Capabilities live on
+// model.Info, keyed by Model ID, so there is nothing to check a plain
+// Executor pin against. Empty (the default) means every candidate
+// qualifies, exactly as before this field existed.
 type Step struct {
-	ID           string
-	Kind         string
-	Capability   map[string]string
-	Executor     string
-	Model        string
-	Preferred    []string
-	FeedsForward bool
-	Target       string
+	ID                  string
+	Kind                string
+	Capability          map[string]string
+	Executor            string
+	Model               string
+	Preferred           []string
+	RequireCapabilities []string
+	FeedsForward        bool
+	Target              string
 }
 
 // Apply Step target names RFC-0004 §2.6's Knowledge-lite capture and
