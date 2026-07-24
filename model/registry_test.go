@@ -85,6 +85,57 @@ func TestRegistry_ZeroValueCapabilitiesLimitsQualityMeansUnrated(t *testing.T) {
 	}
 }
 
+// TestRegistry_Health_NoManagerAttachedReturnsUnknown covers ADR-0013's
+// fifth increment (Proposed): a Registry that never had SetHealthManager
+// called on it still answers Health queries, always as unknown, rather
+// than panicking or erroring.
+func TestRegistry_Health_NoManagerAttachedReturnsUnknown(t *testing.T) {
+	r := model.NewRegistry()
+	got := r.Health("gpt-5.1")
+	if got.Status != model.StatusUnknown {
+		t.Errorf("Status = %q, want %q", got.Status, model.StatusUnknown)
+	}
+}
+
+// TestRegistry_Health_DelegatesToAttachedManager proves Registry.Health is
+// a pure delegation to whatever HealthManager SetHealthManager attached —
+// "Registry queries health manager," not a second, independent health
+// store of its own.
+func TestRegistry_Health_DelegatesToAttachedManager(t *testing.T) {
+	r := model.NewRegistry()
+	h := model.NewHealthManager()
+	if err := h.Report("gpt-5.1", model.Health{Status: model.StatusUnavailable, Reason: "quota exhausted"}); err != nil {
+		t.Fatalf("Report failed: %v", err)
+	}
+	r.SetHealthManager(h)
+
+	got := r.Health("gpt-5.1")
+	if got.Status != model.StatusUnavailable {
+		t.Errorf("Status = %q, want %q", got.Status, model.StatusUnavailable)
+	}
+	if got.Reason != "quota exhausted" {
+		t.Errorf("Reason = %q, want %q", got.Reason, "quota exhausted")
+	}
+}
+
+// TestRegistry_Health_DoesNotRequireModelToBeCatalogued covers a
+// deliberate design choice: health tracking is independent of Register —
+// querying Health for an ID never registered via Register still delegates
+// correctly, rather than requiring catalog membership first.
+func TestRegistry_Health_DoesNotRequireModelToBeCatalogued(t *testing.T) {
+	r := model.NewRegistry()
+	h := model.NewHealthManager()
+	if err := h.Report("not-in-catalog", model.Health{Status: model.StatusAvailable}); err != nil {
+		t.Fatalf("Report failed: %v", err)
+	}
+	r.SetHealthManager(h)
+
+	got := r.Health("not-in-catalog")
+	if got.Status != model.StatusAvailable {
+		t.Errorf("Status = %q, want %q", got.Status, model.StatusAvailable)
+	}
+}
+
 func TestRegistry_Get_UnregisteredIDFails(t *testing.T) {
 	r := model.NewRegistry()
 	_, err := r.Get("does-not-exist")
