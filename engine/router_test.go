@@ -296,3 +296,56 @@ func TestRouter_EmptyPreferredFallsThroughToModel(t *testing.T) {
 		t.Error("Resolve with an empty Preferred list did not fall through to Model")
 	}
 }
+
+// TestRouter_ResolveModel_ResolvesRegisteredModelToItsExecutor covers
+// ADR-0013's sixth increment (Proposed): ResolveModel resolves a specific
+// Model ID standalone, the same lookup Resolve performs internally — used
+// by automatic model failover to resolve each subsequent Preferred entry.
+func TestRouter_ResolveModel_ResolvesRegisteredModelToItsExecutor(t *testing.T) {
+	executors := engine.NewExecutorRegistry()
+	pinned := &captureExecutor{}
+	def := &captureExecutor{}
+	if err := executors.Register("gemini-vendor", pinned); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+
+	models := model.NewRegistry()
+	if err := models.Register(model.Info{ID: "gemini-3.1-pro", Executor: "gemini-vendor"}); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+
+	router := engine.NewRouter(executors, def).WithModels(models)
+
+	got, err := router.ResolveModel("gemini-3.1-pro")
+	if err != nil {
+		t.Fatalf("ResolveModel failed: %v", err)
+	}
+	if got != pinned {
+		t.Error("ResolveModel did not return the Executor the Model Registry names")
+	}
+}
+
+func TestRouter_ResolveModel_UnknownModelFails(t *testing.T) {
+	executors := engine.NewExecutorRegistry()
+	def := &captureExecutor{}
+	router := engine.NewRouter(executors, def).WithModels(model.NewRegistry())
+
+	_, err := router.ResolveModel("does-not-exist")
+	if err == nil {
+		t.Fatal("ResolveModel with an unregistered model returned nil error")
+	}
+	if !strings.Contains(err.Error(), "does-not-exist") {
+		t.Errorf("error = %q, want it to name the unknown model", err.Error())
+	}
+}
+
+func TestRouter_ResolveModel_NoRegistryConfiguredFails(t *testing.T) {
+	executors := engine.NewExecutorRegistry()
+	def := &captureExecutor{}
+	router := engine.NewRouter(executors, def)
+
+	_, err := router.ResolveModel("gemini-3.1-pro")
+	if err == nil {
+		t.Fatal("ResolveModel with no model.Registry configured returned nil error")
+	}
+}

@@ -11,6 +11,7 @@ import (
 	"foundry/domain"
 	"foundry/engine"
 	"foundry/executor"
+	"foundry/model"
 )
 
 type fakeGatherer struct {
@@ -462,6 +463,17 @@ func (r *fakeReporter) RepairSkipped(reason string) {
 func (r *fakeReporter) BudgetExceeded(reason string) {
 	r.events = append(r.events, "budget-exceeded:"+reason)
 }
+
+// ModelFailover makes fakeReporter also satisfy engine.FailoverReporter
+// (ADR-0013, Proposed, sixth increment) — an optional extension, so this
+// is additive to fakeReporter's own existing behavior; every pre-existing
+// test asserting exact `events` sequences is unaffected, since none of
+// their scenarios trigger a failover.
+func (r *fakeReporter) ModelFailover(stepID, from, to string, class model.FailureClass, cause error) {
+	r.events = append(r.events, fmt.Sprintf("failover:%s:%s->%s:%s", stepID, from, to, class))
+}
+
+var _ engine.FailoverReporter = (*fakeReporter)(nil)
 
 func TestEngine_Run_ReportsPassWithoutRepair(t *testing.T) {
 	eng := newEngine("pass")

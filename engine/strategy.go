@@ -199,31 +199,12 @@ func runSteps(ctx context.Context, pipelineName string, act *domain.Act, intent 
 			if step.FeedsForward && len(act.Steps) > 0 {
 				stepConsidered = appendFeedsForward(considered, act.Steps[len(act.Steps)-1])
 			}
-			resolved, err := rc.router.Resolve(step)
+			start := time.Now()
+			o, err := executeGenerateStep(ctx, rc, step, intent, stepConsidered, attempt)
 			if err != nil {
-				return outcome, judgment, false, wrapStepError(attempt, "route", err)
-			}
-			estimate, err := estimateExecuteCostUSD(ctx, resolved, intent, stepConsidered)
-			if err != nil {
-				return outcome, judgment, false, wrapStepError(attempt, "estimate", err)
-			}
-			if err := rc.spent.charge(estimate); err != nil {
-				// Not wrapStepError: Produce reports this verbatim via
-				// reporter.BudgetExceeded/RepairSkipped, and charge's own
-				// message ("budget exceeded: ...") is already the whole
-				// story — an "engine: execute:"-style prefix would be
-				// redundant in that narration, unlike a genuine Step
-				// failure.
 				return outcome, judgment, false, err
 			}
-			rc.reporter.Executing(attempt + 1)
-			start := time.Now()
-			o, err := resolved.Execute(ctx, intent, stepConsidered)
-			if err != nil {
-				return outcome, judgment, false, wrapStepError(attempt, "execute", err)
-			}
 			outcome = o
-			rc.reporter.Executed(attempt+1, outcome.ActualCostUSD)
 			act.Patch = outcome.Patch
 			act.Iterations = rc.spent.iterations
 			act.CostEstimateUSD = rc.spent.costUSD
