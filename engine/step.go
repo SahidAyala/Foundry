@@ -26,11 +26,19 @@ package engine
 // (the empty string, the default, today's only behavior — the Engine's
 // single configured Applier) or a name registered in an ApplierRegistry
 // (ApplyTargetKnowledgeNote, ApplyTargetProjectDoc — RFC-0004 §2.6).
+//
+// Model is ADR-0013's Model Registry seam (docs/03-adrs/ADR-0013-model-registry.md,
+// Proposed): when set, Router.Resolve looks it up in its configured
+// model.Registry to find which Executor vendor to resolve against instead
+// of Executor — model wins when both are set. Empty means "resolve
+// Executor exactly as before Model existed," the same additive,
+// zero-value-compatible pattern every other Router field already follows.
 type Step struct {
 	ID           string
 	Kind         string
 	Capability   map[string]string
 	Executor     string
+	Model        string
 	FeedsForward bool
 	Target       string
 }

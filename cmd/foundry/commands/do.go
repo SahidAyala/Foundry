@@ -13,6 +13,7 @@ import (
 	"foundry/engine"
 	"foundry/gatherer"
 	"foundry/knowledge"
+	"foundry/model"
 	"foundry/project"
 	"foundry/record"
 	"foundry/vcs"
@@ -35,7 +36,14 @@ import (
 // (cmd/foundry/main.go, Foundry's true composition root) supplies, so this
 // package stays vendor-agnostic (ADR-0005 Decision 5,
 // docs/03-adrs/ADR-0005-executor-contract-and-capability-model.md).
-func Do(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, newExecutor func(workspace string) engine.Executor, newNamedExecutor project.ExecutorConstructor) int {
+//
+// models is the optional Model Registry (ADR-0013, Proposed) a Step's
+// "model" field resolves against, in the same variadic zero-or-one shape
+// session.NewSession already established for newNamedExecutor — omitted
+// entirely, every existing caller (and every existing Pipeline document,
+// which never sets Model) keeps resolving Executor-only Steps exactly as
+// before Model existed.
+func Do(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, newExecutor func(workspace string) engine.Executor, newNamedExecutor project.ExecutorConstructor, models ...*model.Registry) int {
 	intent, repoPath, err := cli.ParseArgs(args)
 	if err != nil {
 		if errors.Is(err, cli.ErrHelp) {
@@ -51,7 +59,7 @@ func Do(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, n
 	// runs. It is hardcoded today; a future --pipeline flag replaces this
 	// literal with a parsed value — no change to engine.go required.
 	const pipelineName = "default"
-	eng, store, _, err := wireEngine(ctx, repoPath, stdin, stdout, newExecutor, newNamedExecutor, pipelineName)
+	eng, store, _, err := wireEngine(ctx, repoPath, stdin, stdout, newExecutor, newNamedExecutor, pipelineName, models...)
 	if err != nil {
 		fmt.Fprintln(stdout, err)
 		return 1
@@ -94,7 +102,12 @@ func Do(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, n
 // would fail resume for exactly the Pipelines a real project actually
 // uses. `foundry do` itself only ever asks for "default" (a built-in), so
 // this is a strict superset for that caller — no behavior change there.
-func wireEngine(ctx context.Context, repoPath string, stdin io.Reader, stdout io.Writer, newExecutor func(workspace string) engine.Executor, newNamedExecutor project.ExecutorConstructor, pipelineName string) (*engine.Engine, *record.FileStore, *record.CheckpointStore, error) {
+//
+// models is the optional Model Registry (ADR-0013, Proposed) attached to
+// the Router via Router.WithModels when present — a Step's "model" field
+// resolves against it instead of "executor" when both are set. Omitted (or
+// nil), the Router behaves exactly as it did before Model existed.
+func wireEngine(ctx context.Context, repoPath string, stdin io.Reader, stdout io.Writer, newExecutor func(workspace string) engine.Executor, newNamedExecutor project.ExecutorConstructor, pipelineName string, models ...*model.Registry) (*engine.Engine, *record.FileStore, *record.CheckpointStore, error) {
 	actsDir := filepath.Join(repoPath, ".foundry", "acts")
 
 	store, err := record.NewFileStore(actsDir)
@@ -149,7 +162,11 @@ func wireEngine(ctx context.Context, repoPath string, stdin io.Reader, stdout io
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	eng.SetRouter(engine.NewRouter(registry, def))
+	router := engine.NewRouter(registry, def)
+	if len(models) > 0 {
+		router = router.WithModels(models[0])
+	}
+	eng.SetRouter(router)
 
 	appliers, err := buildApplierRegistry(cfg)
 	if err != nil {

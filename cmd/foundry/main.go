@@ -14,6 +14,7 @@ import (
 	"foundry/executor/gemini"
 	"foundry/executor/geminicli"
 	"foundry/executor/openai"
+	"foundry/model"
 	"foundry/project"
 	"foundry/session"
 	"foundry/ticket"
@@ -136,8 +137,20 @@ func run(args []string, stdin io.Reader, stdout io.Writer, newExecutor func(work
 		construct = newNamedExecutor[0]
 	}
 
+	// models is ADR-0013's Model Registry (Proposed) — a fixed, hand-curated
+	// catalog built once per process from every concrete Executor package's
+	// own SupportedModels(). buildModelRegistry only fails on a programming
+	// bug (a duplicate model ID across packages), never on anything
+	// project- or user-supplied, and is itself unit-tested to never do so
+	// today; still handled as a real error rather than ignored.
+	models, err := buildModelRegistry()
+	if err != nil {
+		fmt.Fprintln(stdout, err)
+		return 1
+	}
+
 	if len(args) == 0 {
-		return runSession(context.Background(), stdin, stdout, newExecutor, construct)
+		return runSession(context.Background(), stdin, stdout, newExecutor, construct, models)
 	}
 
 	switch args[0] {
@@ -145,7 +158,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer, newExecutor func(work
 		fmt.Fprint(stdout, usage())
 		return 0
 	case "do":
-		return commands.Do(context.Background(), args[1:], stdin, stdout, newExecutor, construct)
+		return commands.Do(context.Background(), args[1:], stdin, stdout, newExecutor, construct, models)
 	case "log":
 		return commands.Log(context.Background(), args[1:], stdout)
 	case "show":
@@ -153,7 +166,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer, newExecutor func(work
 	case "replay":
 		return commands.Replay(context.Background(), args[1:], stdout)
 	case "resume":
-		return commands.Resume(context.Background(), args[1:], stdin, stdout, newExecutor, construct)
+		return commands.Resume(context.Background(), args[1:], stdin, stdout, newExecutor, construct, models)
 	default:
 		fmt.Fprintf(stdout, "foundry: unknown command %q\n\n", args[0])
 		fmt.Fprint(stdout, usage())
@@ -169,7 +182,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer, newExecutor func(work
 // replacement
 // (docs/01-rfcs/RFC-0003-interactive-assistant-and-multi-executor-pipelines.md
 // §3.1).
-func runSession(ctx context.Context, stdin io.Reader, stdout io.Writer, newExecutor func(workspace string) engine.Executor, newNamedExecutor project.ExecutorConstructor) int {
+func runSession(ctx context.Context, stdin io.Reader, stdout io.Writer, newExecutor func(workspace string) engine.Executor, newNamedExecutor project.ExecutorConstructor, models *model.Registry) int {
 	root, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintln(stdout, err)
@@ -181,6 +194,7 @@ func runSession(ctx context.Context, stdin io.Reader, stdout io.Writer, newExecu
 		fmt.Fprintln(stdout, err)
 		return 1
 	}
+	s.SetModelRegistry(models)
 
 	cfg, err := project.LoadConfig(root)
 	if err != nil {

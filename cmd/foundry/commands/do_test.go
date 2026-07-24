@@ -4,14 +4,47 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"foundry/domain"
 	"foundry/engine"
 	"foundry/executor"
+	"foundry/model"
 	"foundry/project"
 )
+
+// initGitRepo creates a temporary git repository with one committed file
+// — mirroring session_test.go's own helper of the same name — deliberately
+// with no go.mod, so verify.DefaultValidators(root) returns zero
+// Validators and the Gate trivially passes; these tests care about
+// routing, not verification.
+func initGitRepo(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v failed: %v\n%s", args, err, out)
+		}
+	}
+
+	run("init", "-q", "-b", "main")
+	run("config", "user.email", "test@example.com")
+	run("config", "user.name", "Test")
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("hello\n"), 0o644); err != nil {
+		t.Fatalf("write fixture file: %v", err)
+	}
+	run("add", ".")
+	run("commit", "-q", "-m", "initial commit")
+
+	return dir
+}
 
 // TestBuildApplierRegistry_RegistersRemotePRTargetWhenConfigured proves
 // wireEngine's buildApplierRegistry (ADR-0010, Piece 6 of
@@ -101,5 +134,74 @@ func TestWireEngine_AIReviewModelRequiresBaseURL(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "ai_review_base_url") {
 		t.Errorf("error = %q, want it to name the missing ai_review_base_url field", err)
+	}
+}
+
+const wireEngineScriptedPatch = "diff --git a/wire_engine_test_file.txt b/wire_engine_test_file.txt\n" +
+	"new file mode 100644\n" +
+	"--- /dev/null\n" +
+	"+++ b/wire_engine_test_file.txt\n" +
+	"@@ -0,0 +1 @@\n" +
+	"+created by test\n"
+
+const wireEngineDefaultPatch = "diff --git a/wire_engine_test_default.txt b/wire_engine_test_default.txt\n" +
+	"new file mode 100644\n" +
+	"--- /dev/null\n" +
+	"+++ b/wire_engine_test_default.txt\n" +
+	"@@ -0,0 +1 @@\n" +
+	"+created by test\n"
+
+// TestWireEngine_ModelPinnedStepRoutesThroughModelRegistry proves
+// wireEngine's models parameter (ADR-0013, Proposed) is actually threaded
+// into the Router: a Pipeline Step naming Model resolves through the
+// passed model.Registry to its Executor, then routes exactly as an
+// Executor pin already would — never to the default Executor.
+func TestWireEngine_ModelPinnedStepRoutesThroughModelRegistry(t *testing.T) {
+	root := initGitRepo(t)
+
+	pipelinesDir := filepath.Join(root, ".foundry", "pipelines")
+	if err := os.MkdirAll(pipelinesDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	pipelineDoc := `{
+		"name": "modeled",
+		"steps": [
+			{"id": "generate", "kind": "generate", "model": "gemini-3.5-flash"},
+			{"id": "verify", "kind": "verify"}
+		]
+	}`
+	if err := os.WriteFile(filepath.Join(pipelinesDir, "modeled.json"), []byte(pipelineDoc), 0o644); err != nil {
+		t.Fatalf("write pipeline document: %v", err)
+	}
+
+	executorsDoc := `{"planner": {"vendor": "test", "model": "whatever"}}`
+	if err := os.WriteFile(filepath.Join(root, ".foundry", "executors.json"), []byte(executorsDoc), 0o644); err != nil {
+		t.Fatalf("write executors config: %v", err)
+	}
+
+	construct := func(cfg project.ExecutorConfig, workspace string) (engine.Executor, error) {
+		return executor.NewScriptedExecutor(wireEngineScriptedPatch), nil
+	}
+	newExecutor := func(workspace string) engine.Executor { return executor.NewScriptedExecutor(wireEngineDefaultPatch) }
+
+	models := model.NewRegistry()
+	if err := models.Register(model.Info{ID: "gemini-3.5-flash", Executor: "planner"}); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+
+	eng, _, _, err := wireEngine(context.Background(), root, strings.NewReader(""), &bytes.Buffer{}, newExecutor, construct, "modeled", models)
+	if err != nil {
+		t.Fatalf("wireEngine failed: %v", err)
+	}
+
+	act, err := eng.Run(context.Background(), &domain.Intent{Text: "test"})
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+	if act.JudgmentVerdict != "pass" {
+		t.Errorf("JudgmentVerdict = %q, want %q", act.JudgmentVerdict, "pass")
+	}
+	if act.Patch != wireEngineScriptedPatch {
+		t.Error("Run did not route the Model-pinned Step to the Executor the model.Registry names")
 	}
 }

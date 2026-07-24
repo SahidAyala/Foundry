@@ -11,6 +11,7 @@ import (
 
 	"foundry/cli"
 	"foundry/engine"
+	"foundry/model"
 	"foundry/project"
 	"foundry/record"
 )
@@ -41,8 +42,9 @@ Flags:
 //
 // newNamedExecutor is the same vendor-dispatch seam Do accepts (see its own
 // doc comment) — passed through to wireEngine so a resumed Act's Router is
-// wired identically to a fresh one's.
-func Resume(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, newExecutor func(workspace string) engine.Executor, newNamedExecutor project.ExecutorConstructor) int {
+// wired identically to a fresh one's. models is the same optional Model
+// Registry seam Do accepts (ADR-0013, Proposed).
+func Resume(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, newExecutor func(workspace string) engine.Executor, newNamedExecutor project.ExecutorConstructor, models ...*model.Registry) int {
 	actID, repoPath, err := parseResumeArgs(args)
 	if err != nil {
 		if errors.Is(err, cli.ErrHelp) {
@@ -74,7 +76,7 @@ func Resume(ctx context.Context, args []string, stdin io.Reader, stdout io.Write
 		return 1
 	}
 
-	eng, store, _, err := wireEngine(ctx, repoPath, stdin, stdout, newExecutor, newNamedExecutor, checkpointed.Pipeline)
+	eng, store, _, err := wireEngine(ctx, repoPath, stdin, stdout, newExecutor, newNamedExecutor, checkpointed.Pipeline, models...)
 	if err != nil {
 		fmt.Fprintln(stdout, err)
 		return 1

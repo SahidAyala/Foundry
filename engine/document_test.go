@@ -159,6 +159,9 @@ func TestDecodePipelineDocument_OmittedRouterFieldsDecodeToZeroValues(t *testing
 	if step.Executor != "" {
 		t.Errorf("Executor = %q, want empty string", step.Executor)
 	}
+	if step.Model != "" {
+		t.Errorf("Model = %q, want empty string", step.Model)
+	}
 	if step.FeedsForward {
 		t.Error("FeedsForward = true, want false")
 	}
@@ -195,6 +198,36 @@ func TestDecodePipelineDocument_CapabilityExecutorFeedsForwardDecode(t *testing.
 	}
 	if !step.FeedsForward {
 		t.Error("FeedsForward = false, want true")
+	}
+}
+
+// TestDecodePipelineDocument_ModelDecodes covers ADR-0013's (Proposed)
+// Step.Model field: optional, decodes alongside Executor without either
+// interpreting the other — Router.Resolve's own precedence (model wins) is
+// its concern, not the decoder's.
+func TestDecodePipelineDocument_ModelDecodes(t *testing.T) {
+	data := []byte(`{
+		"name": "modeled",
+		"steps": [
+			{
+				"id": "generate",
+				"kind": "generate",
+				"executor": "openai-gpt5",
+				"model": "claude-sonnet-5"
+			}
+		]
+	}`)
+
+	got, err := engine.DecodePipelineDocument(data)
+	if err != nil {
+		t.Fatalf("DecodePipelineDocument failed: %v", err)
+	}
+	step := got.Steps[0]
+	if step.Executor != "openai-gpt5" {
+		t.Errorf("Executor = %q, want %q", step.Executor, "openai-gpt5")
+	}
+	if step.Model != "claude-sonnet-5" {
+		t.Errorf("Model = %q, want %q", step.Model, "claude-sonnet-5")
 	}
 }
 

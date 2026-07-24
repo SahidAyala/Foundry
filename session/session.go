@@ -12,6 +12,7 @@ import (
 	"foundry/engine"
 	"foundry/gatherer"
 	"foundry/knowledge"
+	"foundry/model"
 	"foundry/project"
 	"foundry/record"
 	"foundry/ticket"
@@ -79,6 +80,7 @@ type Session struct {
 	appliers      *engine.ApplierRegistry
 	cfg           project.Config
 	ticketFetcher ticket.Fetcher
+	models        *model.Registry
 }
 
 // NewSession resolves root's full Pipeline registry (built-in plus
@@ -232,6 +234,17 @@ func (s *Session) SetTicketFetcher(fetcher ticket.Fetcher) {
 	s.ticketFetcher = fetcher
 }
 
+// SetModelRegistry attaches models as the Model Registry (ADR-0013,
+// Proposed) every Engine built by Engine below resolves a Step's "model"
+// field against, mirroring SetTicketFetcher's own optional, post-
+// construction attachment pattern. Optional: if never called (or called
+// with nil), s.models stays nil and Engine's Router behaves exactly as it
+// did before Model existed — a Step naming "model" then fails with a
+// clear, named error at Resolve time instead of silently falling back.
+func (s *Session) SetModelRegistry(models *model.Registry) {
+	s.models = models
+}
+
 // Initialized reports whether /init has already scaffolded this project
 // — a project.PipelinesDir directory on disk, the same marker
 // session_test.go's own end-to-end tests already check for after running
@@ -253,7 +266,7 @@ func (s *Session) Engine(pipelineName string) (*engine.Engine, error) {
 		return nil, fmt.Errorf("session: %w (run /init to scaffold a starter, or check %s)", err, project.PipelinesDir)
 	}
 	eng := engine.NewEngine(s.gatherer, s.executor, s.verifier, s.Root, pipeline)
-	eng.SetRouter(engine.NewRouter(s.executors, s.executor))
+	eng.SetRouter(engine.NewRouter(s.executors, s.executor).WithModels(s.models))
 	eng.SetApplierRegistry(s.appliers)
 	return eng, nil
 }
