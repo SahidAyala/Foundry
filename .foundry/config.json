@@ -2,6 +2,7 @@
   "ticket_provider": "github",
   "require_approval_before_remote_publish": true,
   "remote_publish_token_env": "GH_TOKEN",
-  "ai_review_model": "llama3",
-  "ai_review_base_url": "http://localhost:11434/v1/chat/completions"
+  "ai_review_model": "openai/gpt-4.1",
+  "ai_review_base_url": "https://models.github.ai/inference/chat/completions",
+  "ai_review_api_key_env": "GITHUB_MODELS_TOKEN"
 }

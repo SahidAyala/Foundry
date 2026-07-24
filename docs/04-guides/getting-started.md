@@ -122,27 +122,41 @@ Amazon Q Developer was considered and deliberately skipped: AWS announced its en
 - `request_copilot_review` — after `remote-pr` opens a pull request, also ask GitHub Copilot to review it (`gh pr edit --add-reviewer @copilot`). Has no effect unless `remote_publish_token_env` is set too. Requires a paid Copilot plan on the repository/organization — Foundry can't detect whether that's available, so this defaults to off. A failure to request the review (no such plan, the feature not enabled) is printed as a warning but never fails the Act — the pull request itself has already been opened by that point.
 - `ticket_provider` — enables `/issue <id>`. `"github"`, `"jira"`, `"gitlab"`, or `"asana"` today; an unset `ticket_provider` makes `/issue` report a clear configuration error rather than guessing. `.foundry/pipelines/issue.json` (scaffolded by `/init` like every other starter) is the Pipeline `/issue` runs — edit it to target `remote-pr` on its `apply` Step if you want `/issue` to end by opening a pull request rather than applying locally.
 
-  This repository's own `.foundry/pipelines/issue.json` also demonstrates diversifying models within one Act: its `plan` Step (the initial analysis of the fetched ticket) pins `"executor": "planner"`, and `.foundry/executors.json` maps `"planner"` to the Gemini CLI vendor — so planning runs on a different, cheaper model than `implement`'s (the default Executor, unpinned). See [Configuring a second Executor](#configuring-a-second-executor-optional) above for the `executors.json` shape, and [pipelines.md](pipelines.md) for the `executor` field itself.
+### This repository's own base configuration: one model per part of the loop
 
-### This repository's own base configuration
-
-This repository dogfoods its own `.foundry/config.json` (previously missing entirely — every `/issue`/AI-review run so far had only ever been tried against throwaway test repos, never against Foundry's own checkout):
+This repository dogfoods its own `.foundry/config.json` and `.foundry/executors.json` (previously missing entirely — every `/issue`/AI-review run so far had only ever been tried against throwaway test repos, never against Foundry's own checkout), deliberately combining four different vendors, each placed where its own strengths fit best:
 
 ```json
+// .foundry/config.json
 {
   "ticket_provider": "github",
   "require_approval_before_remote_publish": true,
   "remote_publish_token_env": "GH_TOKEN",
-  "ai_review_model": "llama3",
-  "ai_review_base_url": "http://localhost:11434/v1/chat/completions"
+  "ai_review_model": "openai/gpt-4.1",
+  "ai_review_base_url": "https://models.github.ai/inference/chat/completions",
+  "ai_review_api_key_env": "GITHUB_MODELS_TOKEN"
+}
+```
+```json
+// .foundry/executors.json
+{
+  "planner": { "vendor": "gemini", "model": "gemini-3.5-flash" },
+  "local-llama": { "vendor": "openai-compatible", "model": "llama3", "base_url": "http://localhost:11434/v1/chat/completions" }
 }
 ```
 
-Each field still needs its own real prerequisite before it does anything — this is base wiring, not a claim that everything below is validated live:
+- **Planning** (`issue.json`'s `plan` Step, pinned `"executor": "planner"`) uses **Gemini** (via `executor/geminicli`) — cheap and fast, the right cost/speed tradeoff for a first-pass analysis a human still has to approve before anything is implemented.
+- **Implementation** (every pipeline's `implement`/`prepare` Step, left unpinned except where noted below) uses **Claude Code**, Foundry's default Executor — the model this project has repeatedly validated live for real code generation; the highest-stakes generate work (`feature`, `release`, `issue`) deliberately keeps the most-proven model, not the cheapest one.
+- **Code review** (the AI-review verify layer, `ai_review_model`/`ai_review_base_url`) uses **GPT** through [GitHub Models](https://docs.github.com/en/github-models) free tier (`openai/gpt-4.1` at `https://models.github.ai/inference/chat/completions`) — deliberately a *third*, independent vendor from whichever model wrote the diff (Claude or Gemini), so the review isn't just the same model re-checking its own work. GitHub Models' free tier authenticates with a PAT carrying the `models` scope (`Authorization: Bearer`, the same shape `executor/openai`'s client already sends) — `ai_review_api_key_env` names `GITHUB_MODELS_TOKEN` rather than reusing `GH_TOKEN` directly, since a `gh`-issued token typically doesn't carry the `models` scope by default; a single PAT with both `repo` and `models` scopes could serve both env vars if you'd rather manage one token.
+- **Bugfixes** (`bugfix.json`'s `implement` Step, pinned `"executor": "local-llama"`) use a local **Ollama** model — bugfixes are usually smaller, lower-stakes changes, a reasonable place to trade some capability for a fully free, private, offline-capable path that never sends code to a third party.
+
+Each of these still needs its own real prerequisite before it does anything — this is base wiring, not a claim that everything is validated live in this environment:
 
 - `ticket_provider: "github"` works immediately — it reuses the already-authenticated `gh` CLI session, the same as the live-validated fetch earlier in this guide.
 - `remote_publish_token_env: "GH_TOKEN"` requires exporting a real GitHub token (`export GH_TOKEN=<a PAT with repo scope>`) in the shell `foundry` runs in before an `/issue` run's `apply` Step (targeting `remote-pr`) can actually push a branch and open a pull request. Unlike `ticket_provider: "github"`'s fetch path (which reuses `gh`'s own cached login), `vcs.GitHubPRApplier` reads its credential from this named environment variable explicitly — `gh auth login`'s cached session alone is not enough here.
-- `ai_review_model`/`ai_review_base_url` point at a local [Ollama](https://ollama.com) instance (chosen for being free and requiring no API key) — but **Ollama is not installed in this environment**, so this is configuration-only, not a working reviewer yet. To actually use it: install Ollama, run `ollama pull llama3` (or swap in whichever model you `pull`), and make sure `ollama serve` is running before starting a session that triggers a verify Step.
+- `"planner"` (Gemini) requires the `gemini` CLI installed and signed in — **not installed in this environment**.
+- `ai_review_model`/`ai_review_base_url` (GitHub Models) require exporting `GITHUB_MODELS_TOKEN` to a PAT with the `models` scope — not configured in this environment, and **not validated live against the real endpoint** (fixture-tested against the documented Chat Completions shape only, the same honest limitation every HTTP-based Executor/Verifier in this repo already carries).
+- `"local-llama"` (Ollama) requires installing Ollama, running `ollama pull llama3` (or swapping in whichever model you `pull`), and `ollama serve` running before a `bugfix` Act's `implement` Step runs — **Ollama is not installed in this environment**.
 
 GitHub and GitLab need no separate credential — they shell out to `gh issue view` / `glab issue view`, reusing whichever authenticated CLI session is already set up (the same `gh` session `remote_publish_token_env` already assumes for GitHub):
 

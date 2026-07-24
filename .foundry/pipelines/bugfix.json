@@ -1,7 +1,7 @@
 {
   "name": "bugfix",
   "steps": [
-    { "id": "implement", "kind": "generate" },
+    { "id": "implement", "kind": "generate", "executor": "local-llama" },
     { "id": "verify", "kind": "verify" },
     { "id": "approve", "kind": "approve" },
     { "id": "apply", "kind": "apply" },
