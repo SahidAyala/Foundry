@@ -33,12 +33,23 @@ package engine
 // of Executor — model wins when both are set. Empty means "resolve
 // Executor exactly as before Model existed," the same additive,
 // zero-value-compatible pattern every other Router field already follows.
+//
+// Preferred is ADR-0013's fourth-increment addition (Proposed): an ordered
+// list of Model IDs, the first of which wins over Model when both are set
+// — Router.Resolve always picks Preferred[0] with no availability check of
+// any kind (no probing whether that model is actually reachable, no
+// fallback to a later entry, no retry if it fails to resolve). The rest of
+// the list is inert today, carried only so a future, separately-decided
+// increment can add real availability-aware fallback without another
+// migration. An empty or absent Preferred falls through to Model exactly
+// as before this field existed.
 type Step struct {
 	ID           string
 	Kind         string
 	Capability   map[string]string
 	Executor     string
 	Model        string
+	Preferred    []string
 	FeedsForward bool
 	Target       string
 }

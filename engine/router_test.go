@@ -159,3 +159,140 @@ func TestRouter_UnknownExecutorBehaviorUnchangedByModelFeature(t *testing.T) {
 		t.Fatal("Resolve with a pin naming an unregistered Executor returned nil error")
 	}
 }
+
+// TestRouter_PreferredResolvesFirstEntryWithNoAvailabilityCheck covers
+// ADR-0013's fourth increment (Proposed): a Step naming Preferred resolves
+// through Preferred[0] only — the requirement is "simply select the first
+// item," with no probing of whether it's actually reachable.
+func TestRouter_PreferredResolvesFirstEntryWithNoAvailabilityCheck(t *testing.T) {
+	executors := engine.NewExecutorRegistry()
+	first := &captureExecutor{}
+	def := &captureExecutor{}
+	if err := executors.Register("opus-vendor", first); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+
+	models := model.NewRegistry()
+	if err := models.Register(model.Info{ID: "claude-opus-4-8", Executor: "opus-vendor"}); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+	if err := models.Register(model.Info{ID: "claude-sonnet-5", Executor: "opus-vendor"}); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+
+	router := engine.NewRouter(executors, def).WithModels(models)
+
+	got, err := router.Resolve(engine.Step{
+		ID: "plan", Kind: "generate",
+		Preferred: []string{"claude-opus-4-8", "claude-sonnet-5", "gemini-3.1-pro"},
+	})
+	if err != nil {
+		t.Fatalf("Resolve failed: %v", err)
+	}
+	if got != first {
+		t.Error("Resolve on a Preferred step did not resolve the first entry's Executor")
+	}
+}
+
+// TestRouter_PreferredFirstEntryUnknownFailsWithoutTryingLaterEntries
+// covers the explicit requirement: no availability check, no fallback to
+// a later Preferred entry, no retries — the first entry being unregistered
+// is a validation failure, not a reason to try the second.
+func TestRouter_PreferredFirstEntryUnknownFailsWithoutTryingLaterEntries(t *testing.T) {
+	executors := engine.NewExecutorRegistry()
+	second := &captureExecutor{}
+	def := &captureExecutor{}
+	if err := executors.Register("sonnet-vendor", second); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+
+	models := model.NewRegistry()
+	if err := models.Register(model.Info{ID: "claude-sonnet-5", Executor: "sonnet-vendor"}); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+	// Deliberately no "claude-opus-4-8" registered — the first Preferred
+	// entry — even though the second entry is registered and would
+	// otherwise resolve fine.
+
+	router := engine.NewRouter(executors, def).WithModels(models)
+
+	_, err := router.Resolve(engine.Step{
+		ID: "plan", Kind: "generate",
+		Preferred: []string{"claude-opus-4-8", "claude-sonnet-5"},
+	})
+	if err == nil {
+		t.Fatal("Resolve with an unregistered first Preferred entry returned nil error")
+	}
+	if !strings.Contains(err.Error(), "claude-opus-4-8") {
+		t.Errorf("error = %q, want it to name the unregistered first entry", err.Error())
+	}
+}
+
+// TestRouter_PreferredWinsOverModelWhenBothSet covers the precedence rule:
+// Preferred[0] wins over Model when both are set on the same Step.
+func TestRouter_PreferredWinsOverModelWhenBothSet(t *testing.T) {
+	executors := engine.NewExecutorRegistry()
+	fromPreferred := &captureExecutor{}
+	fromModel := &captureExecutor{}
+	def := &captureExecutor{}
+	if err := executors.Register("opus-vendor", fromPreferred); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+	if err := executors.Register("planner", fromModel); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+
+	models := model.NewRegistry()
+	if err := models.Register(model.Info{ID: "claude-opus-4-8", Executor: "opus-vendor"}); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+	if err := models.Register(model.Info{ID: "gemini-3.5-flash", Executor: "planner"}); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+
+	router := engine.NewRouter(executors, def).WithModels(models)
+
+	got, err := router.Resolve(engine.Step{
+		ID: "plan", Kind: "generate",
+		Model:     "gemini-3.5-flash",
+		Preferred: []string{"claude-opus-4-8"},
+	})
+	if err != nil {
+		t.Fatalf("Resolve failed: %v", err)
+	}
+	if got != fromPreferred {
+		t.Error("Resolve with both Preferred and Model set did not let Preferred win")
+	}
+}
+
+// TestRouter_EmptyPreferredFallsThroughToModel covers backward
+// compatibility for an empty (but present, e.g. "preferred": []) Preferred
+// list — it must be treated exactly like an absent one, falling through
+// to Model.
+func TestRouter_EmptyPreferredFallsThroughToModel(t *testing.T) {
+	executors := engine.NewExecutorRegistry()
+	fromModel := &captureExecutor{}
+	def := &captureExecutor{}
+	if err := executors.Register("planner", fromModel); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+
+	models := model.NewRegistry()
+	if err := models.Register(model.Info{ID: "gemini-3.5-flash", Executor: "planner"}); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+
+	router := engine.NewRouter(executors, def).WithModels(models)
+
+	got, err := router.Resolve(engine.Step{
+		ID: "plan", Kind: "generate",
+		Model:     "gemini-3.5-flash",
+		Preferred: []string{},
+	})
+	if err != nil {
+		t.Fatalf("Resolve failed: %v", err)
+	}
+	if got != fromModel {
+		t.Error("Resolve with an empty Preferred list did not fall through to Model")
+	}
+}
