@@ -96,3 +96,24 @@ func (r Router) Resolve(step Step) (Executor, error) {
 	}
 	return e, nil
 }
+
+// ResolveModel resolves a specific Model ID to an Executor — the same
+// name-lookup Resolve performs internally for Model/Preferred[0], exposed
+// standalone so a caller (automatic model failover, ADR-0013 Proposed
+// sixth increment — see executeGenerateStep in strategy.go) can resolve
+// each subsequent Preferred entry in turn after the first one Resolve
+// already tried. A clear, named error if no model.Registry is attached,
+// id is not registered in it, or the Executor it names is not registered
+// in r's ExecutorRegistry — the same failure shapes Resolve already
+// produces for Model/Preferred[0], just without step-specific wrapping
+// (the caller adds that context).
+func (r Router) ResolveModel(id string) (Executor, error) {
+	if r.models == nil {
+		return nil, fmt.Errorf("model %q is set, but no model registry is configured", id)
+	}
+	info, err := r.models.Get(id)
+	if err != nil {
+		return nil, err
+	}
+	return r.registry.Get(info.Executor)
+}
