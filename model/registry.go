@@ -99,14 +99,44 @@ type Quality struct {
 	Review    int
 }
 
-// Registry is an in-memory catalog of Info entries, keyed by ID.
+// Registry is an in-memory catalog of Info entries, keyed by ID. It
+// optionally holds a HealthManager (SetHealthManager) it queries on
+// Health's behalf — Registry itself never tracks runtime health state
+// directly, keeping the fixed catalog and the mutable runtime state as two
+// separate, independently-optional concerns.
 type Registry struct {
 	models map[string]Info
+	health *HealthManager
 }
 
-// NewRegistry returns an empty Registry, ready for Register calls.
+// NewRegistry returns an empty Registry, ready for Register calls. It has
+// no HealthManager attached — Health queries return Health{Status:
+// StatusUnknown} until SetHealthManager is called.
 func NewRegistry() *Registry {
 	return &Registry{models: make(map[string]Info)}
+}
+
+// SetHealthManager attaches manager as the Registry's health query
+// backend (ADR-0013, Proposed, fifth increment) — Health delegates to it.
+// Optional: a Registry with none attached still answers Health queries,
+// always as Health{Status: StatusUnknown}, rather than panicking or
+// erroring.
+func (r *Registry) SetHealthManager(manager *HealthManager) {
+	r.health = manager
+}
+
+// Health returns id's current runtime health via the attached
+// HealthManager (SetHealthManager), or Health{Status: StatusUnknown} if
+// none is attached. This is purely a query — it never registers,
+// resolves, or otherwise changes anything about id's catalog Info, and
+// nothing in engine.Router.Resolve calls it: no routing decision is made
+// from this value. id need not be a registered model — health tracking is
+// independent of catalog membership.
+func (r *Registry) Health(id string) Health {
+	if r.health == nil {
+		return Health{Status: StatusUnknown}
+	}
+	return r.health.Get(id)
 }
 
 // Register adds info to the Registry. It refuses an empty ID, an empty
