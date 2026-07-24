@@ -24,7 +24,11 @@
 
 Each owns one or more **compatibility surfaces** (expensive to change after release). *Numbering is provisional and not yet ratified.*
 
-**Empty.** Every backlog row identified so far has been drafted and ratified — see [implementation-status.md](../00-overview/implementation-status.md) for what remains genuinely unbuilt (a mechanism/versioning ADR still needs writing once [ADR-0008](ADR-0008-extension-isolation-and-contract-versioning.md)'s named trigger fires; capability-based negotiation once [ADR-0006](ADR-0006-routing-and-policy.md)'s named trigger fires; ADR-0012's own implementation PR). A new backlog row is added here the moment a genuinely new architectural decision is identified as needed.
+| ADR | Decision | Notes |
+|---|---|---|
+| [ADR-0013](ADR-0013-model-registry.md) | Model Registry (`model.Registry` catalogs which named model belongs to which Executor vendor — metadata only; no change to `engine.Router`, Pipeline schema, or any existing configuration) | Proposed 2026-07-24, not yet ratified. Purely additive: introduces no new compatibility surface, gates nothing existing. Code already exists and is fully green (`model` package, per-Executor `SupportedModels()`, `cmd/foundry.buildModelRegistry()`) — awaiting the maintainer's ratification, not a follow-up implementation PR. |
+
+Beyond the row above, every other backlog row identified so far has been drafted and ratified — see [implementation-status.md](../00-overview/implementation-status.md) for what remains genuinely unbuilt (a mechanism/versioning ADR still needs writing once [ADR-0008](ADR-0008-extension-isolation-and-contract-versioning.md)'s named trigger fires; capability-based negotiation once [ADR-0006](ADR-0006-routing-and-policy.md)'s named trigger fires; ADR-0012's own implementation PR). A new backlog row is added here the moment a genuinely new architectural decision is identified as needed.
 
 ## Status definitions
 
