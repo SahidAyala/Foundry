@@ -124,6 +124,26 @@ Amazon Q Developer was considered and deliberately skipped: AWS announced its en
 
   This repository's own `.foundry/pipelines/issue.json` also demonstrates diversifying models within one Act: its `plan` Step (the initial analysis of the fetched ticket) pins `"executor": "planner"`, and `.foundry/executors.json` maps `"planner"` to the Gemini CLI vendor — so planning runs on a different, cheaper model than `implement`'s (the default Executor, unpinned). See [Configuring a second Executor](#configuring-a-second-executor-optional) above for the `executors.json` shape, and [pipelines.md](pipelines.md) for the `executor` field itself.
 
+### This repository's own base configuration
+
+This repository dogfoods its own `.foundry/config.json` (previously missing entirely — every `/issue`/AI-review run so far had only ever been tried against throwaway test repos, never against Foundry's own checkout):
+
+```json
+{
+  "ticket_provider": "github",
+  "require_approval_before_remote_publish": true,
+  "remote_publish_token_env": "GH_TOKEN",
+  "ai_review_model": "llama3",
+  "ai_review_base_url": "http://localhost:11434/v1/chat/completions"
+}
+```
+
+Each field still needs its own real prerequisite before it does anything — this is base wiring, not a claim that everything below is validated live:
+
+- `ticket_provider: "github"` works immediately — it reuses the already-authenticated `gh` CLI session, the same as the live-validated fetch earlier in this guide.
+- `remote_publish_token_env: "GH_TOKEN"` requires exporting a real GitHub token (`export GH_TOKEN=<a PAT with repo scope>`) in the shell `foundry` runs in before an `/issue` run's `apply` Step (targeting `remote-pr`) can actually push a branch and open a pull request. Unlike `ticket_provider: "github"`'s fetch path (which reuses `gh`'s own cached login), `vcs.GitHubPRApplier` reads its credential from this named environment variable explicitly — `gh auth login`'s cached session alone is not enough here.
+- `ai_review_model`/`ai_review_base_url` point at a local [Ollama](https://ollama.com) instance (chosen for being free and requiring no API key) — but **Ollama is not installed in this environment**, so this is configuration-only, not a working reviewer yet. To actually use it: install Ollama, run `ollama pull llama3` (or swap in whichever model you `pull`), and make sure `ollama serve` is running before starting a session that triggers a verify Step.
+
 GitHub and GitLab need no separate credential — they shell out to `gh issue view` / `glab issue view`, reusing whichever authenticated CLI session is already set up (the same `gh` session `remote_publish_token_env` already assumes for GitHub):
 
 ```json
