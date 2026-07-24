@@ -40,12 +40,17 @@ type PipelineDocument struct {
 // and §2.6, Pieces 1 and 4 of
 // docs/04-guides/multi-executor-router-implementation-plan.md): a document
 // that omits them decodes to Step's zero values for all four, identical to
-// every document written before they existed.
+// every document written before they existed. Model is optional too
+// (ADR-0013, Proposed): a document naming "model" instead of (or alongside)
+// "executor" is resolved by Router against a configured model.Registry —
+// model wins when both are present; a document that predates Model, or
+// simply never sets it, keeps its exact current executor-only behavior.
 type StepDocument struct {
 	ID           string            `json:"id"`
 	Kind         string            `json:"kind"`
 	Capability   map[string]string `json:"capability,omitempty"`
 	Executor     string            `json:"executor,omitempty"`
+	Model        string            `json:"model,omitempty"`
 	FeedsForward bool              `json:"feeds_forward,omitempty"`
 	Target       string            `json:"target,omitempty"`
 }
@@ -192,6 +197,7 @@ func (doc PipelineDocument) toPipeline() (Pipeline, error) {
 			Kind:         s.Kind,
 			Capability:   s.Capability,
 			Executor:     s.Executor,
+			Model:        s.Model,
 			FeedsForward: s.FeedsForward,
 			Target:       s.Target,
 		}
