@@ -48,17 +48,20 @@ Per [ADR-0013](../03-adrs/ADR-0013-model-registry.md) (Proposed): a `generate` S
 - What models exist, and which Executor each belongs to, is a fixed catalog built once per process from every Executor package's own `SupportedModels()` (see [implementation-status.md](../00-overview/implementation-status.md)'s changelog) — there is no per-project way to add to it yet.
 - The Model Registry (`model.Registry`) also carries a runtime `HealthManager` (`AVAILABLE`/`UNAVAILABLE`/`COOLDOWN`/`UNKNOWN`, plus a `reason` and `retryAt`), queryable via `Registry.Health` — ADR-0013 (Proposed), fifth increment. This is not a Pipeline/Step concept: no field on a Step reads or reports it, `Router.Resolve` never consults it, and a `model`/`preferred`-pinned Step's resolution is completely unaffected by any model's reported health today.
 
-### Preferred model lists
+### Preferred model lists and automatic failover
 
-Per [ADR-0013](../03-adrs/ADR-0013-model-registry.md) (Proposed, fourth increment): a `generate` Step can name `preferred` instead of (or alongside) `model` — an ordered list of Model IDs:
+Per [ADR-0013](../03-adrs/ADR-0013-model-registry.md) (Proposed, fourth and sixth increments): a `generate` Step can name `preferred` instead of (or alongside) `model` — an ordered list of Model IDs:
 
 ```json
 { "id": "plan", "kind": "generate", "preferred": ["claude-opus-4-8", "claude-sonnet-5", "gemini-3.1-pro"] }
 ```
 
 - **`model`/`executor` still work exactly as before — `preferred` is entirely optional.** If set (non-empty), its first entry wins over `model`, which in turn still wins over `executor`.
-- **Only the first entry is ever consulted, today.** There is deliberately no availability check of any kind yet — Router.Resolve does not probe whether `claude-opus-4-8` is actually reachable before using it, and does not fall back to `claude-sonnet-5` or `gemini-3.1-pro` if the first entry fails to resolve. Right now, `preferred: [X, Y, Z]` behaves exactly like writing `model: X` — the remaining entries are inert, reserved for a future, separately-decided increment that adds real availability-aware fallback.
-- **An unresolvable first entry fails exactly like an unresolvable `model`** — a clear, named error, never a silent try-the-next-entry.
+- **Automatic failover is supported only when `preferred` names two or more models.** A Step with zero or one `preferred` entries behaves exactly as before this feature existed — a single resolve-and-execute attempt, no retry of any kind.
+- **A retryable failure tries the next entry.** If the first entry's model call fails with a classified, retryable reason — rate limit, temporary unavailability, or timeout — Foundry resolves and tries the next `preferred` entry instead, logging the switch (e.g. "Claude Sonnet unavailable. Switching to Gemini 3.1 Pro."). This repeats down the list until one succeeds or the list is exhausted.
+- **Some failures never fail over, by design** — authentication failures, an invalid/unrecognized model ID, and a model rejecting something it doesn't support (unsupported capability) always fail the Step immediately, even with more `preferred` entries left to try. A different model wouldn't fix a bad credential or a typo'd model name, and trying one anyway would hide the real problem.
+- **There is still no availability *probing*** — nothing checks whether `claude-opus-4-8` is reachable before trying it; a failure is only ever detected by actually attempting the call and it failing. Nothing here consults a model's reported runtime health either (see the ADR's own Decision 9/10 split) — failover reacts only to a real, just-attempted failure.
+- **This only actually helps once a real Executor's errors are classified.** As of this writing, no `executor/*` package emits the classification failover needs — the mechanism is fully implemented and tested (via fakes), but dormant against every real vendor until a separate, per-vendor mapping decision is made.
 - **An empty `preferred: []` is treated as absent**, falling through to `model`/`executor` unaffected.
 
 ## What's shipped, and why each is shaped the way it is
