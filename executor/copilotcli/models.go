@@ -9,7 +9,10 @@ import "foundry/model"
 // flag (checked against GitHub's own CLI documentation before writing
 // this — no such reference was found), so this entry names the fact
 // that an unconfigured default exists rather than fabricating specific
-// model names.
+// model names. For the same reason, Capabilities/Limits/Quality are left
+// at their zero value ("not rated," per model.Info's own doc comment)
+// rather than guessed — the underlying model is not confirmed, so neither
+// is anything about what it supports.
 func SupportedModels() []model.Info {
 	return []model.Info{
 		{ID: "copilot-default", Executor: "copilot", Provider: "GitHub Copilot", DisplayName: "GitHub Copilot CLI (default model)"},
