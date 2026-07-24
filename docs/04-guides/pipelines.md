@@ -22,7 +22,7 @@ A **Pipeline** is one **Strategy** for producing an **Act**: a predeclared seque
 }
 ```
 
-- **`steps`** — an ordered list. Each Step has an `id` (unique within the document, doubles as the human-readable name a `repair.target` can point back to) and a `kind`, one of RFC-0002 §4.2's closed five: `generate`, `verify`, `approve`, `apply`, `record`. A Step Kind PipelineStrategy does not recognize is a decode-time error, never a silently skipped Step. A Step may also carry `capability` (object, still unused by any document above — reserved for future capability-based routing, see [ADR-0006](../03-adrs/ADR-0006-routing-and-policy.md)), `executor` (string — a `generate` Step's pin to a named Executor from `.foundry/executors.json`, resolved by `engine.Router`; **used by `issue.json`'s `plan` Step below** to run its analysis on a different model than `implement`'s), `feeds_forward` (bool — used by `engine/strategy.go`'s `appendFeedsForward` to attach the immediately-preceding Step's own recorded output to a later Step's considered Context; not yet used by any document above), and `target` (string — used by `apply` Steps to name an apply Target, e.g. `issue.json`'s `remote-pr`).
+- **`steps`** — an ordered list. Each Step has an `id` (unique within the document, doubles as the human-readable name a `repair.target` can point back to) and a `kind`, one of RFC-0002 §4.2's closed five: `generate`, `verify`, `approve`, `apply`, `record`. A Step Kind PipelineStrategy does not recognize is a decode-time error, never a silently skipped Step. A Step may also carry `capability` (object, still unused by any document above — reserved for future capability-based routing, see [ADR-0006](../03-adrs/ADR-0006-routing-and-policy.md)), `executor` (string — a `generate` Step's pin to a named Executor from `.foundry/executors.json`, resolved by `engine.Router`; **used by `issue.json`'s `plan` Step below** to run its analysis on a different model than `implement`'s), `model` (string — ADR-0013, Proposed; a `generate` Step's pin to a named Model from the process's Model Registry instead of an Executor directly — see "Pinning a Step to a Model" below), `feeds_forward` (bool — used by `engine/strategy.go`'s `appendFeedsForward` to attach the immediately-preceding Step's own recorded output to a later Step's considered Context; not yet used by any document above), and `target` (string — used by `apply` Steps to name an apply Target, e.g. `issue.json`'s `remote-pr`).
 - **`repair.max_attempts`** — how many times the Pipeline may re-run after a `verify` Step's Judgment is `fail`. `0` (or an omitted `repair` block) means no repair.
 - **`repair.target`** — the Step ID a repair round jumps back to, re-running only from there onward, not the whole Pipeline. Omitted means "restart from the first Step."
 
@@ -31,6 +31,21 @@ A failing `verify` Step always stops the current attempt before any `approve`, `
 ### Field evolution and unknown fields
 
 Per [ADR-0004](../03-adrs/ADR-0004-reusable-act-template-format-and-evolution-policy.md): the fields listed above are the complete schema — there is no document schema-version field yet, and any field not named here is a decode-time error, not a silently ignored key. If you see an error like `unknown field "capabilty"`, it means exactly that: the document has a field this schema doesn't recognize, most often a typo of one of the names above. Fix the field name (or remove it) and re-run. New optional fields, when added, are always additive and `omitempty` — a document written before a new field existed keeps decoding identically once the field is documented here.
+
+### Pinning a Step to a Model instead of an Executor
+
+Per [ADR-0013](../03-adrs/ADR-0013-model-registry.md) (Proposed): a `generate` Step can name `model` instead of (or alongside) `executor`:
+
+```json
+{ "id": "plan", "kind": "generate", "model": "claude-sonnet-5" }
+```
+
+- `executor` still works exactly as it always did — `model` is entirely optional.
+- **If both are set, `model` wins.** `engine.Router.Resolve` looks `model` up in the process's Model Registry to find which Executor it belongs to, and resolves *that* name instead of `executor`'s value.
+- **An unknown `model` is a validation failure** — a name not in the Model Registry (or a Model Registry not configured at all) is a clear, named error at Resolve time, never a silent fallback to `executor` or the default Executor.
+- **An unknown `executor` behaves exactly as before** — whether the name being resolved came from `model` or from `executor` directly, an unregistered name in `.foundry/executors.json` fails the same way it always did.
+- A model's Executor value must match an entry's *name* in `.foundry/executors.json` (e.g. an entry literally named `"gemini"`), not merely share its `vendor`. A project that names its Gemini entry `"planner"` (as this repository's own `.foundry/executors.json` does) needs a `model` pinned Step to resolve against an entry actually named after the vendor, or against `"planner"` directly via `executor` instead — `model` does not search `.foundry/executors.json` by `vendor`. Models whose Executor is `"claude"` (Anthropic's Claude models) cannot resolve via `model` at all today: Claude Code is Foundry's implicit default and is never registered under a name, so this fails as "unknown executor" — correct, deterministic behavior, but a real, named limitation of this first increment (see the ADR's own Consequences).
+- What models exist, and which Executor each belongs to, is a fixed catalog built once per process from every Executor package's own `SupportedModels()` (see [implementation-status.md](../00-overview/implementation-status.md)'s changelog) — there is no per-project way to add to it yet.
 
 ## What's shipped, and why each is shaped the way it is
 
