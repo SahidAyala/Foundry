@@ -26,9 +26,16 @@ func (g *fakeGatherer) Gather(ctx context.Context, intent *domain.Intent) ([]str
 type fakeVerifier struct {
 	verdict string
 	err     error
+
+	// receivedOutcome records the last Outcome passed to Verify, so a
+	// test can assert what the Engine actually handed the verify Step —
+	// e.g. domain.Outcome.Intent (set by the Engine's generate-Step
+	// handling, not by any Executor).
+	receivedOutcome *domain.Outcome
 }
 
 func (v *fakeVerifier) Verify(ctx context.Context, outcome *domain.Outcome, workspace string) (*domain.Judgment, error) {
+	v.receivedOutcome = outcome
 	if v.err != nil {
 		return nil, v.err
 	}
@@ -658,5 +665,29 @@ func TestEngine_RunBudgeted_ReportsRepairSkippedWhenBudgetRefuses(t *testing.T) 
 	}
 	if !reflect.DeepEqual(reporter.events, want) {
 		t.Errorf("events = %v, want %v", reporter.events, want)
+	}
+}
+
+// TestEngine_Run_SetsOutcomeIntentForVerifier proves the Engine populates
+// domain.Outcome.Intent (right after Execute returns, in the generate-Step
+// handling) with the Act's own Intent text — so a Verifier (e.g.
+// verify/aireview) can judge a Patch against what was actually asked for,
+// not just the diff alone. Set by the Engine itself, not by the
+// Executor: captureExecutor never touches Outcome.Intent.
+func TestEngine_Run_SetsOutcomeIntentForVerifier(t *testing.T) {
+	exec := &captureExecutor{patches: []string{"first-patch"}}
+	verifier := &fakeVerifier{verdict: "pass"}
+	eng := engine.NewEngine(&fakeGatherer{files: []string{"main.go"}}, exec, verifier, "", engine.DefaultPipeline())
+
+	_, err := eng.Run(context.Background(), &domain.Intent{Text: "implement issue #7: recent command"})
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	if verifier.receivedOutcome == nil {
+		t.Fatal("Verify was never called")
+	}
+	if verifier.receivedOutcome.Intent != "implement issue #7: recent command" {
+		t.Errorf("Outcome.Intent = %q, want the Act's own Intent text", verifier.receivedOutcome.Intent)
 	}
 }

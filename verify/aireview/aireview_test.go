@@ -89,6 +89,58 @@ func TestVerify_PassWithNoFindings(t *testing.T) {
 	}
 }
 
+// TestVerify_IncludesOutcomeIntentInRequestWhenSet covers the maintainer's
+// requested enrichment: outcome.Intent (set by the Engine from the Act's
+// own Intent text — e.g. a ticket's title, description, and acceptance
+// criteria) is included in the review request when non-empty, so the
+// model judges the diff against what was actually asked for.
+func TestVerify_IncludesOutcomeIntentInRequestWhenSet(t *testing.T) {
+	body := fixtureResponse(t, "VERDICT: pass\nFINDINGS:\n- none")
+	d := &fakeDoer{resp: jsonResponse(http.StatusOK, body)}
+	v := newTestVerifier(d)
+
+	outcome := &domain.Outcome{
+		Patch:  "diff --git a/x b/x\n",
+		Intent: "Implement issue #7: recent command\n\nAcceptance criteria:\n- Sorts by created_at descending",
+	}
+	if _, err := v.Verify(context.Background(), outcome, "workspace"); err != nil {
+		t.Fatalf("Verify failed: %v", err)
+	}
+
+	if !strings.Contains(d.gotBody, "recent command") {
+		t.Errorf("request body missing the original intent text, got:\n%s", d.gotBody)
+	}
+	if !strings.Contains(d.gotBody, "Sorts by created_at descending") {
+		t.Errorf("request body missing the acceptance criteria folded into Intent, got:\n%s", d.gotBody)
+	}
+	if !strings.Contains(d.gotBody, "diff --git a/x b/x") {
+		t.Errorf("request body missing the patch to review, got:\n%s", d.gotBody)
+	}
+}
+
+// TestReviewPrompt_EmptyIntentUsesPlainDiffPrompt covers backward
+// compatibility: an Outcome with no Intent set (every Outcome built
+// before this field existed, and any Outcome built outside the Engine's
+// own generate-Step path) gets byte-for-byte the same prompt as before
+// this enrichment existed.
+func TestReviewPrompt_EmptyIntentUsesPlainDiffPrompt(t *testing.T) {
+	got := reviewPrompt("", "diff --git a/x b/x\n")
+	want := "Review this diff:\n\ndiff --git a/x b/x\n"
+	if got != want {
+		t.Errorf("reviewPrompt(\"\", patch) = %q, want %q", got, want)
+	}
+}
+
+func TestReviewPrompt_IncludesIntentWhenSet(t *testing.T) {
+	got := reviewPrompt("Implement issue #7", "diff --git a/x b/x\n")
+	if !strings.Contains(got, "Implement issue #7") {
+		t.Errorf("reviewPrompt = %q, want it to contain the intent", got)
+	}
+	if !strings.Contains(got, "diff --git a/x b/x") {
+		t.Errorf("reviewPrompt = %q, want it to still contain the patch", got)
+	}
+}
+
 func TestVerify_PassWithFindingsSurfacesThemWithoutFailing(t *testing.T) {
 	body := fixtureResponse(t, "VERDICT: pass\nFINDINGS:\n- Consider adding a comment here\n- Variable name could be clearer")
 	d := &fakeDoer{resp: jsonResponse(http.StatusOK, body)}

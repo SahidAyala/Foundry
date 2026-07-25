@@ -112,28 +112,44 @@ type chatCompletionErrorResponse struct {
 	} `json:"error"`
 }
 
-// Verify sends outcome.Patch to the configured model and parses its
-// response into a Judgment. A patch the model reports no findings
-// against still yields Verdict "pass" with a single explanatory Checked
-// entry, never an empty slice that could be confused with "not run at
-// all".
+// Verify sends outcome.Patch (and, when set, outcome.Intent — the
+// original request this Patch was produced for, e.g. a ticket's title,
+// description, and acceptance criteria; set by the Engine, never by an
+// Executor) to the configured model and parses its response into a
+// Judgment. A patch the model reports no findings against still yields
+// Verdict "pass" with a single explanatory Checked entry, never an empty
+// slice that could be confused with "not run at all".
 func (v *Verifier) Verify(ctx context.Context, outcome *domain.Outcome, workspace string) (*domain.Judgment, error) {
 	ctx, cancel := context.WithTimeout(ctx, v.timeout)
 	defer cancel()
 
-	content, err := v.call(ctx, outcome.Patch)
+	content, err := v.call(ctx, outcome.Intent, outcome.Patch)
 	if err != nil {
 		return nil, err
 	}
 	return parseReview(content), nil
 }
 
-func (v *Verifier) call(ctx context.Context, patch string) (string, error) {
+// reviewPrompt renders the user message asking the model to review patch.
+// When intent is non-empty, the original request is included so the
+// model can judge whether the diff actually satisfies it, not only
+// whether the diff looks internally reasonable — the same distinction a
+// human reviewer draws between "is this good code" and "does this do
+// what was asked."
+func reviewPrompt(intent, patch string) string {
+	if intent == "" {
+		return "Review this diff:\n\n" + patch
+	}
+	return "The original request was:\n\n" + intent +
+		"\n\nReview whether the following diff satisfies it:\n\n" + patch
+}
+
+func (v *Verifier) call(ctx context.Context, intent, patch string) (string, error) {
 	body, err := json.Marshal(chatCompletionRequest{
 		Model: v.model,
 		Messages: []chatMessage{
 			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: "Review this diff:\n\n" + patch},
+			{Role: "user", Content: reviewPrompt(intent, patch)},
 		},
 	})
 	if err != nil {
