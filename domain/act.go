@@ -106,6 +106,17 @@ type Intent struct {
 // Outcome is what the executor produced.
 type Outcome struct {
 	Patch string
+	// Intent is the original Intent.Text this Outcome was produced in
+	// response to — set by the Engine (engine/strategy.go's generate-Step
+	// handling) right after Execute returns, not by any Executor itself,
+	// so no existing Executor implementation needs to change to populate
+	// it. Empty for an Outcome built directly by a test or a caller
+	// outside the Engine's own generate-Step path. Exists so a Verifier
+	// can judge a Patch against what was actually asked for (e.g. a
+	// ticket's acceptance criteria, folded into Intent.Text by
+	// session.formatIssueIntent) instead of the diff alone — see
+	// verify/aireview, the first reader.
+	Intent string
 	// ActualCostUSD is the real, post-execution cost of the Execute call
 	// that produced this Outcome, if the Executor can report one — nil
 	// when it cannot (ADR-0011, docs/03-adrs/ADR-0011-cost-as-a-first-class-constraint.md).

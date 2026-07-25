@@ -205,6 +205,12 @@ func runSteps(ctx context.Context, pipelineName string, act *domain.Act, intent 
 				return outcome, judgment, false, err
 			}
 			outcome = o
+			// Intent is set here, by the Engine, rather than by any
+			// Executor — so a later verify Step's Verifier (e.g.
+			// verify/aireview) can judge the Patch against what was
+			// actually asked for without every existing Executor
+			// implementation needing to change to populate it.
+			outcome.Intent = intent.Text
 			act.Patch = outcome.Patch
 			act.Iterations = rc.spent.iterations
 			act.CostEstimateUSD = rc.spent.costUSD
