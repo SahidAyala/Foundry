@@ -122,7 +122,7 @@ Amazon Q Developer was considered and deliberately skipped: AWS announced its en
 - `docs_path` — enables the `project-doc` apply target, appending an Act's output to this file.
 - `require_approval_before_remote_publish` / `remote_publish_token_env` — enable the `remote-pr` apply target ([ADR-0010](../03-adrs/ADR-0010-vcs-pr-integration-and-apply-targets.md)), which pushes a branch and opens a pull request via `gh`. A Pipeline declaring `remote-pr` with no preceding `approve` Step is refused when it's loaded, not silently allowed to skip human approval.
 - `request_copilot_review` — after `remote-pr` opens a pull request, also ask GitHub Copilot to review it (`gh pr edit --add-reviewer @copilot`). Has no effect unless `remote_publish_token_env` is set too. Requires a paid Copilot plan on the repository/organization — Foundry can't detect whether that's available, so this defaults to off. A failure to request the review (no such plan, the feature not enabled) is printed as a warning but never fails the Act — the pull request itself has already been opened by that point.
-- `ticket_provider` — enables `/issue <id>`. `"github"`, `"jira"`, `"gitlab"`, or `"asana"` today; an unset `ticket_provider` makes `/issue` report a clear configuration error rather than guessing. `.foundry/pipelines/issue.json` (scaffolded by `/init` like every other starter) is the Pipeline `/issue` runs — edit it to target `remote-pr` on its `apply` Step if you want `/issue` to end by opening a pull request rather than applying locally.
+- `ticket_provider` — enables `/issue <id>`. `"github"`, `"jira"`, `"gitlab"`, `"asana"`, or `"backlog"` today; an unset `ticket_provider` makes `/issue` report a clear configuration error rather than guessing. `.foundry/pipelines/issue.json` (scaffolded by `/init` like every other starter) is the Pipeline `/issue` runs — edit it to target `remote-pr` on its `apply` Step if you want `/issue` to end by opening a pull request rather than applying locally.
 
 ### This repository's own base configuration: one model per part of the loop
 
@@ -191,7 +191,41 @@ Jira and Asana have no equivalent CLI to reuse, so they need their own credentia
 
 `asana_api_token_env` names the environment variable holding an Asana Personal Access Token — generate one from your Asana profile settings. Unlike Jira, Asana needs no separate base URL: its API has one fixed global endpoint regardless of workspace.
 
-**Only the GitHub path above has been validated against a real ticket** — live, against a real GitHub issue. Jira, GitLab, and Asana are fixture-tested against their vendors' own documented request/response shapes only; none of the three has a real account/token/CLI available in this environment to validate against live.
+`"backlog"` needs no external credential at all — it reads a local, project-committed JSON file instead of calling any API:
+
+```json
+{ "ticket_provider": "backlog" }
+```
+
+```json
+// .foundry/backlog.json (or wherever backlog_path points)
+{
+  "features": [
+    {
+      "id": "7",
+      "title": "Comando recent",
+      "description": "Lista las N notas más recientes, ordenadas por created_at descendente.",
+      "acceptance": [
+        "`recent` lista las 5 notas más recientes por defecto",
+        "`recent --limit 10` permite cambiar el número"
+      ],
+      "status": "pending"
+    }
+  ]
+}
+```
+
+- `backlog_path` (optional) — where to read the file from, relative to the project root; defaults to `.foundry/backlog.json` if unset.
+- `/issue <id>` fetches the feature with that literal `id`. `/issue next` fetches the **first** feature whose `status` is `"pending"`, in file order — useful for working through a backlog one item at a time without looking up IDs yourself.
+- `acceptance` (optional, a list of strings) is appended to the feature's `description` as a plain bulleted list before it becomes the Act's Intent text — the same criteria a human reviewer would check a PR against.
+- This Fetcher never writes back to `backlog.json` — fetching a feature does not change its `status`, the same read-only contract every other ticket provider already has (`ticket/github` never moves a GitHub issue to "in progress" either). Move a feature to `"done"` yourself once its Act is applied, the same way you'd close a ticket in any other tracker.
+- Valid `status` values: `"pending"`, `"in_progress"`, `"done"`, `"blocked"` — Foundry doesn't enforce a specific set beyond matching `"pending"` for `/issue next`; use whatever your own workflow needs.
+
+**Only the GitHub path above has been validated against a real ticket** — live, against a real GitHub issue. Jira, GitLab, and Asana are fixture-tested against their vendors' own documented request/response shapes only. `"backlog"` needs no external validation at all — it's a plain local file read, tested directly.
+
+### Feeding what was asked for into AI review
+
+When a generate Step's Outcome is produced, Foundry automatically records the Act's own Intent text onto it (`domain.Outcome.Intent`) — no configuration needed, this always happens. If [AI code review](#ai-code-review-optional) is enabled, it uses this to judge a diff against what was actually requested (e.g. a ticket's title, description, and any `acceptance` criteria — including a `"backlog"` feature's own), not only whether the diff looks internally reasonable on its own. A Step run outside `/issue` (e.g. a plain `/feature "..."` prompt) still benefits: the AI reviewer sees the same intent text you typed.
 
 ## AI code review (optional)
 
