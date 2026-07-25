@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"foundry/domain"
+	"foundry/model"
 )
 
 // fakeDoer is an injectable doer that returns a canned response (or
@@ -218,6 +219,9 @@ func TestExecute_TransportError(t *testing.T) {
 	if !strings.Contains(err.Error(), "request failed") {
 		t.Errorf("error = %q, want it to mention 'request failed'", err)
 	}
+	if _, ok := model.ClassifyFailure(err); ok {
+		t.Error("a generic transport error was classified; it should stay unclassified (never guessed at)")
+	}
 }
 
 func TestExecute_Unauthorized(t *testing.T) {
@@ -234,6 +238,9 @@ func TestExecute_Unauthorized(t *testing.T) {
 	if !strings.Contains(err.Error(), "Incorrect API key provided") {
 		t.Errorf("error = %q, want it to include the vendor's own error message", err)
 	}
+	if class, ok := model.ClassifyFailure(err); !ok || class != model.FailureAuthentication {
+		t.Errorf("ClassifyFailure = (%q, %v), want (%q, true)", class, ok, model.FailureAuthentication)
+	}
 }
 
 func TestExecute_RateLimited(t *testing.T) {
@@ -247,6 +254,9 @@ func TestExecute_RateLimited(t *testing.T) {
 	if !strings.Contains(err.Error(), "rate limited") {
 		t.Errorf("error = %q, want it to mention 'rate limited'", err)
 	}
+	if class, ok := model.ClassifyFailure(err); !ok || class != model.FailureRateLimit {
+		t.Errorf("ClassifyFailure = (%q, %v), want (%q, true)", class, ok, model.FailureRateLimit)
+	}
 }
 
 func TestExecute_ServerError(t *testing.T) {
@@ -258,6 +268,46 @@ func TestExecute_ServerError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "server error") {
 		t.Errorf("error = %q, want it to mention 'server error'", err)
+	}
+	if class, ok := model.ClassifyFailure(err); !ok || class != model.FailureTemporaryUnavailable {
+		t.Errorf("ClassifyFailure = (%q, %v), want (%q, true)", class, ok, model.FailureTemporaryUnavailable)
+	}
+}
+
+// TestExecute_ModelNotFound covers OpenAI's documented NotFoundError
+// (platform.openai.com/docs/guides/error-codes — "requests for
+// non-existent resources," which for this API includes an unrecognized
+// model ID), classified as FailureInvalidModel — automatic model
+// failover must never retry this against the same model.
+func TestExecute_ModelNotFound(t *testing.T) {
+	body := `{"error": {"message": "The model 'gpt-does-not-exist' does not exist", "type": "invalid_request_error"}}`
+	e := newTestExecutor(&fakeDoer{resp: jsonResponse(http.StatusNotFound, body)})
+
+	_, err := e.Execute(context.Background(), &domain.Intent{Text: "x"}, nil)
+	if err == nil {
+		t.Fatal("Execute returned nil error on 404")
+	}
+	if !strings.Contains(err.Error(), "model not found") {
+		t.Errorf("error = %q, want it to mention 'model not found'", err)
+	}
+	if class, ok := model.ClassifyFailure(err); !ok || class != model.FailureInvalidModel {
+		t.Errorf("ClassifyFailure = (%q, %v), want (%q, true)", class, ok, model.FailureInvalidModel)
+	}
+}
+
+// TestExecute_TimeoutIsClassified covers the context-deadline-exceeded
+// path specifically (distinct from a generic transport error), classified
+// as FailureTimeout.
+func TestExecute_TimeoutIsClassified(t *testing.T) {
+	e := newTestExecutor(&fakeDoer{err: context.DeadlineExceeded})
+	e.timeout = time.Nanosecond
+
+	_, err := e.Execute(context.Background(), &domain.Intent{Text: "x"}, nil)
+	if err == nil {
+		t.Fatal("Execute returned nil error on timeout")
+	}
+	if class, ok := model.ClassifyFailure(err); !ok || class != model.FailureTimeout {
+		t.Errorf("ClassifyFailure = (%q, %v), want (%q, true)", class, ok, model.FailureTimeout)
 	}
 }
 

@@ -35,6 +35,7 @@ import (
 	"foundry/domain"
 	"foundry/engine"
 	"foundry/executor"
+	"foundry/model"
 )
 
 const (
@@ -238,7 +239,10 @@ func (e *Executor) call(ctx context.Context, intent *domain.Intent, considered [
 	resp, err := e.doer.Do(req)
 	if err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return chatCompletionResponse{}, fmt.Errorf("openai: timed out after %s", e.timeout)
+			return chatCompletionResponse{}, &model.FailureError{
+				Class: model.FailureTimeout,
+				Err:   fmt.Errorf("openai: timed out after %s", e.timeout),
+			}
 		}
 		return chatCompletionResponse{}, fmt.Errorf("openai: request failed: %w", err)
 	}
@@ -267,6 +271,21 @@ func (e *Executor) call(ctx context.Context, intent *domain.Intent, considered [
 // the vendor's own documented {"error": {"message": ...}} body when it
 // parses, and naming the specific, common failure modes (auth, rate limit)
 // a caller is most likely to hit.
+//
+// The four named cases are additionally wrapped in a *model.FailureError
+// (ADR-0013, Proposed, sixth increment), classifying them for automatic
+// model failover: 401/403 and 5xx map to the same classes OpenAI's own
+// documented error taxonomy names (platform.openai.com/docs/guides/error-codes
+// — AuthenticationError, RateLimitError, InternalServerError/"engine
+// overloaded"), confirmed before writing this, not guessed; 404
+// (OpenAI's NotFoundError — "requests for non-existent resources," which
+// in this API includes an unrecognized model ID) maps to
+// FailureInvalidModel. A generic 4xx (the default branch below) is left
+// unclassified rather than guessed at — OpenAI's own docs don't document
+// a distinct, reliable signal for it that maps cleanly to one of
+// FailureClass's six named values, and an unclassified error is simply
+// never eligible for failover (ClassifyFailure's own "unknown defaults to
+// not retryable" rule), never wrongly retried.
 func statusError(status int, body []byte) error {
 	message := strings.TrimSpace(string(body))
 	var decoded chatCompletionErrorResponse
@@ -276,11 +295,25 @@ func statusError(status int, body []byte) error {
 
 	switch {
 	case status == http.StatusUnauthorized || status == http.StatusForbidden:
-		return fmt.Errorf("openai: authentication failed (status %d): %s", status, message)
+		return &model.FailureError{
+			Class: model.FailureAuthentication,
+			Err:   fmt.Errorf("openai: authentication failed (status %d): %s", status, message),
+		}
 	case status == http.StatusTooManyRequests:
-		return fmt.Errorf("openai: rate limited (status %d): %s", status, message)
+		return &model.FailureError{
+			Class: model.FailureRateLimit,
+			Err:   fmt.Errorf("openai: rate limited (status %d): %s", status, message),
+		}
+	case status == http.StatusNotFound:
+		return &model.FailureError{
+			Class: model.FailureInvalidModel,
+			Err:   fmt.Errorf("openai: model not found (status %d): %s", status, message),
+		}
 	case status >= 500:
-		return fmt.Errorf("openai: server error (status %d): %s", status, message)
+		return &model.FailureError{
+			Class: model.FailureTemporaryUnavailable,
+			Err:   fmt.Errorf("openai: server error (status %d): %s", status, message),
+		}
 	default:
 		return fmt.Errorf("openai: request rejected (status %d): %s", status, message)
 	}
