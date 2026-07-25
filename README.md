@@ -56,7 +56,7 @@ Documentation is **single-source-of-truth**: every concept is defined once, in `
 
 ## Install
 
-**Requirements:** [Go](https://go.dev/dl/) 1.21+. `git` is also required for the one-line install below (not needed if you already have a local clone).
+**Requirements:** [Go](https://go.dev/dl/) 1.24+ (matching `go.mod`). `git` is also required for the one-line install below (not needed if you already have a local clone).
 
 ### One-line install (no clone needed)
 
@@ -82,6 +82,10 @@ Once installed, run `foundry` from any directory to start an interactive session
 
 ## Status
 
-**Implementation active, well past the original walking skeleton.** M0 (the first usable, deterministic vertical slice) is complete, and the codebase has since shipped a multi-Executor Router (Claude Code + OpenAI), VCS/PR publishing, and Authored Knowledge capture and retrieval. [docs/00-overview/roadmap.md](docs/00-overview/roadmap.md)'s current-status table gives an honest, milestone-by-milestone read of what's shipped vs. still planned. Several foundational decisions remain open (governance, the precise center of the domain, replay scope, knowledge migration, and more) and are also listed there. Only the language/toolchain decision is accepted ([docs/03-adrs/ADR-0001-language-and-toolchain.md](docs/03-adrs/ADR-0001-language-and-toolchain.md)).
+**Implementation active, well past the original walking skeleton.** M0–M3 (walking skeleton, deterministic core, reusable Act templates, real executors) are shipped; M4 (Knowledge) and M5 (Integration & visibility) are shipped in part; M6 (Extensibility) and M7 (Stability) haven't started. [docs/00-overview/roadmap.md](docs/00-overview/roadmap.md)'s current-status table and [docs/00-overview/implementation-status.md](docs/00-overview/implementation-status.md)'s living dashboard give an honest, milestone-by-milestone read of what's shipped vs. still planned — treat this section as a summary, those two documents as the source of truth.
+
+Shipped highlights: a multi-Executor Router behind six real vendors (Claude Code, OpenAI, Gemini — both CLI and API, GitHub Copilot CLI, and a general OpenAI-Chat-Completions-compatible vendor covering Ollama/Groq/DeepSeek/GitHub Models); VCS/PR publishing with optional Copilot review; Authored Knowledge capture and retrieval; ticket-driven Acts (`/issue`) against GitHub, Jira, GitLab, Asana, or a local JSON backlog; and an AI-review Verifier composable alongside deterministic checks.
+
+**13 ADRs are accepted** (governance, language/toolchain, persistence, replay, reusable-Act templates, the Executor contract, routing & policy, Knowledge & semantic store, extension isolation, CLI & output contract, VCS/PR integration, cost as a first-class constraint, and interactive terminal UX) — see [docs/03-adrs/README.md](docs/03-adrs/README.md) for the full list and what each one settles. A Model Registry (per-model capability metadata, preferred-model lists, automatic failover, capability-aware model resolution) is drafted as [ADR-0013](docs/03-adrs/ADR-0013-model-registry.md) and fully implemented but **not yet ratified** — treat it as provisional until that changes. Several foundational decisions remain genuinely open (the precise center of the domain, extensibility's concrete mechanism, and more) and are listed in the roadmap.
 
 **Start here:** [docs/04-guides/getting-started.md](docs/04-guides/getting-started.md) to install and run Foundry today; [docs/00-overview/roadmap.md](docs/00-overview/roadmap.md) for what's built and what's next.
