@@ -89,3 +89,7 @@ Shipped highlights: a multi-Executor Router behind six real vendors (Claude Code
 **13 ADRs are accepted** (governance, language/toolchain, persistence, replay, reusable-Act templates, the Executor contract, routing & policy, Knowledge & semantic store, extension isolation, CLI & output contract, VCS/PR integration, cost as a first-class constraint, and interactive terminal UX) — see [docs/03-adrs/README.md](docs/03-adrs/README.md) for the full list and what each one settles. A Model Registry (per-model capability metadata, preferred-model lists, automatic failover, capability-aware model resolution) is drafted as [ADR-0013](docs/03-adrs/ADR-0013-model-registry.md) and fully implemented but **not yet ratified** — treat it as provisional until that changes. Several foundational decisions remain genuinely open (the precise center of the domain, extensibility's concrete mechanism, and more) and are listed in the roadmap.
 
 **Start here:** [docs/04-guides/getting-started.md](docs/04-guides/getting-started.md) to install and run Foundry today; [docs/00-overview/roadmap.md](docs/00-overview/roadmap.md) for what's built and what's next.
+
+## License
+
+[MIT](LICENSE)
