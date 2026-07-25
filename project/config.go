@@ -49,11 +49,17 @@ type Config struct {
 
 	// TicketProvider names which external ticketing system the
 	// interactive session's /issue command fetches from — "github",
-	// "jira", "gitlab", or "asana" today (see
+	// "jira", "gitlab", "asana", or "backlog" today (see
 	// docs/00-overview/implementation-status.md). Empty means /issue is
 	// not configured; it reports a clear, named error if invoked rather
 	// than guessing a provider.
 	TicketProvider string `json:"ticket_provider"`
+
+	// BacklogPath is the project-relative path ticket/backlog reads its
+	// local JSON feature list from — ticket/backlog.DefaultPath
+	// (.foundry/backlog.json) if empty. Ignored unless TicketProvider is
+	// "backlog".
+	BacklogPath string `json:"backlog_path"`
 
 	// JiraBaseURL is a Jira Cloud site's own base URL (e.g.
 	// "https://yourcompany.atlassian.net") — required when TicketProvider
