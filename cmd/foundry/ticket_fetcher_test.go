@@ -6,6 +6,7 @@ import (
 
 	"foundry/project"
 	asanaticket "foundry/ticket/asana"
+	backlogticket "foundry/ticket/backlog"
 	githubticket "foundry/ticket/github"
 	gitlabticket "foundry/ticket/gitlab"
 	jiraticket "foundry/ticket/jira"
@@ -60,6 +61,16 @@ func TestNewTicketFetcher_AsanaVendorConstructsAsanaFetcher(t *testing.T) {
 	}
 	if _, ok := fetcher.(*asanaticket.Fetcher); !ok {
 		t.Errorf("newTicketFetcher(asana) = %T, want *asana.Fetcher", fetcher)
+	}
+}
+
+func TestNewTicketFetcher_BacklogVendorConstructsBacklogFetcher(t *testing.T) {
+	fetcher, err := newTicketFetcher(project.Config{TicketProvider: "backlog"}, "/repo")
+	if err != nil {
+		t.Fatalf("newTicketFetcher failed: %v", err)
+	}
+	if _, ok := fetcher.(*backlogticket.Fetcher); !ok {
+		t.Errorf("newTicketFetcher(backlog) = %T, want *backlog.Fetcher", fetcher)
 	}
 }
 

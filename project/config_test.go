@@ -62,6 +62,28 @@ func TestLoadConfig_DecodesTicketProvider(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_DecodesBacklogPath(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".foundry"), 0o755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	writeFile(t, filepath.Join(root, ".foundry"), "config.json", `{
+		"ticket_provider": "backlog",
+		"backlog_path": ".foundry/features.json"
+	}`)
+
+	config, err := project.LoadConfig(root)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if config.TicketProvider != "backlog" {
+		t.Errorf("TicketProvider = %q, want %q", config.TicketProvider, "backlog")
+	}
+	if config.BacklogPath != ".foundry/features.json" {
+		t.Errorf("BacklogPath = %q, want %q", config.BacklogPath, ".foundry/features.json")
+	}
+}
+
 func TestLoadConfig_DecodesJiraFields(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".foundry"), 0o755); err != nil {

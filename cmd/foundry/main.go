@@ -19,6 +19,7 @@ import (
 	"foundry/session"
 	"foundry/ticket"
 	asanaticket "foundry/ticket/asana"
+	backlogticket "foundry/ticket/backlog"
 	githubticket "foundry/ticket/github"
 	gitlabticket "foundry/ticket/gitlab"
 	jiraticket "foundry/ticket/jira"
@@ -109,9 +110,13 @@ func namedExecutor(cfg project.ExecutorConfig, workspace string) (engine.Executo
 // to ticket/asana, a pure HTTP call like Jira's (a Bearer Personal Access
 // Token resolved from cfg.AsanaAPITokenEnv) — Asana has no CLI
 // convention either, and unlike Jira needs no separate base URL, since
-// its API has one fixed global endpoint. Only runSession calls this, and
-// only when project.Config.TicketProvider is set — /issue is entirely
-// opt-in, exactly like RequestCopilotReview.
+// its API has one fixed global endpoint. "backlog" resolves to
+// ticket/backlog, reading a local, project-committed JSON feature list
+// (cfg.BacklogPath, or ticket/backlog.DefaultPath if empty) instead of
+// calling any external API — for a project that tracks work as a plain
+// file in its own repository. Only runSession calls this, and only when
+// project.Config.TicketProvider is set — /issue is entirely opt-in,
+// exactly like RequestCopilotReview.
 func newTicketFetcher(cfg project.Config, workspace string) (ticket.Fetcher, error) {
 	switch cfg.TicketProvider {
 	case "github":
@@ -122,8 +127,10 @@ func newTicketFetcher(cfg project.Config, workspace string) (ticket.Fetcher, err
 		return gitlabticket.NewFetcher(workspace), nil
 	case "asana":
 		return asanaticket.NewFetcher(os.Getenv(cfg.AsanaAPITokenEnv)), nil
+	case "backlog":
+		return backlogticket.NewFetcher(workspace, cfg.BacklogPath), nil
 	default:
-		return nil, fmt.Errorf("foundry: unsupported ticket provider %q (supported: %q, %q, %q, %q)", cfg.TicketProvider, "github", "jira", "gitlab", "asana")
+		return nil, fmt.Errorf("foundry: unsupported ticket provider %q (supported: %q, %q, %q, %q, %q)", cfg.TicketProvider, "github", "jira", "gitlab", "asana", "backlog")
 	}
 }
 
