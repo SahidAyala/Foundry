@@ -1,7 +1,5 @@
 # Foundry
 
-> *Foundry is a working name and is provisional.*
-
 **Foundry turns human intent into engineering outcomes that can be trusted — justified, accountable, and recorded — and that compound, because the project learns from each one.**
 
 It is not an IDE, a chatbot, an autonomous agent, a prompt tool, or a wrapper around a model. It is a system for the **responsible evolution of a project's state**, in which the model is replaceable substrate and the durable value is the project's own process, knowledge, and auditable history.

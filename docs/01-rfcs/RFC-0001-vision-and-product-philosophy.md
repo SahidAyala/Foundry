@@ -277,7 +277,7 @@ Genuine unknowns this RFC does not resolve. Each is a candidate for a future RFC
 4. **The boundary of "knowledge."** §6.3 and §8.2 lean heavily on "knowledge" as durable capital. *What is, and is not, knowledge — and who decides?* Code structure is derivable; a decision's rationale is authored. The line between them is doing a lot of philosophical work and is not yet rigorously defined here.
 5. **Autonomy's safe envelope.** §6.4 says autonomy is "a dial, not a destination." *What principles govern how far that dial may safely turn, and for what classes of work?* We have asserted the default; we have not defined the envelope.
 6. **The open-source / sustainability model.** Goal 7 and V4 demand an open, ownable platform. *What governance and sustainability model keeps Foundry open and ownable without collapsing — and without the V6 vendor-capture pressure creeping in through funding?* This is a product-survival question, not just a licensing detail.
-7. **The name.** "Foundry" is provisional and collides with existing tools in adjacent spaces. *Does the name survive, and does it matter?* Deferred, but logged.
+7. ~~**The name.**~~ **RESOLVED 2026-07-26** (see [roadmap.md](../00-overview/roadmap.md) open decision 11) — the maintainer confirmed "Foundry" directly; it is no longer provisional. This resolves only the name itself, not [ADR-0001](../03-adrs/ADR-0001-language-and-toolchain.md)'s own separate, still-open follow-up (Future ADR Dependencies item 3): what the canonical Go module/import path should be, now that it can finally be set.
 
 ---
 
