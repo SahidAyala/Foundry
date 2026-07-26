@@ -51,7 +51,7 @@ These are unresolved and **must not be settled silently in implementation**. The
 8. **Extension isolation mechanism & contract versioning** (see [../02-architecture/extensibility.md](../02-architecture/extensibility.md)).
 9. ~~**Cost as a first-class constraint.**~~ **RESOLVED 2026-07-21** — see [ADR-0011](../03-adrs/ADR-0011-cost-as-a-first-class-constraint.md): `CostEstimator` ([ADR-0005](../03-adrs/ADR-0005-executor-contract-and-capability-model.md) Decision 3) stays optional, not mandatory — Claude Code's subprocess has no billing signal to report, a structural limit, not a "not yet." An optional, additive `ActualCostUSD` on `Outcome`/`StepRecord`/`Act` lets an Executor that can (`executor/openai`) report real post-execution cost as reported Evidence, never a second Budget gate. `engine/budget.go`'s hardcoded ceilings and any cost reconciliation/calibration remain declined until each has a named, concrete trigger. **Still open:** the paired **near-term single-user value** vs the long compounding bet — a product-strategy question ADR-0011 explicitly did not resolve, distinct from the cost-mechanism question above.
 10. **Concurrency / scale model** and whether remote operation is truly additive (see [../02-architecture/system-context.md](../02-architecture/system-context.md)).
-11. **The project name** ("Foundry" is provisional).
+11. ~~**The project name.**~~ **RESOLVED 2026-07-26** — the maintainer confirmed "Foundry" directly, no longer provisional.
 
 Several of these have proposed owning ADRs; see [../03-adrs/README.md](../03-adrs/README.md).
 
