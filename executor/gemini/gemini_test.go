@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/model"
 )
 
 // fakeDoer is an injectable doer that returns a canned response (or
@@ -167,6 +168,15 @@ func TestExecute_TransportError(t *testing.T) {
 	if !strings.Contains(err.Error(), "request failed") {
 		t.Errorf("error = %q, want it to mention 'request failed'", err)
 	}
+	// A plain transport error (anything other than the context deadline
+	// expiring) stays unclassified, mirroring executor/openai's own
+	// identical case: Gemini's documented troubleshooting guide names no
+	// distinct, reliable signal for it, so guessing a class would be worse
+	// than leaving it unclassified (ClassifyFailure's own "unknown defaults
+	// to not retryable" rule already makes this safe).
+	if class, ok := model.ClassifyFailure(err); ok {
+		t.Errorf("ClassifyFailure = (%q, true), want ok=false for a plain transport error", class)
+	}
 }
 
 func TestExecute_Unauthorized(t *testing.T) {
@@ -183,6 +193,9 @@ func TestExecute_Unauthorized(t *testing.T) {
 	if !strings.Contains(err.Error(), "API key not valid") {
 		t.Errorf("error = %q, want it to include the vendor's own error message", err)
 	}
+	if class, ok := model.ClassifyFailure(err); !ok || class != model.FailureAuthentication {
+		t.Errorf("ClassifyFailure = (%q, %v), want (%q, true)", class, ok, model.FailureAuthentication)
+	}
 }
 
 func TestExecute_RateLimited(t *testing.T) {
@@ -196,6 +209,9 @@ func TestExecute_RateLimited(t *testing.T) {
 	if !strings.Contains(err.Error(), "rate limited") {
 		t.Errorf("error = %q, want it to mention 'rate limited'", err)
 	}
+	if class, ok := model.ClassifyFailure(err); !ok || class != model.FailureRateLimit {
+		t.Errorf("ClassifyFailure = (%q, %v), want (%q, true)", class, ok, model.FailureRateLimit)
+	}
 }
 
 func TestExecute_ServerError(t *testing.T) {
@@ -208,6 +224,9 @@ func TestExecute_ServerError(t *testing.T) {
 	if !strings.Contains(err.Error(), "server error") {
 		t.Errorf("error = %q, want it to mention 'server error'", err)
 	}
+	if class, ok := model.ClassifyFailure(err); !ok || class != model.FailureTemporaryUnavailable {
+		t.Errorf("ClassifyFailure = (%q, %v), want (%q, true)", class, ok, model.FailureTemporaryUnavailable)
+	}
 }
 
 func TestExecute_ErrorBodyNotJSON(t *testing.T) {
@@ -219,6 +238,47 @@ func TestExecute_ErrorBodyNotJSON(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "upstream connect error") {
 		t.Errorf("error = %q, want it to include the raw error body when it isn't JSON", err)
+	}
+	if class, ok := model.ClassifyFailure(err); !ok || class != model.FailureTemporaryUnavailable {
+		t.Errorf("ClassifyFailure = (%q, %v), want (%q, true)", class, ok, model.FailureTemporaryUnavailable)
+	}
+}
+
+// TestExecute_ModelNotFound covers Gemini's documented 404/NOT_FOUND status
+// (ai.google.dev/gemini-api/docs/troubleshooting — "the requested resource
+// wasn't found," which in this API includes an unrecognized model ID in the
+// endpoint path): failover must never retry this against the same model.
+func TestExecute_ModelNotFound(t *testing.T) {
+	body := `{"error": {"code": 404, "message": "models/gemini-nonexistent is not found for API version v1beta", "status": "NOT_FOUND"}}`
+	e := newTestExecutor(&fakeDoer{resp: jsonResponse(http.StatusNotFound, body)})
+
+	_, err := e.Execute(context.Background(), &domain.Intent{Text: "x"}, nil)
+	if err == nil {
+		t.Fatal("Execute returned nil error on 404")
+	}
+	if !strings.Contains(err.Error(), "model not found") {
+		t.Errorf("error = %q, want it to mention 'model not found'", err)
+	}
+	if class, ok := model.ClassifyFailure(err); !ok || class != model.FailureInvalidModel {
+		t.Errorf("ClassifyFailure = (%q, %v), want (%q, true)", class, ok, model.FailureInvalidModel)
+	}
+}
+
+// TestExecute_TimeoutIsClassified covers the context-deadline-exceeded
+// transport branch, distinct from a plain transport error above.
+func TestExecute_TimeoutIsClassified(t *testing.T) {
+	e := newTestExecutor(&fakeDoer{err: context.DeadlineExceeded})
+	e.timeout = time.Nanosecond
+
+	_, err := e.Execute(context.Background(), &domain.Intent{Text: "x"}, nil)
+	if err == nil {
+		t.Fatal("Execute returned nil error on timeout")
+	}
+	if !strings.Contains(err.Error(), "timed out") {
+		t.Errorf("error = %q, want it to mention 'timed out'", err)
+	}
+	if class, ok := model.ClassifyFailure(err); !ok || class != model.FailureTimeout {
+		t.Errorf("ClassifyFailure = (%q, %v), want (%q, true)", class, ok, model.FailureTimeout)
 	}
 }
 

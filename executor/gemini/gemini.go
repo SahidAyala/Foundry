@@ -36,6 +36,7 @@ import (
 	"github.com/SahidAyala/Foundry/domain"
 	"github.com/SahidAyala/Foundry/engine"
 	"github.com/SahidAyala/Foundry/executor"
+	"github.com/SahidAyala/Foundry/model"
 )
 
 const (
@@ -253,7 +254,10 @@ func (e *Executor) call(ctx context.Context, intent *domain.Intent, considered [
 	resp, err := e.doer.Do(req)
 	if err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return generateContentResponse{}, fmt.Errorf("gemini: timed out after %s", e.timeout)
+			return generateContentResponse{}, &model.FailureError{
+				Class: model.FailureTimeout,
+				Err:   fmt.Errorf("gemini: timed out after %s", e.timeout),
+			}
 		}
 		return generateContentResponse{}, fmt.Errorf("gemini: request failed: %w", err)
 	}
@@ -279,6 +283,24 @@ func (e *Executor) call(ctx context.Context, intent *domain.Intent, considered [
 // Google's own documented {"error": {"message": ...}} body when it parses,
 // and naming the specific, common failure modes (auth, rate limit) a caller
 // is most likely to hit.
+//
+// The four named cases are additionally wrapped in a *model.FailureError
+// (ADR-0013, Proposed), classifying them for automatic model failover: every
+// mapping was confirmed against Gemini API's own documented error taxonomy
+// (ai.google.dev/gemini-api/docs/troubleshooting) before writing it, not
+// guessed — 403/PERMISSION_DENIED → FailureAuthentication, 429/
+// RESOURCE_EXHAUSTED → FailureRateLimit, 404/NOT_FOUND (which that same
+// guide documents as covering "the requested resource wasn't found,"
+// including an unrecognized model ID) → FailureInvalidModel, and 503/
+// UNAVAILABLE or 500/INTERNAL → FailureTemporaryUnavailable (the guide
+// recommends retrying both with backoff). 401 is included alongside 403 for
+// FailureAuthentication even though Google's guide names only 403 for this
+// API specifically — mirroring executor/openai's own treatment of the same
+// pairing, since a bearer-style credential rejected outright and one
+// rejected as lacking permission are both non-retryable for the same
+// reason. Any other 4xx is left unclassified rather than guessed at, the
+// same reasoning executor/openai's own statusError documents for its own
+// default case.
 func statusError(status int, body []byte) error {
 	message := strings.TrimSpace(string(body))
 	var decoded googleErrorResponse
@@ -288,11 +310,25 @@ func statusError(status int, body []byte) error {
 
 	switch {
 	case status == http.StatusUnauthorized || status == http.StatusForbidden:
-		return fmt.Errorf("gemini: authentication failed (status %d): %s", status, message)
+		return &model.FailureError{
+			Class: model.FailureAuthentication,
+			Err:   fmt.Errorf("gemini: authentication failed (status %d): %s", status, message),
+		}
 	case status == http.StatusTooManyRequests:
-		return fmt.Errorf("gemini: rate limited (status %d): %s", status, message)
+		return &model.FailureError{
+			Class: model.FailureRateLimit,
+			Err:   fmt.Errorf("gemini: rate limited (status %d): %s", status, message),
+		}
+	case status == http.StatusNotFound:
+		return &model.FailureError{
+			Class: model.FailureInvalidModel,
+			Err:   fmt.Errorf("gemini: model not found (status %d): %s", status, message),
+		}
 	case status >= 500:
-		return fmt.Errorf("gemini: server error (status %d): %s", status, message)
+		return &model.FailureError{
+			Class: model.FailureTemporaryUnavailable,
+			Err:   fmt.Errorf("gemini: server error (status %d): %s", status, message),
+		}
 	default:
 		return fmt.Errorf("gemini: request rejected (status %d): %s", status, message)
 	}
