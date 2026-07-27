@@ -7,14 +7,14 @@ import (
 	"path/filepath"
 	"testing"
 
-	"foundry/domain"
-	"foundry/engine"
-	"foundry/executor/claude"
-	"foundry/gatherer"
-	"foundry/record"
-	"foundry/replay"
-	"foundry/verify"
-	"foundry/workspace"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
+	"github.com/SahidAyala/Foundry/executor/claude"
+	"github.com/SahidAyala/Foundry/gatherer"
+	"github.com/SahidAyala/Foundry/record"
+	"github.com/SahidAyala/Foundry/replay"
+	"github.com/SahidAyala/Foundry/verify"
+	"github.com/SahidAyala/Foundry/workspace"
 )
 
 // TestVerify_ReproducesARealClaudeCodeProducedAct closes a real gap: every

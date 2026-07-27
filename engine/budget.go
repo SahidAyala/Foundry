@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 // ErrBudgetExceeded reports that producing an Act would break its Budget.

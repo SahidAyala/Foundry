@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"foundry/project"
-	"foundry/session"
+	"github.com/SahidAyala/Foundry/project"
+	"github.com/SahidAyala/Foundry/session"
 )
 
 // TestREPL_EndToEnd_InitFeatureExit is the first true end-to-end test of

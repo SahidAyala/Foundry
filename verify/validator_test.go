@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 func TestValidator_Run_Passes(t *testing.T) {

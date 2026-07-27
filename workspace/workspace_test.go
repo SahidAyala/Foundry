@@ -372,11 +372,11 @@ func TestWorkspace_TwoWorkspaces_NoInterference(t *testing.T) {
 func TestWorkspace_TwoWorkspaces_SameRepo_NoInterference(t *testing.T) {
 	repo := initGitRepo(t)
 
-	wsA, err := NewWorkspace(repo, "foundry/act-aaa")
+	wsA, err := NewWorkspace(repo, "github.com/SahidAyala/Foundry/act-aaa")
 	if err != nil {
 		t.Fatalf("NewWorkspace(A) failed: %v", err)
 	}
-	wsB, err := NewWorkspace(repo, "foundry/act-bbb")
+	wsB, err := NewWorkspace(repo, "github.com/SahidAyala/Foundry/act-bbb")
 	if err != nil {
 		t.Fatalf("NewWorkspace(B) failed: %v", err)
 	}

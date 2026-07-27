@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 // initGitRepo creates a temporary git repository with one committed file,

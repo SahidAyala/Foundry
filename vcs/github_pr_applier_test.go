@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 // initGitRepo creates a temporary git repository with a single committed
@@ -127,7 +127,7 @@ func TestGitHubPRApplier_Apply_CommitsPushesAndCallsGH(t *testing.T) {
 	if len(capturedArgs) == 0 || capturedArgs[0] != "pr" || capturedArgs[1] != "create" {
 		t.Errorf("gh args = %v, want it to start with [pr create]", capturedArgs)
 	}
-	wantHead := "foundry/act-act-1"
+	wantHead := "github.com/SahidAyala/Foundry/act-act-1"
 	foundHead := false
 	for i, a := range capturedArgs {
 		if a == "--head" && i+1 < len(capturedArgs) && capturedArgs[i+1] == wantHead {
@@ -147,12 +147,12 @@ func TestGitHubPRApplier_Apply_CommitsPushesAndCallsGH(t *testing.T) {
 	// The local throwaway branch must be cleaned up after a successful
 	// Apply (ADR-0010 Decision 5: only the remote branch and opened PR
 	// are the durable, terminal result).
-	list, err := gitOutputForTest(repo, "branch", "--list", "foundry/act-act-1")
+	list, err := gitOutputForTest(repo, "branch", "--list", "github.com/SahidAyala/Foundry/act-act-1")
 	if err != nil {
 		t.Fatalf("git branch --list failed: %v", err)
 	}
 	if list != "" {
-		t.Errorf("local branch %q still exists after Apply, want it cleaned up", "foundry/act-act-1")
+		t.Errorf("local branch %q still exists after Apply, want it cleaned up", "github.com/SahidAyala/Foundry/act-act-1")
 	}
 }
 
@@ -198,7 +198,7 @@ func TestGitHubPRApplier_Apply_GHFailureAfterPushNamesTheDanglingBranch(t *testi
 		t.Fatal("Apply returned nil error when gh pr create failed")
 	}
 
-	branch := "foundry/act-" + act.ID
+	branch := "github.com/SahidAyala/Foundry/act-" + act.ID
 	if !strings.Contains(err.Error(), branch) {
 		t.Errorf("error = %q, want it to name the dangling branch %q", err, branch)
 	}
@@ -248,7 +248,7 @@ func TestGitHubPRApplier_Apply_RequestsCopilotReviewWhenEnabled(t *testing.T) {
 		t.Fatalf("gh was called %d times, want 2 (pr create, then pr edit --add-reviewer)", len(calls))
 	}
 	reviewCall := calls[1]
-	wantBranch := "foundry/act-" + act.ID
+	wantBranch := "github.com/SahidAyala/Foundry/act-" + act.ID
 	wantArgs := []string{"pr", "edit", wantBranch, "--add-reviewer", "@copilot"}
 	if len(reviewCall.args) != len(wantArgs) {
 		t.Fatalf("second gh call args = %v, want %v", reviewCall.args, wantArgs)
@@ -321,7 +321,7 @@ func TestGitHubPRApplier_Apply_CopilotReviewFailureDoesNotFailApply(t *testing.T
 	// The pull request's own branch must still be cleaned up locally --
 	// the review-request failure must not leave Apply behaving as if the
 	// whole thing failed.
-	list, err := gitOutputForTest(repo, "branch", "--list", "foundry/act-"+act.ID)
+	list, err := gitOutputForTest(repo, "branch", "--list", "github.com/SahidAyala/Foundry/act-"+act.ID)
 	if err != nil {
 		t.Fatalf("git branch --list failed: %v", err)
 	}

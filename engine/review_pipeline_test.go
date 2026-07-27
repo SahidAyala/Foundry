@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	"foundry/domain"
-	"foundry/engine"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
 )
 
 // This file validates that the architecture RFC-0002 §9 Phase 3 built is

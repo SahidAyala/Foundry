@@ -99,7 +99,7 @@ func NewWorkspace(repoPath string, branchName string) (*Workspace, error) {
 
 // worktreeDirName returns a filesystem-safe directory leaf name unique to
 // branchName (branchName already includes the Act ID, e.g.
-// "foundry/act-<id>").
+// "github.com/SahidAyala/Foundry/act-<id>").
 func worktreeDirName(branchName string) string {
 	return strings.ReplaceAll(branchName, "/", "-")
 }

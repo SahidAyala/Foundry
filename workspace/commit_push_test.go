@@ -46,14 +46,14 @@ func initGitRepoWithRemote(t *testing.T) (repo, remote string) {
 func TestWorkspace_BranchName_ReturnsCreatedBranch(t *testing.T) {
 	repo := initGitRepo(t)
 
-	ws, err := NewWorkspace(repo, "foundry/act-abc123")
+	ws, err := NewWorkspace(repo, "github.com/SahidAyala/Foundry/act-abc123")
 	if err != nil {
 		t.Fatalf("NewWorkspace failed: %v", err)
 	}
 	defer ws.Clean(context.Background())
 
-	if got := ws.BranchName(); got != "foundry/act-abc123" {
-		t.Errorf("BranchName() = %q, want %q", got, "foundry/act-abc123")
+	if got := ws.BranchName(); got != "github.com/SahidAyala/Foundry/act-abc123" {
+		t.Errorf("BranchName() = %q, want %q", got, "github.com/SahidAyala/Foundry/act-abc123")
 	}
 }
 

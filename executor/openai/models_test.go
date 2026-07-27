@@ -3,7 +3,7 @@ package openai_test
 import (
 	"testing"
 
-	"foundry/executor/openai"
+	"github.com/SahidAyala/Foundry/executor/openai"
 )
 
 func TestSupportedModels_CoversBothOpenAIVendors(t *testing.T) {

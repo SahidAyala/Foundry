@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"foundry/session"
+	"github.com/SahidAyala/Foundry/session"
 )
 
 // recordingHandler is a fake CommandHandler for testing CommandRegistry

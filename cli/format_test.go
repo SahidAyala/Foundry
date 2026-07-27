@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 func TestFormatAct_Golden(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"regexp"
 
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 // PipelineDocument is the declarative, wire-format shape a Pipeline is

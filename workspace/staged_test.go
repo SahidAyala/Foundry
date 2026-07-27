@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 // gitRun runs git with args in dir and returns its trimmed output, failing

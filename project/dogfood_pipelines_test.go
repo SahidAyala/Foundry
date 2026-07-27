@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"foundry/domain"
-	"foundry/project"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/project"
 )
 
 // TestDogfoodPipelines_DecodeAndUseTrustSteps loads this repository's own

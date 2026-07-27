@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"foundry/cli"
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/cli"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 func TestPromptForApproval_Yes(t *testing.T) {

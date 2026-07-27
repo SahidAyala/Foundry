@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"foundry/replay"
+	"github.com/SahidAyala/Foundry/replay"
 )
 
 const (

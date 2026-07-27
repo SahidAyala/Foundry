@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"foundry/domain"
-	"foundry/engine"
-	"foundry/gatherer"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
+	"github.com/SahidAyala/Foundry/gatherer"
 )
 
 // fakeGatherer returns a canned slice or error from Gather, recording

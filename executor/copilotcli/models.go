@@ -1,6 +1,6 @@
 package copilotcli
 
-import "foundry/model"
+import "github.com/SahidAyala/Foundry/model"
 
 // SupportedModels returns a single informational entry for the "copilot"
 // Executor (ADR-0013, Model Registry). Unlike executor/openai's or

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"foundry/domain"
-	"foundry/session"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/session"
 )
 
 // TestSession_KnowledgeNoteReachesLaterActsConsideredContext proves

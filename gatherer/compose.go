@@ -3,8 +3,8 @@ package gatherer
 import (
 	"context"
 
-	"foundry/domain"
-	"foundry/engine"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
 )
 
 // Compose returns a Gatherer that runs each of sources in order and

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"foundry/domain"
-	"foundry/model"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/model"
 )
 
 // fakeDoer is an injectable doer that returns a canned response (or

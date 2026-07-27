@@ -3,7 +3,7 @@ package session_test
 import (
 	"testing"
 
-	"foundry/session"
+	"github.com/SahidAyala/Foundry/session"
 )
 
 func TestParseLine_SlashCommandWithArgs(t *testing.T) {

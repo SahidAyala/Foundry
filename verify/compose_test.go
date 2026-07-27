@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"foundry/domain"
-	"foundry/engine"
-	"foundry/verify"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
+	"github.com/SahidAyala/Foundry/verify"
 )
 
 // fakeVerifier returns a canned Judgment or error from Verify, recording

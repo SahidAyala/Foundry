@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	"foundry/domain"
-	"foundry/engine"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
 )
 
 func TestMultiReporter_FansOutEveryEventToEachReporter(t *testing.T) {

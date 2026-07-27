@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"foundry/cli"
+	"github.com/SahidAyala/Foundry/cli"
 )
 
 func TestInteractiveRenderer_Banner(t *testing.T) {

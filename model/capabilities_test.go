@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"foundry/model"
+	"github.com/SahidAyala/Foundry/model"
 )
 
 func TestCapabilities_Supports_AllSatisfied(t *testing.T) {

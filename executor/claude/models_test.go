@@ -3,7 +3,7 @@ package claude_test
 import (
 	"testing"
 
-	"foundry/executor/claude"
+	"github.com/SahidAyala/Foundry/executor/claude"
 )
 
 func TestSupportedModels_AllBelongToClaudeExecutor(t *testing.T) {

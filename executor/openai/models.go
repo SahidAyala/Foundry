@@ -1,6 +1,6 @@
 package openai
 
-import "foundry/model"
+import "github.com/SahidAyala/Foundry/model"
 
 // SupportedModels returns this package's known models as Model Registry
 // catalog metadata (ADR-0013). executor/openai backs two vendor strings

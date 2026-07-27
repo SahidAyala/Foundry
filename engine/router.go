@@ -3,7 +3,7 @@ package engine
 import (
 	"fmt"
 
-	"foundry/model"
+	"github.com/SahidAyala/Foundry/model"
 )
 
 // Router resolves the Executor a Step's Generate work runs against

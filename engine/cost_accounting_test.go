@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"foundry/domain"
-	"foundry/engine"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
 )
 
 // pricedExecutor is an Executor that also implements engine.CostEstimator,

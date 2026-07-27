@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"foundry/domain"
-	"foundry/engine"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
 )
 
 // Gate evaluates a set of Validators and produces a verdict.

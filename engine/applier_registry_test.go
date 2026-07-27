@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 type fakeRegistryApplier struct{ name string }

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 // Checkpointer is the port a record Step calls to persist the Act's trace

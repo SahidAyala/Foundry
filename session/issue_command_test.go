@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"foundry/session"
-	"foundry/ticket"
+	"github.com/SahidAyala/Foundry/session"
+	"github.com/SahidAyala/Foundry/ticket"
 )
 
 // fakeTicketFetcher is an injectable ticket.Fetcher that returns a canned

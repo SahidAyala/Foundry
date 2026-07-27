@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"foundry/ticket/backlog"
+	"github.com/SahidAyala/Foundry/ticket/backlog"
 )
 
 func writeBacklog(t *testing.T, dir, contents string) string {

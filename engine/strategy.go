@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 // verdictFail is the Gate verdict that triggers a Pipeline's bounded

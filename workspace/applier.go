@@ -3,8 +3,8 @@ package workspace
 import (
 	"context"
 
-	"foundry/domain"
-	"foundry/engine"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
 )
 
 // GitApplier implements engine.Applier by calling ApplyAct — an apply

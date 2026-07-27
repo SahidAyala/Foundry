@@ -12,13 +12,13 @@ import (
 	"testing"
 	"time"
 
-	"foundry/cli"
-	"foundry/domain"
-	"foundry/engine"
-	"foundry/executor"
-	"foundry/record"
-	"foundry/verify"
-	"foundry/workspace"
+	"github.com/SahidAyala/Foundry/cli"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
+	"github.com/SahidAyala/Foundry/executor"
+	"github.com/SahidAyala/Foundry/record"
+	"github.com/SahidAyala/Foundry/verify"
+	"github.com/SahidAyala/Foundry/workspace"
 )
 
 type emptyGatherer struct{}
@@ -174,7 +174,7 @@ func TestCLI_Do_ApprovedAppliesAndRecords(t *testing.T) {
 	if branch != "main" {
 		t.Errorf("repo left on branch %q, want %q", branch, "main")
 	}
-	if list := gitOutput(t, repo, "branch", "--list", "foundry/act-*"); list != "" {
+	if list := gitOutput(t, repo, "branch", "--list", "github.com/SahidAyala/Foundry/act-*"); list != "" {
 		t.Errorf("throwaway branch left behind: %q", list)
 	}
 }
@@ -673,7 +673,7 @@ func TestCLI_Do_PipelineAppliedInsideEngineIsNotAppliedAgain(t *testing.T) {
 	if branch != "main" {
 		t.Errorf("repo left on branch %q, want %q", branch, "main")
 	}
-	if list := gitOutput(t, repo, "branch", "--list", "foundry/act-*"); list != "" {
+	if list := gitOutput(t, repo, "branch", "--list", "github.com/SahidAyala/Foundry/act-*"); list != "" {
 		t.Errorf("throwaway branch left behind: %q", list)
 	}
 }

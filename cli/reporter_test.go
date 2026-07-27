@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"foundry/engine"
+	"github.com/SahidAyala/Foundry/engine"
 )
 
 func TestNewReporter_DefaultIsProgressReporterOnly(t *testing.T) {

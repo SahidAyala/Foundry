@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"foundry/session"
+	"github.com/SahidAyala/Foundry/session"
 )
 
 // writeConfig writes root's .foundry/config.json with the given raw JSON

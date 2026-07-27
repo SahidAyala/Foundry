@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 // Authority is the port an approve Step calls to accept or reject an Act's

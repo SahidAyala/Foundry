@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 func newAct(id, intent string, createdAt time.Time) *domain.Act {

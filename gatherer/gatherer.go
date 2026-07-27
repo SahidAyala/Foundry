@@ -24,8 +24,8 @@ import (
 	"sort"
 	"strings"
 
-	"foundry/domain"
-	"foundry/engine"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
 )
 
 // maxContextBytes bounds the total gathered content per Act so an Intent

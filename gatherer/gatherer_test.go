@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 // newRepo creates a temp repository root containing files, keyed by relative

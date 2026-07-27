@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"foundry/domain"
-	"foundry/engine"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
 )
 
 // slogLines decodes each line of buf as a JSON log record and returns its

@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"foundry/domain"
-	"foundry/engine"
-	"foundry/record"
-	"foundry/replay"
-	"foundry/workspace"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
+	"github.com/SahidAyala/Foundry/record"
+	"github.com/SahidAyala/Foundry/replay"
+	"github.com/SahidAyala/Foundry/workspace"
 )
 
 // ErrHelp indicates the caller asked for usage information rather than

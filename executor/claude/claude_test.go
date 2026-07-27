@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 // fakeRunner is an injectable runner that returns canned output and captures

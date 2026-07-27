@@ -3,7 +3,7 @@ package engine_test
 import (
 	"testing"
 
-	"foundry/engine"
+	"github.com/SahidAyala/Foundry/engine"
 )
 
 func TestExecutorRegistry_RegisterAndGet(t *testing.T) {

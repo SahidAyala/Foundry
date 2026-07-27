@@ -36,8 +36,8 @@ import (
 	"strings"
 	"time"
 
-	"foundry/domain"
-	"foundry/engine"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
 )
 
 const defaultTimeout = 2 * time.Minute

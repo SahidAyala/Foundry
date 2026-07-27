@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"foundry/domain"
-	"foundry/model"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/model"
 )
 
 // FailoverReporter is an optional Reporter extension (ADR-0013, Proposed,

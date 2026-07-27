@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"os"
 
-	"foundry/engine"
+	"github.com/SahidAyala/Foundry/engine"
 )
 
 // foundryLogEnv is the opt-in switch for structured observability logging

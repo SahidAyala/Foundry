@@ -21,7 +21,7 @@ import (
 	"strconv"
 	"strings"
 
-	"foundry/ticket"
+	"github.com/SahidAyala/Foundry/ticket"
 )
 
 // Fetcher fetches a GitLab issue's content via the glab CLI, run in a

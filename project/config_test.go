@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"foundry/project"
+	"github.com/SahidAyala/Foundry/project"
 )
 
 func TestLoadConfig_MissingFileReturnsZeroValue(t *testing.T) {

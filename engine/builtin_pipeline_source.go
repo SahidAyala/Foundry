@@ -5,7 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 // defaultPipelineDocument and reviewPipelineDocument are the built-in

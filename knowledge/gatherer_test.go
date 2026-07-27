@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"foundry/domain"
-	"foundry/knowledge"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/knowledge"
 )
 
 func writeNote(t *testing.T, root, name, content string) {

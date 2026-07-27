@@ -9,11 +9,11 @@ import (
 	"strings"
 	"testing"
 
-	"foundry/domain"
-	"foundry/engine"
-	"foundry/executor"
-	"foundry/project"
-	"foundry/session"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
+	"github.com/SahidAyala/Foundry/executor"
+	"github.com/SahidAyala/Foundry/project"
+	"github.com/SahidAyala/Foundry/session"
 )
 
 // initGitRepo creates a temporary git repository with one committed file,

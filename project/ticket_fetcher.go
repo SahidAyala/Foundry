@@ -1,6 +1,6 @@
 package project
 
-import "foundry/ticket"
+import "github.com/SahidAyala/Foundry/ticket"
 
 // TicketFetcherConstructor constructs a ticket.Fetcher for cfg's
 // TicketProvider and the project's workspace directory — the same

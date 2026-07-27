@@ -22,7 +22,7 @@ import (
 	"strconv"
 	"strings"
 
-	"foundry/ticket"
+	"github.com/SahidAyala/Foundry/ticket"
 )
 
 // Fetcher fetches a GitHub issue's content via the gh CLI, run in a fixed
