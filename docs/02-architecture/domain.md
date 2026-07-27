@@ -1,6 +1,6 @@
 # Architecture — Domain
 
-> **Maturity: PROVISIONAL — this is the *current working domain model*, not ratified architectural truth.** The choice of the Act as the center is an unresolved question ([../06-open-questions/OQ-001-domain-center.md](../06-open-questions/OQ-001-domain-center.md)); the vocabulary is provisional ([OQ-007](../06-open-questions/OQ-007-canonical-terminology.md)). Build on it, but do not treat it as settled. See [maturity levels](../04-guides/documentation.md#maturity-levels).
+> **Maturity: PROVISIONAL — ratified working model, not frozen architectural truth.** [ADR-0015](../03-adrs/ADR-0015-domain-center-act-and-knowledge.md) (Accepted 2026-07-26) ratifies the Act as the domain's dynamic center and Knowledge as its durable medium, closing [OQ-001](../06-open-questions/OQ-001-domain-center.md). Still genuinely open, and not resolved by that ADR: whether **Strategy** is itself a domain concept ([OQ-002](../06-open-questions/OQ-002-pipeline-as-strategy.md)), whether a rejected/abandoned Act still deposits into Knowledge (also OQ-002), and whether the vocabulary itself is right ([OQ-007](../06-open-questions/OQ-007-canonical-terminology.md)). Build on it, but do not treat every detail as settled. See [maturity levels](../04-guides/documentation.md#maturity-levels).
 >
 > **This document answers exactly one question: _What are the domain concepts?_**
 > It does not describe how outcomes are produced (see [execution.md](execution.md)), how trust is established ([trust.md](trust.md)), what knowledge is ([knowledge.md](knowledge.md)), what may be extended ([extensibility.md](extensibility.md)), or where the boundaries are ([system-context.md](system-context.md)).
@@ -12,7 +12,7 @@ The working model centers the domain on a single proposed unit: the **Act** — 
 
 This is the result of reducing the product to first principles: Foundry exists to evolve a project's state *responsibly* — justified, accountable, recorded, and compounding. On this model, the thing that is justified, owned, recorded, and learned-from is the Act, and everything else in the domain is something an Act *contains*, *operates on*, or *deposits into*.
 
-> **Honesty note.** "The Act is *the* fundamental abstraction" is a **working hypothesis** that originated in this project's own reasoning — it is *not* drawn from a ratified document, and a credible alternative centers the domain on **Knowledge** instead. The open question, its alternatives, and the current recommendation live in [../06-open-questions/OQ-001-domain-center.md](../06-open-questions/OQ-001-domain-center.md). Until that resolves via a ratified RFC (a governance process now exists — [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md)), this document is the *current understanding*, not the final word.
+> **Honesty note.** "The Act is *the* fundamental abstraction" originated as a **working hypothesis** in this project's own reasoning, not drawn from any prior ratified document — but as of [ADR-0015](../03-adrs/ADR-0015-domain-center-act-and-knowledge.md) (Accepted 2026-07-26), it *is* now a ratified decision, under [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md)'s process. What remains genuinely open — Strategy as a domain concept, rejected-Act semantics ([OQ-002](../06-open-questions/OQ-002-pipeline-as-strategy.md)), and the vocabulary itself ([OQ-007](../06-open-questions/OQ-007-canonical-terminology.md)) — is named in [ADR-0015](../03-adrs/ADR-0015-domain-center-act-and-knowledge.md)'s own Decision 2, not left ambiguous.
 
 Two consequences define the shape of the domain:
 
@@ -63,10 +63,9 @@ If a proposed feature cannot be expressed as an Act, that is a signal the domain
 
 ## Open domain questions
 
-This model rests on unresolved questions. They are **owned by the open-questions tier** (not restated here) so deliberation never leaks into canonical prose:
+**[OQ-001 — The domain center: Act vs Knowledge](../06-open-questions/OQ-001-domain-center.md) is now RESOLVED** — see [ADR-0015](../03-adrs/ADR-0015-domain-center-act-and-knowledge.md). Its own sub-questions remain open, owned by the open-questions tier (not restated here) so deliberation never leaks into canonical prose:
 
-- [OQ-001 — The domain center: Act vs Knowledge](../06-open-questions/OQ-001-domain-center.md)
 - [OQ-002 — Pipeline as Strategy](../06-open-questions/OQ-002-pipeline-as-strategy.md)
 - [OQ-007 — Is the vocabulary right?](../06-open-questions/OQ-007-canonical-terminology.md)
 
-Whether **Strategy** is a domain concept or merely the boundary to mechanism, and whether **rejected/abandoned Acts** deposit into Knowledge, are sub-questions of OQ-001/OQ-002 and must not be silently resolved in implementation.
+Whether **Strategy** is a domain concept or merely the boundary to mechanism, and whether **rejected/abandoned Acts** deposit into Knowledge, are sub-questions of OQ-002 and must not be silently resolved in implementation.

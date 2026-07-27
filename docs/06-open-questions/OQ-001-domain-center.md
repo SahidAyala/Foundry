@@ -1,6 +1,6 @@
 # OQ-001 — What is the center of the domain?
 
-**Maturity: OPEN QUESTION** · informs [../02-architecture/domain.md](../02-architecture/domain.md) (currently PROVISIONAL)
+**Maturity: RESOLVED** · see [ADR-0015](../03-adrs/ADR-0015-domain-center-act-and-knowledge.md) · informs [../02-architecture/domain.md](../02-architecture/domain.md) (PROVISIONAL, now a ratified working model)
 
 ## Problem
 The architecture currently centers the domain on the **Act** (a justified, accountable transition of project state). Is that the right center — or is **Knowledge** the truer center, or some third framing?
@@ -27,4 +27,4 @@ This conclusion originated in a first-principles review (now archived), authored
 Adopt **Act as the dynamic center with Knowledge as the durable medium** (alternative 1/3 blended) as the **current working model**, because it expresses the full lifecycle cleanly and is the least committal about mechanism. Treat it as PROVISIONAL.
 
 ## Status
-**OPEN.** Resolution should come via an RFC, ratified under [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md)'s now-existing process. Until an RFC actually resolves it, [domain.md](../02-architecture/domain.md) must label this as the current working model, not architectural truth.
+**RESOLVED 2026-07-26** — see [ADR-0015](../03-adrs/ADR-0015-domain-center-act-and-knowledge.md), ratified under [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md)'s process: alternative 1/3 (Act as the dynamic center, Knowledge as the durable medium) is adopted as this project's ratified working model. Resolved via a narrow ADR rather than an RFC — see that ADR's own "Note on mechanism," matching how every other open question in this repository has actually been closed. This resolves the *center* only; [OQ-002](OQ-002-pipeline-as-strategy.md) (Strategy as a domain concept, rejected-Act semantics) and [OQ-007](OQ-007-canonical-terminology.md) (vocabulary) remain open.
