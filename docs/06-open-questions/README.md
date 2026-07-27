@@ -12,7 +12,7 @@ The first-pass refactor archived eight Architecture Review Board reviews. Their 
 
 | ID | Question | Current recommendation | Status |
 |---|---|---|---|
-| [OQ-001](OQ-001-domain-center.md) | What is the center of the domain — Act, Knowledge, or something else? | Act as the dynamic center, Knowledge as the durable medium | OPEN |
+| [OQ-001](OQ-001-domain-center.md) | What is the center of the domain — Act, Knowledge, or something else? | Act as the dynamic center, Knowledge as the durable medium | **RESOLVED** → [ADR-0015](../03-adrs/ADR-0015-domain-center-act-and-knowledge.md) (per this page's own recommendation) |
 | [OQ-002](OQ-002-pipeline-as-strategy.md) | Is the predeclared graph (Pipeline) one Strategy or the system's spine? | One Strategy among several | OPEN |
 | [OQ-003](OQ-003-replay-across-versions.md) | Does the replay guarantee hold across Engine versions? | Scope it to same-version initially | **RESOLVED** → [ADR-0003](../03-adrs/ADR-0003-replay-and-determinism-contract.md) |
 | [OQ-004](OQ-004-validator-determinism.md) | What can the verification guarantee honestly promise? | Record-and-replay, not "pure function" | **RESOLVED** → [ADR-0003](../03-adrs/ADR-0003-replay-and-determinism-contract.md) (not per this page's own recommendation — see page) |
