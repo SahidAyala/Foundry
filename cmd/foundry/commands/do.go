@@ -9,17 +9,17 @@ import (
 	"os"
 	"path/filepath"
 
-	"foundry/cli"
-	"foundry/engine"
-	"foundry/gatherer"
-	"foundry/knowledge"
-	"foundry/model"
-	"foundry/project"
-	"foundry/record"
-	"foundry/vcs"
-	"foundry/verify"
-	"foundry/verify/aireview"
-	"foundry/workspace"
+	"github.com/SahidAyala/Foundry/cli"
+	"github.com/SahidAyala/Foundry/engine"
+	"github.com/SahidAyala/Foundry/gatherer"
+	"github.com/SahidAyala/Foundry/knowledge"
+	"github.com/SahidAyala/Foundry/model"
+	"github.com/SahidAyala/Foundry/project"
+	"github.com/SahidAyala/Foundry/record"
+	"github.com/SahidAyala/Foundry/vcs"
+	"github.com/SahidAyala/Foundry/verify"
+	"github.com/SahidAyala/Foundry/verify/aireview"
+	"github.com/SahidAyala/Foundry/workspace"
 )
 
 // Do implements the `foundry do` command: parse its arguments, wire the Act

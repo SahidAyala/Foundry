@@ -9,8 +9,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"foundry/domain"
-	"foundry/engine"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
 )
 
 // PromptForApproval shows act's proposed patch and machine verdict on out,

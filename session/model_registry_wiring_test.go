@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"foundry/domain"
-	"foundry/engine"
-	"foundry/model"
-	"foundry/project"
-	"foundry/session"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
+	"github.com/SahidAyala/Foundry/model"
+	"github.com/SahidAyala/Foundry/project"
+	"github.com/SahidAyala/Foundry/session"
 )
 
 // TestSession_EngineRoutesModelPinnedStepThroughRegistry proves

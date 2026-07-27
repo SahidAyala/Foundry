@@ -23,7 +23,7 @@ import (
 	"errors"
 	"fmt"
 
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 // Engine produces machine-judged Acts.

@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"foundry/engine"
+	"github.com/SahidAyala/Foundry/engine"
 )
 
 func TestBuiltinPipelineSource_LoadsDefaultPipeline(t *testing.T) {

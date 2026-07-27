@@ -3,7 +3,7 @@ package engine
 import (
 	"context"
 
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 // Executor is the port for executing work. Production wires the Claude Code

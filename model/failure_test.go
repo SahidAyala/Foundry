@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"foundry/model"
+	"github.com/SahidAyala/Foundry/model"
 )
 
 func TestFailureClass_Retryable(t *testing.T) {

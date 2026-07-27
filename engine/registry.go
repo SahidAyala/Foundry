@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 // PipelineRegistry holds named Pipeline definitions so Pipeline uniqueness

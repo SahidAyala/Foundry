@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"foundry/domain"
-	"foundry/engine"
-	"foundry/project"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
+	"github.com/SahidAyala/Foundry/project"
 )
 
 func TestLoadExecutorConfig_MissingFileReturnsEmptyMap(t *testing.T) {

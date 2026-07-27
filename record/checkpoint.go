@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 // CheckpointStore persists an Act's in-progress trace before it reaches a

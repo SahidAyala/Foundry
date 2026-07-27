@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"foundry/cli"
-	"foundry/workspace"
+	"github.com/SahidAyala/Foundry/cli"
+	"github.com/SahidAyala/Foundry/workspace"
 )
 
 // RunPipelineCommand is the one CommandHandler backing every slash

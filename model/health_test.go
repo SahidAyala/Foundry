@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"foundry/model"
+	"github.com/SahidAyala/Foundry/model"
 )
 
 func TestHealthManager_Get_UnreportedModelReturnsUnknown(t *testing.T) {

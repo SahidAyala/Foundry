@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"foundry/domain"
-	"foundry/engine"
-	"foundry/model"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
+	"github.com/SahidAyala/Foundry/model"
 )
 
 // TestEngine_Run_CapabilityAwareResolution_SkipsIncompatibleFirstCandidate

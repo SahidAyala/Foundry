@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"foundry/engine"
+	"github.com/SahidAyala/Foundry/engine"
 )
 
 // FilesystemPipelineSource discovers Pipeline documents a project has

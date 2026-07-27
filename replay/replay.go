@@ -17,8 +17,8 @@ import (
 	"context"
 	"fmt"
 
-	"foundry/domain"
-	"foundry/engine"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
 )
 
 // StepResult is one verify Step's replay outcome.

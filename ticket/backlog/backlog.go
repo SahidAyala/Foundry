@@ -24,7 +24,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"foundry/ticket"
+	"github.com/SahidAyala/Foundry/ticket"
 )
 
 // DefaultPath is where Fetcher reads its backlog from, relative to the

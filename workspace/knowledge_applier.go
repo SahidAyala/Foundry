@@ -8,8 +8,8 @@ import (
 	"regexp"
 	"strings"
 
-	"foundry/domain"
-	"foundry/engine"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
 )
 
 // KnowledgeNoteDir is the conventional, fixed location, relative to a

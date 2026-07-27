@@ -1,6 +1,6 @@
 package geminicli
 
-import "foundry/model"
+import "github.com/SahidAyala/Foundry/model"
 
 // SupportedModels returns Gemini's known models as Model Registry catalog
 // metadata (ADR-0013), registered under the "gemini" Executor — the same

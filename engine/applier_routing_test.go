@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"foundry/domain"
-	"foundry/engine"
-	"foundry/executor"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
+	"github.com/SahidAyala/Foundry/executor"
 )
 
 // applyPipeline is a minimal Pipeline with the shape every apply Step

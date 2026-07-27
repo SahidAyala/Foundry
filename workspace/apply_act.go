@@ -3,7 +3,7 @@ package workspace
 import (
 	"context"
 
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 // ApplyAct applies act's patch to repoPath on an isolated branch named for
@@ -13,7 +13,7 @@ import (
 // a Pipeline with no apply Step) and GitApplier (for a Pipeline that
 // declares one, RFC-0002 §9 Phase 4) share — neither reimplements it.
 func ApplyAct(ctx context.Context, repoPath string, act *domain.Act) error {
-	ws, err := NewWorkspace(repoPath, "foundry/act-"+act.ID)
+	ws, err := NewWorkspace(repoPath, "github.com/SahidAyala/Foundry/act-"+act.ID)
 	if err != nil {
 		return err
 	}

@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	"foundry/domain"
-	"foundry/engine"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
 )
 
 // orderExecutor records its own name to a shared log each time it is

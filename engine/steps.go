@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"time"
 
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 // recordStep appends one StepRecord to act's trace. kind identifies the

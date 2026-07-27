@@ -1,6 +1,6 @@
 package engine
 
-import "foundry/domain"
+import "github.com/SahidAyala/Foundry/domain"
 
 // Reporter observes an Act's lifecycle as the Engine runs it — pure
 // narration, never control flow. Only the Engine decides what runs next

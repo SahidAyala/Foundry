@@ -4,7 +4,7 @@ package executor
 import (
 	"context"
 
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 // ScriptedExecutor returns a fixed patch, deterministically, regardless of

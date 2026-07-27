@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"foundry/project"
+	"github.com/SahidAyala/Foundry/project"
 )
 
 func writeFile(t *testing.T, dir, name, content string) {

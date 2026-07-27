@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"foundry/domain"
-	"foundry/engine"
-	"foundry/executor"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
+	"github.com/SahidAyala/Foundry/executor"
 )
 
 // fakeCheckpointSaver is an in-memory engine.CheckpointSaver: it captures

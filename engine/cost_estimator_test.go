@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 // plainExecutor implements only Executor, not CostEstimator — the shape of

@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"foundry/domain"
-	"foundry/engine"
-	"foundry/project"
-	"foundry/session"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
+	"github.com/SahidAyala/Foundry/project"
+	"github.com/SahidAyala/Foundry/session"
 )
 
 // TestSession_EngineRoutesPinnedStepToNamedExecutor proves Session.Engine's

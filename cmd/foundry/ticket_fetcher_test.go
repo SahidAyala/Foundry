@@ -4,12 +4,12 @@ import (
 	"strings"
 	"testing"
 
-	"foundry/project"
-	asanaticket "foundry/ticket/asana"
-	backlogticket "foundry/ticket/backlog"
-	githubticket "foundry/ticket/github"
-	gitlabticket "foundry/ticket/gitlab"
-	jiraticket "foundry/ticket/jira"
+	"github.com/SahidAyala/Foundry/project"
+	asanaticket "github.com/SahidAyala/Foundry/ticket/asana"
+	backlogticket "github.com/SahidAyala/Foundry/ticket/backlog"
+	githubticket "github.com/SahidAyala/Foundry/ticket/github"
+	gitlabticket "github.com/SahidAyala/Foundry/ticket/gitlab"
+	jiraticket "github.com/SahidAyala/Foundry/ticket/jira"
 )
 
 func TestNewTicketFetcher_GithubVendorConstructsGithubFetcher(t *testing.T) {

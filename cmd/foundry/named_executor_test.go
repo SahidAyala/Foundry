@@ -4,11 +4,11 @@ import (
 	"strings"
 	"testing"
 
-	"foundry/executor/copilotcli"
-	"foundry/executor/gemini"
-	"foundry/executor/geminicli"
-	"foundry/executor/openai"
-	"foundry/project"
+	"github.com/SahidAyala/Foundry/executor/copilotcli"
+	"github.com/SahidAyala/Foundry/executor/gemini"
+	"github.com/SahidAyala/Foundry/executor/geminicli"
+	"github.com/SahidAyala/Foundry/executor/openai"
+	"github.com/SahidAyala/Foundry/project"
 )
 
 func TestNamedExecutor_OpenAIVendorConstructsOpenAIExecutor(t *testing.T) {

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"foundry/domain"
-	"foundry/replay"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/replay"
 )
 
 // seqVerifier returns one canned Judgment per Verify call, in order.

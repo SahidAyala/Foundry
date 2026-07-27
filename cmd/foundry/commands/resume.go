@@ -9,11 +9,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"foundry/cli"
-	"foundry/engine"
-	"foundry/model"
-	"foundry/project"
-	"foundry/record"
+	"github.com/SahidAyala/Foundry/cli"
+	"github.com/SahidAyala/Foundry/engine"
+	"github.com/SahidAyala/Foundry/model"
+	"github.com/SahidAyala/Foundry/project"
+	"github.com/SahidAyala/Foundry/record"
 )
 
 func resumeUsage() string {

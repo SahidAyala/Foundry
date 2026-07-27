@@ -3,7 +3,7 @@ package record
 import (
 	"encoding/json"
 
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 // encode renders act as human-readable, stable JSON for durable storage.

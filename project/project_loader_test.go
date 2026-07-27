@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"foundry/project"
+	"github.com/SahidAyala/Foundry/project"
 )
 
 // writeDocument writes a Pipeline document to dir/name, creating dir

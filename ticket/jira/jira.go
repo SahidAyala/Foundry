@@ -32,7 +32,7 @@ import (
 	"strings"
 	"time"
 
-	"foundry/ticket"
+	"github.com/SahidAyala/Foundry/ticket"
 )
 
 const defaultTimeout = 30 * time.Second

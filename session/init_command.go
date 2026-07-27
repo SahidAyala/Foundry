@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"foundry/project"
+	"github.com/SahidAyala/Foundry/project"
 )
 
 // InitCommand backs /init: it scaffolds the project's pipelines

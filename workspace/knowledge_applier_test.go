@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"foundry/domain"
-	"foundry/workspace"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/workspace"
 )
 
 func TestKnowledgeNoteApplier_WritesNoteUnderKnowledgeNoteDir(t *testing.T) {

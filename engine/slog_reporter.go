@@ -3,7 +3,7 @@ package engine
 import (
 	"log/slog"
 
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 // SlogReporter implements Reporter by emitting structured, leveled log

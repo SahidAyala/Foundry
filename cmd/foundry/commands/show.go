@@ -8,8 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"foundry/cli"
-	"foundry/record"
+	"github.com/SahidAyala/Foundry/cli"
+	"github.com/SahidAyala/Foundry/record"
 )
 
 func showUsage() string {

@@ -7,7 +7,7 @@ import (
 	"io"
 	"strconv"
 
-	"foundry/cli"
+	"github.com/SahidAyala/Foundry/cli"
 )
 
 const defaultLogLimit = 10

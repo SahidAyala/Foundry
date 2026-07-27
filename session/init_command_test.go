@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"foundry/session"
+	"github.com/SahidAyala/Foundry/session"
 )
 
 func TestInitCommand_ScaffoldsPipelinesDirectory(t *testing.T) {

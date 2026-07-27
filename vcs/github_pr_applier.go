@@ -15,9 +15,9 @@ import (
 	"os/exec"
 	"strings"
 
-	"foundry/domain"
-	"foundry/engine"
-	"foundry/workspace"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
+	"github.com/SahidAyala/Foundry/workspace"
 )
 
 // defaultRemote is the git remote GitHubPRApplier pushes to. Foundry does
@@ -88,7 +88,7 @@ func (a GitHubPRApplier) Apply(ctx context.Context, workspaceRoot string, act *d
 		return fmt.Errorf("vcs: github-pr: environment variable %q (remote_publish_token_env) is not set", a.TokenEnv)
 	}
 
-	ws, err := workspace.NewWorkspace(workspaceRoot, "foundry/act-"+act.ID)
+	ws, err := workspace.NewWorkspace(workspaceRoot, "github.com/SahidAyala/Foundry/act-"+act.ID)
 	if err != nil {
 		return fmt.Errorf("vcs: github-pr: %w", err)
 	}

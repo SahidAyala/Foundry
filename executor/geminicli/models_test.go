@@ -3,7 +3,7 @@ package geminicli_test
 import (
 	"testing"
 
-	"foundry/executor/geminicli"
+	"github.com/SahidAyala/Foundry/executor/geminicli"
 )
 
 func TestSupportedModels_AllBelongToGeminiExecutor(t *testing.T) {

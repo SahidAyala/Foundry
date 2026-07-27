@@ -6,10 +6,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"foundry/domain"
-	"foundry/engine"
-	"foundry/executor/openai"
-	"foundry/model"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
+	"github.com/SahidAyala/Foundry/executor/openai"
+	"github.com/SahidAyala/Foundry/model"
 )
 
 // TestEngine_Run_FailsOverFromRealOpenAIRateLimitToAnotherModel proves the

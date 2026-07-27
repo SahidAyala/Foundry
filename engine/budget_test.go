@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"foundry/domain"
+	"github.com/SahidAyala/Foundry/domain"
 )
 
 func TestDefaultBudget(t *testing.T) {

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"foundry/domain"
-	"foundry/engine"
-	"foundry/session"
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/engine"
+	"github.com/SahidAyala/Foundry/session"
 )
 
 func newTestSession(t *testing.T, in string) (*session.Session, *bytes.Buffer) {

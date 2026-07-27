@@ -1,11 +1,11 @@
 package main
 
 import (
-	"foundry/executor/claude"
-	"foundry/executor/copilotcli"
-	"foundry/executor/geminicli"
-	"foundry/executor/openai"
-	"foundry/model"
+	"github.com/SahidAyala/Foundry/executor/claude"
+	"github.com/SahidAyala/Foundry/executor/copilotcli"
+	"github.com/SahidAyala/Foundry/executor/geminicli"
+	"github.com/SahidAyala/Foundry/executor/openai"
+	"github.com/SahidAyala/Foundry/model"
 )
 
 // buildModelRegistry assembles a model.Registry from every concrete

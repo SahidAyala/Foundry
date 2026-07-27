@@ -3,8 +3,8 @@ package copilotcli_test
 import (
 	"testing"
 
-	"foundry/executor/copilotcli"
-	"foundry/model"
+	"github.com/SahidAyala/Foundry/executor/copilotcli"
+	"github.com/SahidAyala/Foundry/model"
 )
 
 func TestSupportedModels_RegistersDefaultUnderCopilotExecutor(t *testing.T) {

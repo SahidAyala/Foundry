@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"foundry/ticket"
+	"github.com/SahidAyala/Foundry/ticket"
 )
 
 // IssueCommand implements /issue <id>: fetches id from the Session's

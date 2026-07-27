@@ -10,7 +10,7 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"foundry/cli"
+	"github.com/SahidAyala/Foundry/cli"
 )
 
 // HistoryFile is the conventional location, relative to a project root,

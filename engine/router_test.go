@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"foundry/engine"
-	"foundry/model"
+	"github.com/SahidAyala/Foundry/engine"
+	"github.com/SahidAyala/Foundry/model"
 )
 
 func TestRouter_UnpinnedStepResolvesToDefault(t *testing.T) {

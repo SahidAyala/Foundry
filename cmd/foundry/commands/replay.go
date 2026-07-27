@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"io"
 
-	"foundry/cli"
-	"foundry/verify"
-	"foundry/workspace"
+	"github.com/SahidAyala/Foundry/cli"
+	"github.com/SahidAyala/Foundry/verify"
+	"github.com/SahidAyala/Foundry/workspace"
 )
 
 func replayUsage() string {

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"foundry/verify"
+	"github.com/SahidAyala/Foundry/verify"
 )
 
 func TestDefaultValidators_GoModuleGetsBuildAndTest(t *testing.T) {

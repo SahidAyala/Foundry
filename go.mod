@@ -1,4 +1,4 @@
-module foundry
+module github.com/SahidAyala/Foundry
 
 go 1.24.2
 

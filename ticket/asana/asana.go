@@ -28,7 +28,7 @@ import (
 	"strings"
 	"time"
 
-	"foundry/ticket"
+	"github.com/SahidAyala/Foundry/ticket"
 )
 
 const (

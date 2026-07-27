@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"foundry/model"
+	"github.com/SahidAyala/Foundry/model"
 )
 
 func TestRegistry_RegisterAndGet(t *testing.T) {
