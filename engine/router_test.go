@@ -396,3 +396,45 @@ func TestRouter_ModelInfo_NoRegistryConfiguredFails(t *testing.T) {
 		t.Fatal("ModelInfo with no model.Registry configured returned nil error")
 	}
 }
+
+func TestRouter_ModelHealth_NoRegistryConfiguredReturnsUnknown(t *testing.T) {
+	executors := engine.NewExecutorRegistry()
+	def := &captureExecutor{}
+	router := engine.NewRouter(executors, def)
+
+	got := router.ModelHealth("claude-sonnet-5")
+	if got.Status != model.StatusUnknown {
+		t.Errorf("ModelHealth with no model.Registry configured = %q, want %q", got.Status, model.StatusUnknown)
+	}
+}
+
+func TestRouter_ModelHealth_NoHealthManagerAttachedReturnsUnknown(t *testing.T) {
+	executors := engine.NewExecutorRegistry()
+	def := &captureExecutor{}
+	router := engine.NewRouter(executors, def).WithModels(model.NewRegistry())
+
+	got := router.ModelHealth("claude-sonnet-5")
+	if got.Status != model.StatusUnknown {
+		t.Errorf("ModelHealth with a model.Registry but no HealthManager = %q, want %q", got.Status, model.StatusUnknown)
+	}
+}
+
+func TestRouter_ModelHealth_DelegatesToAttachedHealthManager(t *testing.T) {
+	executors := engine.NewExecutorRegistry()
+	def := &captureExecutor{}
+	registry := model.NewRegistry()
+	health := model.NewHealthManager()
+	if err := health.Report("claude-sonnet-5", model.Health{Status: model.StatusUnavailable, Reason: "rate limited"}); err != nil {
+		t.Fatalf("Report failed: %v", err)
+	}
+	registry.SetHealthManager(health)
+	router := engine.NewRouter(executors, def).WithModels(registry)
+
+	got := router.ModelHealth("claude-sonnet-5")
+	if got.Status != model.StatusUnavailable {
+		t.Errorf("ModelHealth = %q, want %q", got.Status, model.StatusUnavailable)
+	}
+	if got.Reason != "rate limited" {
+		t.Errorf("ModelHealth Reason = %q, want %q", got.Reason, "rate limited")
+	}
+}

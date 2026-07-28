@@ -132,3 +132,19 @@ func (r Router) ModelInfo(id string) (model.Info, error) {
 	}
 	return r.models.Get(id)
 }
+
+// ModelHealth returns id's currently reported model.Health via r's
+// attached model.Registry, mirroring Registry.Health's own contract:
+// Health{Status: StatusUnknown} if no model.Registry is attached, no
+// HealthManager is attached to it, or nothing has ever been reported for
+// id — never an error, since "no report" is a legitimate default, not a
+// lookup failure. Used by automatic model failover (see
+// engine/failover.go's preferHealthyCandidates) to deprioritize a
+// candidate known to be down before ever attempting it, not only after a
+// call to it actually fails.
+func (r Router) ModelHealth(id string) model.Health {
+	if r.models == nil {
+		return model.Health{Status: model.StatusUnknown}
+	}
+	return r.models.Health(id)
+}

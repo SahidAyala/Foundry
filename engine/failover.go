@@ -55,26 +55,31 @@ func executeGenerateStep(ctx context.Context, rc runContext, step Step, intent *
 }
 
 // executeGenerateStepWithoutCapabilityCheck is the sixth increment's own
-// executeGenerateStep, unchanged: step.Preferred is empty (or has exactly
-// one entry with nothing left to fail over to) runs a single
+// executeGenerateStep, with one addition (the tenth increment,
+// preferHealthyCandidates): step.Preferred is empty runs a single
 // Resolve/estimate/charge/Execute sequence, byte-for-byte the same as
 // before automatic failover existed ("supported only when preferred[] is
-// configured"); step.Preferred with more than one entry fails over on a
-// retryable Execute failure, exactly as documented on runExecuteAttempts.
+// configured"); step.Preferred with two or more entries fails over on a
+// retryable Execute failure, exactly as documented on runExecuteAttempts,
+// after first being reordered so any entry known to be currently
+// Unavailable sorts behind every other entry — connecting HealthManager
+// to failover so a known-down model is skipped preemptively, not only
+// after a real call to it fails.
 func executeGenerateStepWithoutCapabilityCheck(ctx context.Context, rc runContext, step Step, intent *domain.Intent, considered []string, attempt int) (*domain.Outcome, error) {
-	resolved, err := rc.router.Resolve(step)
+	if len(step.Preferred) == 0 {
+		resolved, err := rc.router.Resolve(step)
+		if err != nil {
+			return nil, wrapStepError(attempt, "route", err)
+		}
+		return runExecuteAttempts(ctx, rc, step.ID, resolved, "", nil, intent, considered, attempt)
+	}
+
+	ordered := preferHealthyCandidates(rc.router, step.Preferred)
+	resolved, err := rc.router.ResolveModel(ordered[0])
 	if err != nil {
-		return nil, wrapStepError(attempt, "route", err)
+		return nil, wrapStepError(attempt, "route", fmt.Errorf("step %q: %w", step.ID, err))
 	}
-
-	currentModel := ""
-	var remaining []string
-	if len(step.Preferred) > 0 {
-		currentModel = step.Preferred[0]
-		remaining = step.Preferred[1:]
-	}
-
-	return runExecuteAttempts(ctx, rc, step.ID, resolved, currentModel, remaining, intent, considered, attempt)
+	return runExecuteAttempts(ctx, rc, step.ID, resolved, ordered[0], ordered[1:], intent, considered, attempt)
 }
 
 // executeGenerateStepWithCapabilityCheck implements capability-aware
@@ -113,6 +118,7 @@ func executeGenerateStepWithCapabilityCheck(ctx context.Context, rc runContext, 
 	if err != nil {
 		return nil, wrapStepError(attempt, "route", fmt.Errorf("step %q: %w", step.ID, err))
 	}
+	capable = preferHealthyCandidates(rc.router, capable)
 
 	resolved, err := rc.router.ResolveModel(capable[0])
 	if err != nil {
@@ -143,6 +149,37 @@ func filterCapableCandidates(router Router, candidates []string, required []stri
 		return nil, fmt.Errorf("no candidate model (%s) supports all required capabilities (%s)", strings.Join(candidates, ", "), strings.Join(required, ", "))
 	}
 	return capable, nil
+}
+
+// preferHealthyCandidates reorders candidates (the tenth increment,
+// connecting model.HealthManager to failover and capability filtering —
+// the gap every earlier increment's own Consequences named) so that any
+// candidate router.ModelHealth reports Unavailable() sorts behind every
+// candidate it doesn't, preserving each group's own relative order — a
+// stable partition, not a filter. Unlike filterCapableCandidates, this
+// never drops a candidate entirely: a HealthManager report is one
+// Executor's own observation, which can go stale (a model marked down an
+// hour ago may well be back), unlike static Capabilities data, which is a
+// hard, load-bearing requirement. If every candidate is currently
+// Unavailable, this is a no-op — Foundry still attempts the Step's first
+// declared candidate rather than refusing outright over health data that
+// might no longer be true. Called once, up front, the same "no dynamic
+// re-evaluation mid-loop" shape filterCapableCandidates already
+// established — not re-run after each failover switch.
+func preferHealthyCandidates(router Router, candidates []string) []string {
+	if len(candidates) < 2 {
+		return candidates
+	}
+	ordered := make([]string, 0, len(candidates))
+	var unavailable []string
+	for _, id := range candidates {
+		if router.ModelHealth(id).Unavailable() {
+			unavailable = append(unavailable, id)
+			continue
+		}
+		ordered = append(ordered, id)
+	}
+	return append(ordered, unavailable...)
 }
 
 // runExecuteAttempts runs the shared estimate/charge/Executing/Execute/
