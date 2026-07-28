@@ -77,6 +77,55 @@ func TestHealthManager_DoesNotConflateDistinctModels(t *testing.T) {
 	}
 }
 
+func TestHealth_Unavailable_AvailableIsNeverUnavailable(t *testing.T) {
+	h := model.Health{Status: model.StatusAvailable}
+	if h.Unavailable() {
+		t.Error("Unavailable() = true for StatusAvailable, want false")
+	}
+}
+
+func TestHealth_Unavailable_UnknownIsNeverUnavailable(t *testing.T) {
+	h := model.Health{Status: model.StatusUnknown}
+	if h.Unavailable() {
+		t.Error("Unavailable() = true for StatusUnknown, want false")
+	}
+}
+
+func TestHealth_Unavailable_UnavailableWithZeroRetryAtStaysUnavailable(t *testing.T) {
+	h := model.Health{Status: model.StatusUnavailable}
+	if !h.Unavailable() {
+		t.Error("Unavailable() = false for StatusUnavailable with no RetryAt, want true (no known expiry, per Health's own doc comment)")
+	}
+}
+
+func TestHealth_Unavailable_CooldownWithZeroRetryAtStaysUnavailable(t *testing.T) {
+	h := model.Health{Status: model.StatusCooldown}
+	if !h.Unavailable() {
+		t.Error("Unavailable() = false for StatusCooldown with no RetryAt, want true")
+	}
+}
+
+func TestHealth_Unavailable_RetryAtInFutureStaysUnavailable(t *testing.T) {
+	h := model.Health{Status: model.StatusCooldown, RetryAt: time.Now().Add(time.Hour)}
+	if !h.Unavailable() {
+		t.Error("Unavailable() = false for a RetryAt still in the future, want true")
+	}
+}
+
+func TestHealth_Unavailable_RetryAtInPastLiftsAutomatically(t *testing.T) {
+	h := model.Health{Status: model.StatusCooldown, RetryAt: time.Now().Add(-time.Hour)}
+	if h.Unavailable() {
+		t.Error("Unavailable() = true for a RetryAt already in the past, want false (cooldown lifted without a fresh Report)")
+	}
+}
+
+func TestHealth_Unavailable_UnavailableStatusRetryAtInPastLiftsAutomatically(t *testing.T) {
+	h := model.Health{Status: model.StatusUnavailable, RetryAt: time.Now().Add(-time.Minute)}
+	if h.Unavailable() {
+		t.Error("Unavailable() = true for StatusUnavailable with a past RetryAt, want false")
+	}
+}
+
 // TestHealthManager_ConcurrentReportAndGet_NoRace proves HealthManager is
 // safe under Foundry's own established concurrent-Acts pattern (worktree
 // isolation) — more than one Executor could plausibly report health at

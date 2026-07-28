@@ -6,14 +6,14 @@ import (
 	"time"
 )
 
-// Status is a model's runtime health state (ADR-0013, Proposed, fifth
-// increment) — distinct from Info's static catalog metadata
-// (Capabilities/Limits/Quality), which never changes at runtime. Status is
-// reported by a caller (e.g. an Executor observing a real failure or
-// recovery) and only ever read via Registry.Health/HealthManager.Get;
-// nothing in Foundry's execution path reads it yet, and no automatic
-// failover or routing decision consults it — see HealthManager's own doc
-// comment.
+// Status is a model's runtime health state (ADR-0013) — distinct from
+// Info's static catalog metadata (Capabilities/Limits/Quality), which
+// never changes at runtime. Status is reported by a caller (e.g. an
+// Executor observing a real failure or recovery) and read via
+// Registry.Health/HealthManager.Get, and — since ADR-0013's
+// post-ratification "HealthManager connected" note — by automatic model
+// failover, to deprioritize a currently-unavailable candidate before ever
+// attempting it; see HealthManager's own doc comment and Health.Unavailable.
 type Status string
 
 const (
@@ -41,16 +41,14 @@ type Health struct {
 // hand-curated data. Register/Get/List/ByExecutor on Registry are
 // entirely unaffected by whether a HealthManager is attached.
 //
-// This is metadata only, the same "expose now, consume later" shape
-// ADR-0013's third increment (Capabilities/Limits/Quality) already
-// established: nothing in Foundry's execution path (engine.Router.Resolve,
-// session.Session, engine.Engine) reads a HealthManager's state yet, and
-// no automatic failover exists — a model reported UNAVAILABLE is not
-// skipped, retried elsewhere, or treated any differently by Resolve; it is
-// purely observable state a future, separately-decided increment could act
-// on. Safe for concurrent use, since Foundry already supports concurrent
-// Acts (worktree isolation) whose Executors could plausibly report health
-// at the same time.
+// engine.Router.ModelHealth reads it, and automatic model failover
+// (engine/failover.go's preferHealthyCandidates, ADR-0013's
+// post-ratification "HealthManager connected" note) uses it to
+// deprioritize — never to hard-exclude — a candidate currently reported
+// Unavailable, before ever attempting it, not only after a real Execute
+// call to it fails. Safe for concurrent use, since Foundry already
+// supports concurrent Acts (worktree isolation) whose Executors could
+// plausibly report health at the same time.
 type HealthManager struct {
 	mu     sync.RWMutex
 	health map[string]Health
@@ -93,4 +91,26 @@ func (h *HealthManager) Get(id string) Health {
 		return Health{Status: StatusUnknown}
 	}
 	return health
+}
+
+// Unavailable reports whether h describes a model that should currently
+// be treated as down — StatusUnavailable or StatusCooldown, and not yet
+// past its own reported RetryAt. StatusAvailable and StatusUnknown are
+// never Unavailable. A zero RetryAt means "no retry time given," per this
+// struct's own doc comment, not "retry immediately" — so an Unavailable/
+// Cooldown report with no RetryAt stays Unavailable indefinitely, until a
+// fresh Report says otherwise; only a non-zero RetryAt that has actually
+// passed lifts it automatically, without needing a new Report call.
+//
+// This is what ADR-0013's own "connect HealthManager to failover" follow-up
+// (see engine/failover.go's preferHealthyCandidates) reads to decide
+// whether a candidate should be deprioritized — a soft signal, since a
+// Report can go stale, never a hard exclusion the way Capabilities are.
+func (h Health) Unavailable() bool {
+	switch h.Status {
+	case StatusUnavailable, StatusCooldown:
+		return h.RetryAt.IsZero() || time.Now().Before(h.RetryAt)
+	default:
+		return false
+	}
 }
