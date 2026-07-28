@@ -4,7 +4,7 @@
 
 ## Maturity index (status of every major concept)
 
-See [maturity levels](../04-guides/documentation.md#maturity-levels). **CANONICAL is now reachable, narrowly**: [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md) resolved the systemic blocker (no ratification process existed). Most of the repository is still PROVISIONAL, not because CANONICAL is unreachable in principle, but because each document still needs its own explicit ratification — nothing upgrades automatically. [ADR-0001](../03-adrs/ADR-0001-language-and-toolchain.md) through [ADR-0012](../03-adrs/ADR-0012-interactive-terminal-ux-and-first-dependency.md), plus [ADR-0014](../03-adrs/ADR-0014-principle-priority-ordering.md) and [ADR-0015](../03-adrs/ADR-0015-domain-center-act-and-knowledge.md), are Accepted so far — **the entire ADR backlog is empty except [ADR-0013](../03-adrs/ADR-0013-model-registry.md)** (Model Registry, Proposed, fully implemented, awaiting the maintainer's ratification); RFC-0001 through RFC-0005 remain Draft — Proposed.
+See [maturity levels](../04-guides/documentation.md#maturity-levels). **CANONICAL is now reachable, narrowly**: [ADR-0000](../03-adrs/ADR-0000-governance-and-ratification-process.md) resolved the systemic blocker (no ratification process existed). Most of the repository is still PROVISIONAL, not because CANONICAL is unreachable in principle, but because each document still needs its own explicit ratification — nothing upgrades automatically. [ADR-0001](../03-adrs/ADR-0001-language-and-toolchain.md) through [ADR-0015](../03-adrs/ADR-0015-domain-center-act-and-knowledge.md) are all Accepted — **the entire ADR backlog is empty**; RFC-0001 through RFC-0005 remain Draft — Proposed.
 
 | Concept / decision | Maturity | Owner | Open question |
 |---|---|---|---|
@@ -28,7 +28,7 @@ See [maturity levels](../04-guides/documentation.md#maturity-levels). **CANONICA
 | Cost as a first-class constraint (`CostEstimator` stays optional; additive `ActualCostUSD` reported Evidence; Budget ceilings stay hardcoded pending trigger) | ACCEPTED | [ADR-0011](../03-adrs/ADR-0011-cost-as-a-first-class-constraint.md) | — |
 | Extension isolation & contract versioning (no mechanism chosen; corrects ADR-0001 clause 4's stale gRPC/protobuf pre-commitment) | ACCEPTED | [ADR-0008](../03-adrs/ADR-0008-extension-isolation-and-contract-versioning.md) | — |
 | Interactive terminal UX & first third-party dependency (`bubbletea`/`bubbles`/`lipgloss`) | ACCEPTED | [ADR-0012](../03-adrs/ADR-0012-interactive-terminal-ux-and-first-dependency.md) | — |
-| Model Registry (catalog, capabilities, health, failover, capability-aware resolution) | **PROPOSED, not yet ratified** | [ADR-0013](../03-adrs/ADR-0013-model-registry.md) | — |
+| Model Registry (catalog, capabilities, health, failover, capability-aware resolution) | ACCEPTED | [ADR-0013](../03-adrs/ADR-0013-model-registry.md) | — |
 | Principle priority ordering (Values always outrank Principles; approval never skipped for a trivial Act) | ACCEPTED (partial — within-tier orderings still open) | [ADR-0014](../03-adrs/ADR-0014-principle-priority-ordering.md) | — |
 | Domain center (Act dynamic center, Knowledge durable medium) | ACCEPTED | [ADR-0015](../03-adrs/ADR-0015-domain-center-act-and-knowledge.md) | [OQ-001](../06-open-questions/OQ-001-domain-center.md) — RESOLVED |
 | Workflow / Stage / Provider / Skill / Runtime | REJECTED | [archive](../archive/) | — |

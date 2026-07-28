@@ -22,7 +22,7 @@ A **Pipeline** is one **Strategy** for producing an **Act**: a predeclared seque
 }
 ```
 
-- **`steps`** — an ordered list. Each Step has an `id` (unique within the document, doubles as the human-readable name a `repair.target` can point back to) and a `kind`, one of RFC-0002 §4.2's closed five: `generate`, `verify`, `approve`, `apply`, `record`. A Step Kind PipelineStrategy does not recognize is a decode-time error, never a silently skipped Step. A Step may also carry `capability` (object, still unused by any document above — reserved for future capability-based routing, see [ADR-0006](../03-adrs/ADR-0006-routing-and-policy.md)), `executor` (string — a `generate` Step's pin to a named Executor from `.foundry/executors.json`, resolved by `engine.Router`; **used by `issue.json`'s `plan` Step below** to run its analysis on a different model than `implement`'s), `model` (string — ADR-0013, Proposed; a `generate` Step's pin to a named Model from the process's Model Registry instead of an Executor directly — see "Pinning a Step to a Model" below), `preferred` (array of strings — ADR-0013, Proposed; an ordered list of Model IDs, the first of which wins over `model` — see "Preferred model lists" below), `feeds_forward` (bool — used by `engine/strategy.go`'s `appendFeedsForward` to attach the immediately-preceding Step's own recorded output to a later Step's considered Context; not yet used by any document above), and `target` (string — used by `apply` Steps to name an apply Target, e.g. `issue.json`'s `remote-pr`).
+- **`steps`** — an ordered list. Each Step has an `id` (unique within the document, doubles as the human-readable name a `repair.target` can point back to) and a `kind`, one of RFC-0002 §4.2's closed five: `generate`, `verify`, `approve`, `apply`, `record`. A Step Kind PipelineStrategy does not recognize is a decode-time error, never a silently skipped Step. A Step may also carry `capability` (object, still unused by any document above — reserved for future capability-based routing, see [ADR-0006](../03-adrs/ADR-0006-routing-and-policy.md)), `executor` (string — a `generate` Step's pin to a named Executor from `.foundry/executors.json`, resolved by `engine.Router`; **used by `issue.json`'s `plan` Step below** to run its analysis on a different model than `implement`'s), `model` (string — ADR-0013, Accepted; a `generate` Step's pin to a named Model from the process's Model Registry instead of an Executor directly — see "Pinning a Step to a Model" below), `preferred` (array of strings — ADR-0013, Accepted; an ordered list of Model IDs, the first of which wins over `model` — see "Preferred model lists" below), `feeds_forward` (bool — used by `engine/strategy.go`'s `appendFeedsForward` to attach the immediately-preceding Step's own recorded output to a later Step's considered Context; not yet used by any document above), and `target` (string — used by `apply` Steps to name an apply Target, e.g. `issue.json`'s `remote-pr`).
 - **`repair.max_attempts`** — how many times the Pipeline may re-run after a `verify` Step's Judgment is `fail`. `0` (or an omitted `repair` block) means no repair.
 - **`repair.target`** — the Step ID a repair round jumps back to, re-running only from there onward, not the whole Pipeline. Omitted means "restart from the first Step."
 
@@ -34,7 +34,7 @@ Per [ADR-0004](../03-adrs/ADR-0004-reusable-act-template-format-and-evolution-po
 
 ### Pinning a Step to a Model instead of an Executor
 
-Per [ADR-0013](../03-adrs/ADR-0013-model-registry.md) (Proposed): a `generate` Step can name `model` instead of (or alongside) `executor`:
+Per [ADR-0013](../03-adrs/ADR-0013-model-registry.md) (Accepted): a `generate` Step can name `model` instead of (or alongside) `executor`:
 
 ```json
 { "id": "plan", "kind": "generate", "model": "claude-sonnet-5" }
@@ -46,11 +46,11 @@ Per [ADR-0013](../03-adrs/ADR-0013-model-registry.md) (Proposed): a `generate` S
 - **An unknown `executor` behaves exactly as before** — whether the name being resolved came from `model` or from `executor` directly, an unregistered name in `.foundry/executors.json` fails the same way it always did.
 - A model's Executor value must match an entry's *name* in `.foundry/executors.json` (e.g. an entry literally named `"gemini"`), not merely share its `vendor`. A project that names its Gemini entry `"planner"` (as this repository's own `.foundry/executors.json` does) needs a `model` pinned Step to resolve against an entry actually named after the vendor, or against `"planner"` directly via `executor` instead — `model` does not search `.foundry/executors.json` by `vendor`. Models whose Executor is `"claude"` (Anthropic's Claude models) cannot resolve via `model` at all today: Claude Code is Foundry's implicit default and is never registered under a name, so this fails as "unknown executor" — correct, deterministic behavior, but a real, named limitation of this first increment (see the ADR's own Consequences).
 - What models exist, and which Executor each belongs to, is a fixed catalog built once per process from every Executor package's own `SupportedModels()` (see [implementation-status.md](../00-overview/implementation-status.md)'s changelog) — there is no per-project way to add to it yet.
-- The Model Registry (`model.Registry`) also carries a runtime `HealthManager` (`AVAILABLE`/`UNAVAILABLE`/`COOLDOWN`/`UNKNOWN`, plus a `reason` and `retryAt`), queryable via `Registry.Health` — ADR-0013 (Proposed), fifth increment. This is not a Pipeline/Step concept: no field on a Step reads or reports it, `Router.Resolve` never consults it, and a `model`/`preferred`-pinned Step's resolution is completely unaffected by any model's reported health today.
+- The Model Registry (`model.Registry`) also carries a runtime `HealthManager` (`AVAILABLE`/`UNAVAILABLE`/`COOLDOWN`/`UNKNOWN`, plus a `reason` and `retryAt`), queryable via `Registry.Health` — ADR-0013 (Accepted), fifth increment. This is not a Pipeline/Step concept: no field on a Step reads or reports it, `Router.Resolve` never consults it, and a `model`/`preferred`-pinned Step's resolution is completely unaffected by any model's reported health today.
 
 ### Preferred model lists and automatic failover
 
-Per [ADR-0013](../03-adrs/ADR-0013-model-registry.md) (Proposed, fourth and sixth increments): a `generate` Step can name `preferred` instead of (or alongside) `model` — an ordered list of Model IDs:
+Per [ADR-0013](../03-adrs/ADR-0013-model-registry.md) (Accepted, fourth and sixth increments): a `generate` Step can name `preferred` instead of (or alongside) `model` — an ordered list of Model IDs:
 
 ```json
 { "id": "plan", "kind": "generate", "preferred": ["claude-opus-4-8", "claude-sonnet-5", "gemini-3.1-pro"] }
@@ -66,7 +66,7 @@ Per [ADR-0013](../03-adrs/ADR-0013-model-registry.md) (Proposed, fourth and sixt
 
 ### Capability-aware model resolution
 
-Per [ADR-0013](../03-adrs/ADR-0013-model-registry.md) (Proposed, seventh increment): a `generate` Step can name `require_capabilities` — a list of capability names every candidate selected from `model`/`preferred` must support:
+Per [ADR-0013](../03-adrs/ADR-0013-model-registry.md) (Accepted, seventh increment): a `generate` Step can name `require_capabilities` — a list of capability names every candidate selected from `model`/`preferred` must support:
 
 ```json
 {
