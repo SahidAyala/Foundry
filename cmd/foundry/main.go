@@ -32,9 +32,14 @@ func main() {
 // claudeExecutor is the production Executor factory: it invokes the Claude
 // Code CLI against the Act's workspace. It is injected at the composition root
 // so that main's tests can substitute a deterministic fixture and never depend
-// on Claude Code being installed.
+// on Claude Code being installed. Passes no model — the zero-config default
+// path defers entirely to Claude Code's own configured default (a project's
+// .claude/settings.json, ANTHROPIC_MODEL, or its own built-in default), exactly
+// as before model selection existed. A project wanting a specific Claude
+// model pins one via a named "claude"-vendor entry in .foundry/executors.json
+// instead (see namedExecutor below).
 func claudeExecutor(workspace string) engine.Executor {
-	return claude.NewClaudeExecutor(workspace)
+	return claude.NewClaudeExecutor(workspace, "")
 }
 
 // namedExecutor is the production vendor-dispatch factory (ADR-0005
@@ -76,6 +81,8 @@ func claudeExecutor(workspace string) engine.Executor {
 // configuration error rather than a silent no-op.
 func namedExecutor(cfg project.ExecutorConfig, workspace string) (engine.Executor, error) {
 	switch cfg.Vendor {
+	case "claude":
+		return claude.NewClaudeExecutor(workspace, cfg.Model), nil
 	case "openai":
 		return openai.NewExecutor(cfg.Model, os.Getenv(cfg.APIKeyEnv)), nil
 	case "gemini":
@@ -90,7 +97,7 @@ func namedExecutor(cfg project.ExecutorConfig, workspace string) (engine.Executo
 		}
 		return openai.NewExecutorWithEndpoint(cfg.Model, os.Getenv(cfg.APIKeyEnv), cfg.BaseURL), nil
 	default:
-		return nil, fmt.Errorf("foundry: unsupported executor vendor %q (supported: %q, %q, %q, %q, %q)", cfg.Vendor, "openai", "gemini", "gemini-api", "copilot", "openai-compatible")
+		return nil, fmt.Errorf("foundry: unsupported executor vendor %q (supported: %q, %q, %q, %q, %q, %q)", cfg.Vendor, "claude", "openai", "gemini", "gemini-api", "copilot", "openai-compatible")
 	}
 }
 

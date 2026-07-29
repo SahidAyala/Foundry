@@ -4,12 +4,32 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SahidAyala/Foundry/executor/claude"
 	"github.com/SahidAyala/Foundry/executor/copilotcli"
 	"github.com/SahidAyala/Foundry/executor/gemini"
 	"github.com/SahidAyala/Foundry/executor/geminicli"
 	"github.com/SahidAyala/Foundry/executor/openai"
 	"github.com/SahidAyala/Foundry/project"
 )
+
+// TestNamedExecutor_ClaudeVendorConstructsClaudeExecutor confirms a
+// project can register Claude Code as a named, model-pinned Executor
+// (unlike the zero-config default Executor, which passes no model at
+// all) — closing ADR-0013's own named "claude vendor can never resolve
+// via Model yet" limitation, post-ratification, at the maintainer's
+// direct request.
+func TestNamedExecutor_ClaudeVendorConstructsClaudeExecutor(t *testing.T) {
+	exec, err := namedExecutor(project.ExecutorConfig{
+		Vendor: "claude",
+		Model:  "fable-5",
+	}, "/repo")
+	if err != nil {
+		t.Fatalf("namedExecutor failed: %v", err)
+	}
+	if _, ok := exec.(*claude.ClaudeExecutor); !ok {
+		t.Errorf("namedExecutor(vendor=claude) = %T, want *claude.ClaudeExecutor", exec)
+	}
+}
 
 func TestNamedExecutor_OpenAIVendorConstructsOpenAIExecutor(t *testing.T) {
 	t.Setenv("FOUNDRY_TEST_OPENAI_KEY", "test-key-value")

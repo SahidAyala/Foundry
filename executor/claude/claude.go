@@ -34,17 +34,28 @@ const (
 // output.
 type ClaudeExecutor struct {
 	workspace  string
+	model      string
 	executable string
 	timeout    time.Duration
 	runner     runner
 }
 
-// NewClaudeExecutor returns an executor that runs Claude Code in workspace.
+// NewClaudeExecutor returns an executor that runs Claude Code in workspace,
+// passing model to the CLI's own --model flag when non-empty (confirmed
+// against the CLI's own documented flag — code.claude.com/docs/en/headless
+// — before adding it, not guessed; accepts either an alias like "sonnet"/
+// "opus"/"haiku"/"fable" or a full model name). An empty model omits the
+// flag entirely, leaving Claude Code to use whatever its own configured
+// default is (a project's `.claude/settings.json`, the `ANTHROPIC_MODEL`
+// environment variable, or its own built-in default) — the same behavior
+// this package had before model selection existed, so the zero-config
+// default Executor (cmd/foundry/main.go's claudeExecutor) is unaffected.
 // The workspace is fixed at construction because engine.Executor.Execute does
 // not carry a workspace argument; the Engine is wired with the same directory.
-func NewClaudeExecutor(workspace string) *ClaudeExecutor {
+func NewClaudeExecutor(workspace, model string) *ClaudeExecutor {
 	return &ClaudeExecutor{
 		workspace:  workspace,
+		model:      model,
 		executable: defaultExecutable,
 		timeout:    defaultTimeout,
 		runner:     execRunner{},
@@ -65,7 +76,11 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, intent *domain.Intent, con
 	defer cancel()
 
 	prompt := buildPrompt(intent, considered)
-	stdout, stderr, err := e.runner.Run(ctx, e.workspace, e.executable, []string{"-p"}, prompt)
+	args := []string{"-p"}
+	if e.model != "" {
+		args = append(args, "--model", e.model)
+	}
+	stdout, stderr, err := e.runner.Run(ctx, e.workspace, e.executable, args, prompt)
 	if err != nil {
 		switch {
 		case errors.Is(err, exec.ErrNotFound):
