@@ -12,8 +12,10 @@ import (
 	"github.com/SahidAyala/Foundry/domain"
 	"github.com/SahidAyala/Foundry/engine"
 	"github.com/SahidAyala/Foundry/executor"
+	"github.com/SahidAyala/Foundry/executor/claude"
 	"github.com/SahidAyala/Foundry/model"
 	"github.com/SahidAyala/Foundry/project"
+	"github.com/SahidAyala/Foundry/vcs"
 )
 
 // initGitRepo creates a temporary git repository with one committed file
@@ -53,7 +55,7 @@ func initGitRepo(t *testing.T) string {
 // RemotePublishTokenEnv, mirroring session.Session's own
 // buildApplierRegistry.
 func TestBuildApplierRegistry_RegistersRemotePRTargetWhenConfigured(t *testing.T) {
-	registry, err := buildApplierRegistry(project.Config{RemotePublishTokenEnv: "GITHUB_PR_TOKEN"})
+	registry, err := buildApplierRegistry("/repo", project.Config{RemotePublishTokenEnv: "GITHUB_PR_TOKEN"})
 	if err != nil {
 		t.Fatalf("buildApplierRegistry failed: %v", err)
 	}
@@ -62,12 +64,34 @@ func TestBuildApplierRegistry_RegistersRemotePRTargetWhenConfigured(t *testing.T
 	}
 }
 
+// TestBuildApplierRegistry_WiresSummarizerWhenPRSummaryModelSet covers
+// project.Config.PRSummaryModel: when set alongside RemotePublishTokenEnv,
+// the registered remote-pr Applier's Summarizer is a real
+// claude.Summarizer, not left nil (Apply's own mechanical default).
+func TestBuildApplierRegistry_WiresSummarizerWhenPRSummaryModelSet(t *testing.T) {
+	registry, err := buildApplierRegistry("/repo", project.Config{RemotePublishTokenEnv: "GITHUB_PR_TOKEN", PRSummaryModel: "haiku"})
+	if err != nil {
+		t.Fatalf("buildApplierRegistry failed: %v", err)
+	}
+	applier, err := registry.Get(engine.ApplyTargetRemotePR)
+	if err != nil {
+		t.Fatalf("Get(%q) failed: %v", engine.ApplyTargetRemotePR, err)
+	}
+	prApplier, ok := applier.(vcs.GitHubPRApplier)
+	if !ok {
+		t.Fatalf("registered Applier = %T, want vcs.GitHubPRApplier", applier)
+	}
+	if _, ok := prApplier.Summarizer.(*claude.Summarizer); !ok {
+		t.Errorf("Summarizer = %T, want *claude.Summarizer", prApplier.Summarizer)
+	}
+}
+
 // TestBuildApplierRegistry_NoRemotePRTargetWithoutConfig verifies a
 // project that never sets remote_publish_token_env registers no
 // remote-pr Applier at all — exactly as an apply Step with that Target
 // would have behaved before ADR-0010 existed.
 func TestBuildApplierRegistry_NoRemotePRTargetWithoutConfig(t *testing.T) {
-	registry, err := buildApplierRegistry(project.Config{})
+	registry, err := buildApplierRegistry("/repo", project.Config{})
 	if err != nil {
 		t.Fatalf("buildApplierRegistry failed: %v", err)
 	}

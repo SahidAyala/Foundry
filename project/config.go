@@ -47,6 +47,17 @@ type Config struct {
 	// opted into this supplementary, best-effort request.
 	RequestCopilotReview bool `json:"request_copilot_review"`
 
+	// PRSummaryModel, when set, has vcs.GitHubPRApplier ask Claude Code
+	// (via a claude.Summarizer using this model — an alias like "haiku",
+	// or a full model name) for a short PR title and body from an Act's
+	// Intent and Patch, instead of its own mechanical "echo the Intent
+	// verbatim" default. Empty means the mechanical default — has no
+	// effect at all unless RemotePublishTokenEnv is also set (the
+	// "remote-pr" apply target). A summarization failure is never fatal:
+	// it falls back to the mechanical default, the same best-effort
+	// treatment RequestCopilotReview's own failures already get.
+	PRSummaryModel string `json:"pr_summary_model"`
+
 	// TicketProvider names which external ticketing system the
 	// interactive session's /issue command fetches from — "github",
 	// "jira", "gitlab", "asana", or "backlog" today (see
