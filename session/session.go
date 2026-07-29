@@ -10,6 +10,7 @@ import (
 
 	"github.com/SahidAyala/Foundry/cli"
 	"github.com/SahidAyala/Foundry/engine"
+	"github.com/SahidAyala/Foundry/executor/claude"
 	"github.com/SahidAyala/Foundry/gatherer"
 	"github.com/SahidAyala/Foundry/knowledge"
 	"github.com/SahidAyala/Foundry/model"
@@ -142,7 +143,7 @@ func NewSession(ctx context.Context, root string, in io.Reader, out io.Writer, n
 		return nil, fmt.Errorf("session: build executor registry: %w", err)
 	}
 
-	appliers, err := buildApplierRegistry(cfg)
+	appliers, err := buildApplierRegistry(root, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("session: build applier registry: %w", err)
 	}
@@ -171,9 +172,11 @@ func NewSession(ctx context.Context, root string, in io.Reader, out io.Writer, n
 // cfg names a DocsPath, and ApplyTargetRemotePR only if cfg names a
 // RemotePublishTokenEnv — a project that never opts in registers none of
 // the last two and sees no change, exactly as an apply Step with no
-// Target already behaves. Mirrors cmd/foundry/commands/do.go's own
-// buildApplierRegistry.
-func buildApplierRegistry(cfg project.Config) (*engine.ApplierRegistry, error) {
+// Target already behaves. root is only needed for GitHubPRApplier's
+// optional Summarizer (claude.NewSummarizer's own workspace argument);
+// every other Applier here is workspace-agnostic. Mirrors
+// cmd/foundry/commands/do.go's own buildApplierRegistry.
+func buildApplierRegistry(root string, cfg project.Config) (*engine.ApplierRegistry, error) {
 	appliers := engine.NewApplierRegistry()
 	if err := appliers.Register(engine.ApplyTargetKnowledgeNote, workspace.KnowledgeNoteApplier{}); err != nil {
 		return nil, err
@@ -184,7 +187,11 @@ func buildApplierRegistry(cfg project.Config) (*engine.ApplierRegistry, error) {
 		}
 	}
 	if cfg.RemotePublishTokenEnv != "" {
-		if err := appliers.Register(engine.ApplyTargetRemotePR, vcs.GitHubPRApplier{TokenEnv: cfg.RemotePublishTokenEnv, RequestCopilotReview: cfg.RequestCopilotReview}); err != nil {
+		applier := vcs.GitHubPRApplier{TokenEnv: cfg.RemotePublishTokenEnv, RequestCopilotReview: cfg.RequestCopilotReview}
+		if cfg.PRSummaryModel != "" {
+			applier.Summarizer = claude.NewSummarizer(root, cfg.PRSummaryModel)
+		}
+		if err := appliers.Register(engine.ApplyTargetRemotePR, applier); err != nil {
 			return nil, err
 		}
 	}

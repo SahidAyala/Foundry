@@ -62,11 +62,33 @@ type GitHubPRApplier struct {
 	// already, successfully, been created by the time this runs.
 	RequestCopilotReview bool
 
+	// Summarizer, when set, generates a short title and body from act's
+	// Intent and Patch — used for both the commit message on the throwaway
+	// branch and the pull request itself — instead of Apply's own
+	// mechanical default (act.Intent verbatim, per commitMessage/
+	// defaultPRBody below). Nil means the mechanical default, exactly
+	// Apply's behavior before this field existed. A Summarize error is
+	// never fatal to Apply: it falls back to the mechanical default and
+	// surfaces the error to Out as a warning, the same best-effort
+	// treatment RequestCopilotReview's own failures already get — a
+	// nicer title is a supplementary improvement, not the terminal action
+	// Apply exists to perform.
+	Summarizer PRSummarizer
+
 	// run is the seam createPullRequest and requestCopilotReview call
 	// through instead of shelling out directly, so tests never require a
 	// real gh binary, network access, or GitHub credentials. Nil means
 	// runGH, the real subprocess implementation.
 	run ghRunner
+}
+
+// PRSummarizer generates a short PR title and body from an Act's Intent
+// and Patch text, for GitHubPRApplier.Summarizer above. Implemented by
+// executor/claude.Summarizer — kept as an interface here (not a direct
+// dependency on that package) so vcs never needs to import any concrete
+// Executor vendor, mirroring how engine.Applier itself stays vendor-agnostic.
+type PRSummarizer interface {
+	Summarize(ctx context.Context, intent, patch string) (title, body string, err error)
 }
 
 // copilotReviewer is the handle `gh pr edit --add-reviewer` expects to
@@ -88,6 +110,25 @@ func (a GitHubPRApplier) Apply(ctx context.Context, workspaceRoot string, act *d
 		return fmt.Errorf("vcs: github-pr: environment variable %q (remote_publish_token_env) is not set", a.TokenEnv)
 	}
 
+	out := a.Out
+	if out == nil {
+		out = os.Stdout
+	}
+
+	title, body := defaultPRTitle(act), defaultPRBody(act)
+	if a.Summarizer != nil {
+		summarizedTitle, summarizedBody, err := a.Summarizer.Summarize(ctx, act.Intent, act.Patch)
+		if err != nil {
+			// Best-effort, deliberately: a nicer title/body is a
+			// supplementary improvement over the mechanical default, never
+			// something worth failing the whole Act over — the same
+			// treatment RequestCopilotReview's own failures already get.
+			fmt.Fprintf(out, "vcs: github-pr: could not summarize a PR title/body (falling back to the Intent verbatim): %v\n", err)
+		} else {
+			title, body = summarizedTitle, summarizedBody
+		}
+	}
+
 	ws, err := workspace.NewWorkspace(workspaceRoot, "github.com/SahidAyala/Foundry/act-"+act.ID)
 	if err != nil {
 		return fmt.Errorf("vcs: github-pr: %w", err)
@@ -95,22 +136,18 @@ func (a GitHubPRApplier) Apply(ctx context.Context, workspaceRoot string, act *d
 	if err := ws.Apply(ctx, act.Patch); err != nil {
 		return fmt.Errorf("vcs: github-pr: %w", err)
 	}
-	if err := ws.Commit(ctx, commitMessage(act)); err != nil {
+	if err := ws.Commit(ctx, title); err != nil {
 		return fmt.Errorf("vcs: github-pr: %w", err)
 	}
 	if err := ws.Push(ctx, defaultRemote); err != nil {
 		return fmt.Errorf("vcs: github-pr: %w", err)
 	}
 
-	out := a.Out
-	if out == nil {
-		out = os.Stdout
-	}
 	run := a.run
 	if run == nil {
 		run = runGH
 	}
-	if err := createPullRequest(ctx, run, workspaceRoot, ws.BranchName(), act, token, out); err != nil {
+	if err := createPullRequest(ctx, run, workspaceRoot, ws.BranchName(), title, body, token, out); err != nil {
 		// Push (above) already succeeded by this point — the branch is
 		// real and live on defaultRemote even though no PR exists for it.
 		// Naming that state explicitly here is the fix: previously this
@@ -139,19 +176,25 @@ func (a GitHubPRApplier) Apply(ctx context.Context, workspaceRoot string, act *d
 	return nil
 }
 
-// commitMessage renders act's Intent as a one-line commit message.
-func commitMessage(act *domain.Act) string {
+// defaultPRTitle renders act's Intent as a one-line title, used for both
+// the commit message on the throwaway branch and the pull request itself
+// when no Summarizer is configured (or it fails) — Apply's original,
+// mechanical behavior, unchanged.
+func defaultPRTitle(act *domain.Act) string {
 	return strings.TrimSpace(act.Intent)
+}
+
+// defaultPRBody renders the pull request body Apply used unconditionally
+// before Summarizer existed — act's Intent, plus which Act recorded it.
+func defaultPRBody(act *domain.Act) string {
+	return fmt.Sprintf("Opened by Foundry for Act %s.\n\n%s", act.ID, defaultPRTitle(act))
 }
 
 // createPullRequest shells out to `gh pr create` via run, authenticating
 // with token through the GH_TOKEN environment variable set only for this
 // one subprocess call — never the ambient process environment, never
 // persisted, never logged.
-func createPullRequest(ctx context.Context, run ghRunner, repoPath, branch string, act *domain.Act, token string, out io.Writer) error {
-	title := strings.TrimSpace(act.Intent)
-	body := fmt.Sprintf("Opened by Foundry for Act %s.\n\n%s", act.ID, title)
-
+func createPullRequest(ctx context.Context, run ghRunner, repoPath, branch, title, body, token string, out io.Writer) error {
 	args := []string{"pr", "create", "--head", branch, "--title", title, "--body", body}
 	env := []string{"GH_TOKEN=" + token}
 	if err := run(ctx, repoPath, args, env, out); err != nil {

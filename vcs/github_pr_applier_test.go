@@ -156,6 +156,120 @@ func TestGitHubPRApplier_Apply_CommitsPushesAndCallsGH(t *testing.T) {
 	}
 }
 
+// fakeSummarizer is an injectable PRSummarizer for tests — returns a
+// canned title/body or error, and captures what it was called with.
+type fakeSummarizer struct {
+	title, body string
+	err         error
+
+	gotIntent, gotPatch string
+}
+
+func (f *fakeSummarizer) Summarize(ctx context.Context, intent, patch string) (string, string, error) {
+	f.gotIntent, f.gotPatch = intent, patch
+	if f.err != nil {
+		return "", "", f.err
+	}
+	return f.title, f.body, nil
+}
+
+// TestGitHubPRApplier_Apply_UsesSummarizerForCommitAndPRTitleBody covers
+// the Summarizer field: when set, its title/body are used for both the
+// commit message on the throwaway branch and the pull request itself,
+// instead of Apply's own mechanical "echo the Intent verbatim" default.
+func TestGitHubPRApplier_Apply_UsesSummarizerForCommitAndPRTitleBody(t *testing.T) {
+	repo := initGitRepoWithRemote(t)
+	t.Setenv("FOUNDRY_TEST_TOKEN", "shh-secret")
+
+	var capturedArgs []string
+	fakeRun := func(ctx context.Context, dir string, args []string, env []string, out io.Writer) error {
+		capturedArgs = args
+		return nil
+	}
+
+	summarizer := &fakeSummarizer{title: "Fix greeting typo", body: "Replaces 'hello' with 'goodbye' in greeting.txt."}
+	a := GitHubPRApplier{TokenEnv: "FOUNDRY_TEST_TOKEN", run: fakeRun, Summarizer: summarizer}
+
+	act := &domain.Act{ID: "act-1", Intent: "Fix the greeting", Patch: replacePatch}
+	if err := a.Apply(context.Background(), repo, act); err != nil {
+		t.Fatalf("Apply failed: %v", err)
+	}
+
+	if summarizer.gotIntent != act.Intent {
+		t.Errorf("Summarize called with intent %q, want %q", summarizer.gotIntent, act.Intent)
+	}
+	if summarizer.gotPatch != act.Patch {
+		t.Errorf("Summarize called with patch %q, want %q", summarizer.gotPatch, act.Patch)
+	}
+
+	wantTitleAt, wantBodyAt := -1, -1
+	for i, a := range capturedArgs {
+		if a == "--title" && i+1 < len(capturedArgs) {
+			wantTitleAt = i + 1
+		}
+		if a == "--body" && i+1 < len(capturedArgs) {
+			wantBodyAt = i + 1
+		}
+	}
+	if wantTitleAt == -1 || capturedArgs[wantTitleAt] != summarizer.title {
+		t.Errorf("gh --title = %v, want %q", capturedArgs, summarizer.title)
+	}
+	if wantBodyAt == -1 || capturedArgs[wantBodyAt] != summarizer.body {
+		t.Errorf("gh --body = %v, want %q", capturedArgs, summarizer.body)
+	}
+
+	subject, err := gitOutputForTest(repo, "log", "-1", "--format=%s", "github.com/SahidAyala/Foundry/act-act-1")
+	// The local branch is cleaned up after Apply succeeds, so read the
+	// commit that landed on the remote instead.
+	if err != nil || subject == "" {
+		subject, err = gitOutputForTest(repo, "log", "-1", "--format=%s", "origin/github.com/SahidAyala/Foundry/act-act-1")
+	}
+	if err != nil {
+		t.Fatalf("git log failed: %v", err)
+	}
+	if subject != summarizer.title {
+		t.Errorf("commit subject = %q, want the summarized title %q", subject, summarizer.title)
+	}
+}
+
+// TestGitHubPRApplier_Apply_FallsBackToMechanicalDefaultOnSummarizerError
+// covers the best-effort contract: a Summarize failure never fails Apply
+// itself — it falls back to the mechanical default and surfaces the error
+// to Out as a warning, the same treatment RequestCopilotReview's own
+// failures already get.
+func TestGitHubPRApplier_Apply_FallsBackToMechanicalDefaultOnSummarizerError(t *testing.T) {
+	repo := initGitRepoWithRemote(t)
+	t.Setenv("FOUNDRY_TEST_TOKEN", "shh-secret")
+
+	var capturedArgs []string
+	fakeRun := func(ctx context.Context, dir string, args []string, env []string, out io.Writer) error {
+		capturedArgs = args
+		return nil
+	}
+
+	summarizer := &fakeSummarizer{err: errors.New("claude: summarize: no output")}
+	var out bytes.Buffer
+	a := GitHubPRApplier{TokenEnv: "FOUNDRY_TEST_TOKEN", run: fakeRun, Summarizer: summarizer, Out: &out}
+
+	act := &domain.Act{ID: "act-1", Intent: "Fix the greeting", Patch: replacePatch}
+	if err := a.Apply(context.Background(), repo, act); err != nil {
+		t.Fatalf("Apply failed: %v (a Summarize error must not fail Apply)", err)
+	}
+
+	wantTitleAt := -1
+	for i, a := range capturedArgs {
+		if a == "--title" && i+1 < len(capturedArgs) {
+			wantTitleAt = i + 1
+		}
+	}
+	if wantTitleAt == -1 || capturedArgs[wantTitleAt] != act.Intent {
+		t.Errorf("gh --title = %v, want the mechanical fallback %q", capturedArgs, act.Intent)
+	}
+	if !strings.Contains(out.String(), "could not summarize") {
+		t.Errorf("Out = %q, want a warning naming the summarize failure", out.String())
+	}
+}
+
 func TestGitHubPRApplier_Apply_GHFailurePropagates(t *testing.T) {
 	repo := initGitRepoWithRemote(t)
 	t.Setenv("FOUNDRY_TEST_TOKEN", "shh-secret")

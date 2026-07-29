@@ -46,6 +46,24 @@ func TestLoadConfig_DecodesRemotePublishFields(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_DecodesPRSummaryModel(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".foundry"), 0o755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	writeFile(t, filepath.Join(root, ".foundry"), "config.json", `{
+		"pr_summary_model": "haiku"
+	}`)
+
+	config, err := project.LoadConfig(root)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if config.PRSummaryModel != "haiku" {
+		t.Errorf("PRSummaryModel = %q, want %q", config.PRSummaryModel, "haiku")
+	}
+}
+
 func TestLoadConfig_DecodesTicketProvider(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".foundry"), 0o755); err != nil {
