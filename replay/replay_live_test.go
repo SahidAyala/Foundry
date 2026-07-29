@@ -57,7 +57,7 @@ func TestVerify_ReproducesARealClaudeCodeProducedAct(t *testing.T) {
 	}
 	stagedVerifier := workspace.NewStagedVerifier(gate)
 
-	eng := engine.NewEngine(gatherer.NewNaiveGatherer(root), claude.NewClaudeExecutor(root), stagedVerifier, root, engine.DefaultPipeline())
+	eng := engine.NewEngine(gatherer.NewNaiveGatherer(root), claude.NewClaudeExecutor(root, ""), stagedVerifier, root, engine.DefaultPipeline())
 
 	intent := &domain.Intent{Text: "Append a single line to NOTES.md that says exactly: hello from foundry"}
 	act, err := eng.Run(ctx, intent)

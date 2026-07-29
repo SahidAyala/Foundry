@@ -3,12 +3,24 @@ package claude
 import "github.com/SahidAyala/Foundry/model"
 
 // SupportedModels returns Claude Code's known models as Model Registry
-// catalog metadata (ADR-0013). This is informational only:
-// ClaudeExecutor has no model-selection parameter of its own today (see
-// this package's doc comment — Execute always runs the Claude Code CLI's
-// own default) — registering these entries does not yet let a caller
-// select among them; it only records that the underlying CLI is capable
-// of running them.
+// catalog metadata (ADR-0013). Since ADR-0013's post-ratification "Claude
+// Code model selection" note, ClaudeExecutor does have a real
+// model-selection parameter (NewClaudeExecutor's model argument, passed
+// through to the CLI's own --model flag) — but every entry below still
+// shares one Executor value ("claude"), the same static-catalog shape
+// executor/geminicli's own SupportedModels() already uses. A Step naming
+// `model`/`preferred` only resolves correctly if the project's own
+// `.foundry/executors.json` names an entry literally "claude" *and* that
+// entry's own configured model happens to match the specific ID the Step
+// named — a named executor entry is bound to one fixed model at
+// construction, so a project wanting more than one Claude model
+// selectable this way would need one distinctly-named entry per model,
+// with the catalog's shared "claude" Executor value unable to
+// distinguish between them. The safe, unambiguous way to pin a specific
+// Claude model per Step today is a direct `executor` pin naming that
+// project-configured entry (e.g. `{"executor": "claude-fable"}`), not
+// `model`/`preferred` — see pipelines.md's "Pinning a Step to a Model"
+// section for the same caveat as it already applies to Gemini.
 //
 // Capabilities/Limits/Quality are hand-curated best-effort metadata
 // (model.Info's own doc comment) — not fetched from any live Anthropic

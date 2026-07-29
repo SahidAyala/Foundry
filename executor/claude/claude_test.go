@@ -74,6 +74,44 @@ func TestExecute_Success(t *testing.T) {
 	}
 }
 
+// TestExecute_PassesModelFlagWhenSet covers model selection (confirmed
+// against the CLI's own documented --model flag before adding it, not
+// guessed): a non-empty model is passed through as --model, alongside -p.
+func TestExecute_PassesModelFlagWhenSet(t *testing.T) {
+	r := &fakeRunner{stdout: "```diff\n" + sampleDiff + "```\n"}
+	e := newExecutor(r)
+	e.model = "opus"
+
+	if _, err := e.Execute(context.Background(), &domain.Intent{Text: "x"}, nil); err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	wantArgs := []string{"-p", "--model", "opus"}
+	if len(r.gotArgs) != len(wantArgs) {
+		t.Fatalf("runner args = %v, want %v", r.gotArgs, wantArgs)
+	}
+	for i := range wantArgs {
+		if r.gotArgs[i] != wantArgs[i] {
+			t.Errorf("runner args = %v, want %v", r.gotArgs, wantArgs)
+		}
+	}
+}
+
+// TestExecute_OmitsModelFlagWhenEmpty covers the zero-config default path:
+// an empty model (NewClaudeExecutor's own default) never passes --model at
+// all, leaving Claude Code to use whatever it's otherwise configured for —
+// the same behavior this package had before model selection existed.
+func TestExecute_OmitsModelFlagWhenEmpty(t *testing.T) {
+	r := &fakeRunner{stdout: "```diff\n" + sampleDiff + "```\n"}
+	e := newExecutor(r)
+
+	if _, err := e.Execute(context.Background(), &domain.Intent{Text: "x"}, nil); err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if len(r.gotArgs) != 1 || r.gotArgs[0] != "-p" {
+		t.Errorf("runner args = %v, want [-p] (no --model)", r.gotArgs)
+	}
+}
+
 func TestExecute_ExecutableMissing(t *testing.T) {
 	e := newExecutor(&fakeRunner{err: exec.ErrNotFound})
 
@@ -177,7 +215,7 @@ func TestExecute_NoDiffInOutput(t *testing.T) {
 }
 
 func TestExecute_NoWorkspace(t *testing.T) {
-	e := NewClaudeExecutor("")
+	e := NewClaudeExecutor("", "")
 
 	if _, err := e.Execute(context.Background(), &domain.Intent{Text: "x"}, nil); err == nil {
 		t.Fatal("Execute returned nil error with no workspace configured")
