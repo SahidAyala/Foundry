@@ -120,7 +120,12 @@ func wireEngine(ctx context.Context, repoPath string, stdin io.Reader, stdout io
 		return nil, nil, nil, err
 	}
 
-	gate, err := verify.NewGate("all-pass", verify.DefaultValidators(repoPath)...)
+	cfg, err := project.LoadConfig(repoPath)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	gate, err := verify.NewGate("all-pass", buildValidators(repoPath, cfg)...)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -128,11 +133,6 @@ func wireEngine(ctx context.Context, repoPath string, stdin io.Reader, stdout io
 	// Validators judge the proposed patch, not the developer's checkout:
 	// the Gate runs inside a staged worktree with the patch applied.
 	var verifier engine.Verifier = workspace.NewStagedVerifier(gate)
-
-	cfg, err := project.LoadConfig(repoPath)
-	if err != nil {
-		return nil, nil, nil, err
-	}
 
 	// AIReviewModel is a supplementary, non-deterministic verify Step
 	// composed alongside the deterministic Gate above — never replacing
@@ -214,4 +214,22 @@ func buildApplierRegistry(root string, cfg project.Config) (*engine.ApplierRegis
 		}
 	}
 	return appliers, nil
+}
+
+// buildValidators returns cfg.Validators, converted to []*verify.Validator,
+// when the project has declared any — replacing verify.DefaultValidators'
+// own root-only auto-detection entirely, for a project it can't detect
+// correctly (e.g. a polyglot monorepo with no root go.mod/package.json).
+// An empty Validators list (the default) falls back to auto-detection
+// exactly as before this field existed. Mirrors session.Session's own
+// buildValidators.
+func buildValidators(root string, cfg project.Config) []*verify.Validator {
+	if len(cfg.Validators) == 0 {
+		return verify.DefaultValidators(root)
+	}
+	validators := make([]*verify.Validator, len(cfg.Validators))
+	for i, vc := range cfg.Validators {
+		validators[i] = &verify.Validator{Name: vc.Name, Cmd: vc.Cmd}
+	}
+	return validators
 }

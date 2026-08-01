@@ -125,6 +125,18 @@ Amazon Q Developer was considered and deliberately skipped: AWS announced its en
 - `request_copilot_review` — after `remote-pr` opens a pull request, also ask GitHub Copilot to review it (`gh pr edit --add-reviewer @copilot`). Has no effect unless `remote_publish_token_env` is set too. Requires a paid Copilot plan on the repository/organization — Foundry can't detect whether that's available, so this defaults to off. A failure to request the review (no such plan, the feature not enabled) is printed as a warning but never fails the Act — the pull request itself has already been opened by that point.
 - `pr_summary_model` — has `remote-pr` ask Claude Code (a model alias like `"haiku"`, or a full model name) for a short PR title and body from the Act's own Intent and Patch, used for both the commit message on the throwaway branch and the pull request itself — instead of the mechanical default (the Intent text verbatim, prefixed with the Act ID for the PR body). Has no effect unless `remote_publish_token_env` is set too. A summarization failure (a bad response shape, the CLI not installed) is printed as a warning and falls back to the mechanical default — never fails the Act, the same treatment `request_copilot_review`'s own failures already get.
 - `ticket_provider` — enables `/issue <id>`. `"github"`, `"jira"`, `"gitlab"`, `"asana"`, or `"backlog"` today; an unset `ticket_provider` makes `/issue` report a clear configuration error rather than guessing. `.foundry/pipelines/issue.json` (scaffolded by `/init` like every other starter) is the Pipeline `/issue` runs — edit it to target `remote-pr` on its `apply` Step if you want `/issue` to end by opening a pull request rather than applying locally.
+- `validators` — replaces `verify.DefaultValidators`' own auto-detection entirely with a project-declared list, for a project it can't detect correctly:
+
+  ```json
+  {
+    "validators": [
+      { "name": "events-test", "cmd": "cd events && go test ./..." },
+      { "name": "ui-test", "cmd": "cd ui && npm test" }
+    ]
+  }
+  ```
+
+  Without this field, Foundry looks for a `go.mod` at the project **root** only — `go build ./...` and `go test ./...` if found, or a no-op `repo-sanity` check (`git rev-parse HEAD`, which always passes) if not. A polyglot monorepo with no root `go.mod`/`package.json` (Go here, Node/TS there, in separate subdirectories) falls into that no-op case silently — `verify` reports "pass" without having actually built or tested anything. Each entry's `cmd` runs via `sh -c` in the Act's staged workspace, so a subdirectory-scoped command (`cd <dir> && ...`) works exactly as typed; a non-zero exit fails that Validator, exactly like the auto-detected commands. Setting this even to a single entry replaces auto-detection entirely, not adds to it.
 
 ### This repository's own base configuration: one model per part of the loop
 

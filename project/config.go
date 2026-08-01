@@ -47,6 +47,17 @@ type Config struct {
 	// opted into this supplementary, best-effort request.
 	RequestCopilotReview bool `json:"request_copilot_review"`
 
+	// Validators, when non-empty, replaces verify.DefaultValidators' own
+	// root-only auto-detection entirely with this project-declared list —
+	// for a project DefaultValidators can't detect correctly (a polyglot
+	// monorepo with no root go.mod/package.json, where its fallback
+	// "repo-sanity" validator checks nothing real about the code). Empty
+	// means auto-detection, exactly as before this field existed. Kept as
+	// plain data here (not verify.Validator directly) so project never
+	// needs to import verify — the composition root (session.Session,
+	// cmd/foundry/commands) converts each entry at Gate-construction time.
+	Validators []ValidatorConfig `json:"validators"`
+
 	// PRSummaryModel, when set, has vcs.GitHubPRApplier ask Claude Code
 	// (via a claude.Summarizer using this model — an alias like "haiku",
 	// or a full model name) for a short PR title and body from an Act's
@@ -122,6 +133,29 @@ type Config struct {
 	// ExecutorConfig.APIKeyEnv's pattern. May be left empty for an
 	// endpoint with no auth of its own (e.g. a local Ollama instance).
 	AIReviewAPIKeyEnv string `json:"ai_review_api_key_env"`
+}
+
+// ValidatorConfig is one custom Validator a project declares in its own
+// "validators" list (Config.Validators) — the project-local escape hatch
+// from verify.DefaultValidators' root-only auto-detection. Mirrors
+// verify.Validator's own {Name, Cmd} shape without this package importing
+// verify directly.
+type ValidatorConfig struct {
+	// Name labels this Validator's own line in a recorded Judgment's
+	// Checked findings (verify.Result's own Name field) — must be unique
+	// within a project's own Validators list, the same uniqueness
+	// verify.NewGate itself does not enforce but a human reading recorded
+	// Evidence needs to tell entries apart.
+	Name string `json:"name"`
+
+	// Cmd is the shell command Validator.Run executes in the Act's
+	// workspace — a non-zero exit fails this Validator, exactly like
+	// verify.DefaultValidators' own auto-detected commands (e.g.
+	// "go build ./...", "go test ./..."). Runs via the same shell
+	// invocation verify.Validator.Run already uses, so a monorepo's
+	// per-subdirectory command (e.g. "cd events && go test ./...") works
+	// unmodified.
+	Cmd string `json:"cmd"`
 }
 
 // LoadConfig reads and decodes root's conventional configuration file

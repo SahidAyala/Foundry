@@ -177,6 +177,33 @@ func TestLoadConfig_DecodesAIReviewFields(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_DecodesValidators(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".foundry"), 0o755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	writeFile(t, filepath.Join(root, ".foundry"), "config.json", `{
+		"validators": [
+			{"name": "events-test", "cmd": "cd events && go test ./..."},
+			{"name": "ui-test", "cmd": "cd ui && npm test"}
+		]
+	}`)
+
+	config, err := project.LoadConfig(root)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if len(config.Validators) != 2 {
+		t.Fatalf("len(Validators) = %d, want 2", len(config.Validators))
+	}
+	if config.Validators[0].Name != "events-test" || config.Validators[0].Cmd != "cd events && go test ./..." {
+		t.Errorf("Validators[0] = %+v, want {events-test, cd events && go test ./...}", config.Validators[0])
+	}
+	if config.Validators[1].Name != "ui-test" || config.Validators[1].Cmd != "cd ui && npm test" {
+		t.Errorf("Validators[1] = %+v, want {ui-test, cd ui && npm test}", config.Validators[1])
+	}
+}
+
 func TestLoadConfig_DecodesValidFile(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".foundry"), 0o755); err != nil {

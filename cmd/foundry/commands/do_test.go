@@ -16,6 +16,7 @@ import (
 	"github.com/SahidAyala/Foundry/model"
 	"github.com/SahidAyala/Foundry/project"
 	"github.com/SahidAyala/Foundry/vcs"
+	"github.com/SahidAyala/Foundry/verify"
 )
 
 // initGitRepo creates a temporary git repository with one committed file
@@ -83,6 +84,46 @@ func TestBuildApplierRegistry_WiresSummarizerWhenPRSummaryModelSet(t *testing.T)
 	}
 	if _, ok := prApplier.Summarizer.(*claude.Summarizer); !ok {
 		t.Errorf("Summarizer = %T, want *claude.Summarizer", prApplier.Summarizer)
+	}
+}
+
+// TestBuildValidators_UsesProjectDeclaredValidatorsWhenSet covers
+// project.Config.Validators: when non-empty, it replaces
+// verify.DefaultValidators' own root-only auto-detection entirely — the
+// escape hatch for a project (e.g. a polyglot monorepo) that
+// auto-detection can't handle correctly.
+func TestBuildValidators_UsesProjectDeclaredValidatorsWhenSet(t *testing.T) {
+	cfg := project.Config{Validators: []project.ValidatorConfig{
+		{Name: "events-test", Cmd: "cd events && go test ./..."},
+		{Name: "ui-test", Cmd: "cd ui && npm test"},
+	}}
+	got := buildValidators("/repo", cfg)
+	if len(got) != 2 {
+		t.Fatalf("len(validators) = %d, want 2", len(got))
+	}
+	if got[0].Name != "events-test" || got[0].Cmd != "cd events && go test ./..." {
+		t.Errorf("validators[0] = %+v, want {events-test, cd events && go test ./...}", got[0])
+	}
+	if got[1].Name != "ui-test" || got[1].Cmd != "cd ui && npm test" {
+		t.Errorf("validators[1] = %+v, want {ui-test, cd ui && npm test}", got[1])
+	}
+}
+
+// TestBuildValidators_FallsBackToAutoDetectionWhenUnset covers the
+// backward-compatible default: an empty Validators list (every project
+// before this field existed) falls back to verify.DefaultValidators
+// exactly as before.
+func TestBuildValidators_FallsBackToAutoDetectionWhenUnset(t *testing.T) {
+	root := t.TempDir()
+	got := buildValidators(root, project.Config{})
+	want := verify.DefaultValidators(root)
+	if len(got) != len(want) {
+		t.Fatalf("len(validators) = %d, want %d (verify.DefaultValidators)", len(got), len(want))
+	}
+	for i := range want {
+		if got[i].Name != want[i].Name || got[i].Cmd != want[i].Cmd {
+			t.Errorf("validators[%d] = %+v, want %+v", i, got[i], want[i])
+		}
 	}
 }
 

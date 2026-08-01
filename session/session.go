@@ -116,7 +116,7 @@ func NewSession(ctx context.Context, root string, in io.Reader, out io.Writer, n
 		return nil, fmt.Errorf("session: open checkpoint store: %w", err)
 	}
 
-	gate, err := verify.NewGate("all-pass", verify.DefaultValidators(root)...)
+	gate, err := verify.NewGate("all-pass", buildValidators(root, cfg)...)
 	if err != nil {
 		return nil, fmt.Errorf("session: build verification gate: %w", err)
 	}
@@ -196,6 +196,24 @@ func buildApplierRegistry(root string, cfg project.Config) (*engine.ApplierRegis
 		}
 	}
 	return appliers, nil
+}
+
+// buildValidators returns cfg.Validators, converted to []*verify.Validator,
+// when the project has declared any — replacing verify.DefaultValidators'
+// own root-only auto-detection entirely, for a project it can't detect
+// correctly (e.g. a polyglot monorepo with no root go.mod/package.json).
+// An empty Validators list (the default) falls back to auto-detection
+// exactly as before this field existed. Mirrors
+// cmd/foundry/commands/do.go's own buildValidators.
+func buildValidators(root string, cfg project.Config) []*verify.Validator {
+	if len(cfg.Validators) == 0 {
+		return verify.DefaultValidators(root)
+	}
+	validators := make([]*verify.Validator, len(cfg.Validators))
+	for i, vc := range cfg.Validators {
+		validators[i] = &verify.Validator{Name: vc.Name, Cmd: vc.Cmd}
+	}
+	return validators
 }
 
 // ReloadPipelines re-resolves the session's Pipeline registry from disk
