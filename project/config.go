@@ -133,6 +133,24 @@ type Config struct {
 	// ExecutorConfig.APIKeyEnv's pattern. May be left empty for an
 	// endpoint with no auth of its own (e.g. a local Ollama instance).
 	AIReviewAPIKeyEnv string `json:"ai_review_api_key_env"`
+
+	// AIReviewClaudeModel, when set, adds a supplementary, non-
+	// deterministic executor/claude.Reviewer alongside the deterministic
+	// Gate (and AIReviewModel's own aireview.Verifier, if also set) —
+	// composed via verify.Compose, never replacing either. Unlike
+	// AIReviewModel, this needs no base URL or API key: it runs Claude
+	// Code's own `-p` CLI against the caller's existing Claude Code
+	// subscription (the same mechanism PRSummaryModel already uses),
+	// passing this value to the CLI's own --model flag when non-empty
+	// (an alias like "opus"/"sonnet"/"haiku"/"fable", or a full model
+	// name). Reviewing a diff with the same subscription that may have
+	// written it is a weaker check than an independent vendor reviewing
+	// it (see this file's own AIReviewModel/AIReviewBaseURL, and this
+	// project's getting-started guide) — a project sets this because it
+	// has chosen that tradeoff (e.g. it has no separate review vendor
+	// available), not because it is the recommended default. Empty means
+	// this feature is entirely off, exactly as if it did not exist.
+	AIReviewClaudeModel string `json:"ai_review_claude_model"`
 }
 
 // ValidatorConfig is one custom Validator a project declares in its own

@@ -177,6 +177,24 @@ func TestLoadConfig_DecodesAIReviewFields(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_DecodesAIReviewClaudeModel(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".foundry"), 0o755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	writeFile(t, filepath.Join(root, ".foundry"), "config.json", `{
+		"ai_review_claude_model": "opus"
+	}`)
+
+	config, err := project.LoadConfig(root)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if config.AIReviewClaudeModel != "opus" {
+		t.Errorf("AIReviewClaudeModel = %q, want %q", config.AIReviewClaudeModel, "opus")
+	}
+}
+
 func TestLoadConfig_DecodesValidators(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".foundry"), 0o755); err != nil {
