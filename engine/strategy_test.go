@@ -635,3 +635,112 @@ func TestPipelineStrategy_NoVerifyStepFails(t *testing.T) {
 		t.Errorf("error = %q, want it to name the pipeline %q", err.Error(), "generate-only")
 	}
 }
+
+// TestPipelineStrategy_GenerateErrorTriggersRepair verifies a generate Step
+// that fails outright (an Executor error — no unified diff found, a
+// non-zero CLI exit, ...) now spends repair budget retrying, the same way
+// a failed verify Judgment already did, instead of ending the Act
+// immediately with unspent budget left on the table.
+func TestPipelineStrategy_GenerateErrorTriggersRepair(t *testing.T) {
+	pipeline := engine.Pipeline{
+		Name: "bugfix",
+		Steps: []engine.Step{
+			{ID: "implement", Kind: domain.StepKindGenerate},
+			{ID: "verify", Kind: domain.StepKindVerify},
+		},
+		Repair: engine.RepairPolicy{MaxAttempts: 1, Target: "implement"},
+	}
+
+	exec := &captureExecutor{
+		patches: []string{"", "repaired-patch"},
+		errs:    []error{errors.New("executor: no unified diff found in output"), nil},
+	}
+	verifier := &fakeVerifier{verdict: "pass"}
+	eng := engine.NewEngine(&fakeGatherer{files: []string{"main.go"}}, exec, verifier, "", pipeline)
+
+	act, err := eng.Run(context.Background(), &domain.Intent{Text: "test"})
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+	if act.JudgmentVerdict != "pass" {
+		t.Errorf("JudgmentVerdict = %q, want %q", act.JudgmentVerdict, "pass")
+	}
+	if len(exec.calls) != 2 {
+		t.Fatalf("Executor called %d times, want 2 (failed attempt, then a repaired retry)", len(exec.calls))
+	}
+	for _, considered := range exec.calls[1] {
+		if strings.Contains(considered, "no unified diff found in output") {
+			return
+		}
+	}
+	t.Errorf("repair call considered = %v, want it to include the earlier generate failure", exec.calls[1])
+}
+
+// TestPipelineStrategy_GenerateErrorExhaustsRepairBudgetReturnsError
+// verifies that once repair budget actually runs out, a generate Step
+// still failing is returned as a real error — the retry above is bounded,
+// not infinite, and the Act's recorded Judgment reflects the failure.
+func TestPipelineStrategy_GenerateErrorExhaustsRepairBudgetReturnsError(t *testing.T) {
+	pipeline := engine.Pipeline{
+		Name: "bugfix",
+		Steps: []engine.Step{
+			{ID: "implement", Kind: domain.StepKindGenerate},
+			{ID: "verify", Kind: domain.StepKindVerify},
+		},
+		Repair: engine.RepairPolicy{MaxAttempts: 1, Target: "implement"},
+	}
+
+	exec := &captureExecutor{
+		patches: []string{"", ""},
+		errs:    []error{errors.New("boom-1"), errors.New("boom-2")},
+	}
+	verifier := &fakeVerifier{verdict: "pass"}
+	eng := engine.NewEngine(&fakeGatherer{files: []string{"main.go"}}, exec, verifier, "", pipeline)
+
+	// Run returns (nil, err) for any non-budget Produce error — the same
+	// contract every other Step-failure path already has (engine.go's
+	// RunBudgeted: "This is the one case [ErrBudgetExceeded] where both
+	// return values are non-nil") — so this asserts only on err, not on a
+	// discarded act.
+	_, err := eng.Run(context.Background(), &domain.Intent{Text: "test"})
+	if err == nil {
+		t.Fatal("Run with a generate Step failing on every attempt returned nil error")
+	}
+	if !strings.Contains(err.Error(), "boom-2") {
+		t.Errorf("error = %q, want it to carry the last attempt's own failure (%q)", err.Error(), "boom-2")
+	}
+	if len(exec.calls) != 2 {
+		t.Fatalf("Executor called %d times, want 2 (initial attempt + the one allowed repair)", len(exec.calls))
+	}
+}
+
+// TestPipelineStrategy_GenerateErrorWithNoRepairConfiguredFailsImmediately
+// verifies a Pipeline that deliberately declares no repair (e.g.
+// release.json — a release failing should stop for a human, not
+// auto-retry) still fails on the very first generate error, exactly as
+// before this fix: repair-eligibility never invents a retry a Pipeline
+// didn't ask for.
+func TestPipelineStrategy_GenerateErrorWithNoRepairConfiguredFailsImmediately(t *testing.T) {
+	pipeline := engine.Pipeline{
+		Name: "release",
+		Steps: []engine.Step{
+			{ID: "prepare", Kind: domain.StepKindGenerate},
+			{ID: "verify", Kind: domain.StepKindVerify},
+		},
+	}
+
+	exec := &captureExecutor{
+		patches: []string{""},
+		errs:    []error{errors.New("executor: no unified diff found in output")},
+	}
+	verifier := &fakeVerifier{verdict: "pass"}
+	eng := engine.NewEngine(&fakeGatherer{files: []string{"main.go"}}, exec, verifier, "", pipeline)
+
+	_, err := eng.Run(context.Background(), &domain.Intent{Text: "test"})
+	if err == nil {
+		t.Fatal("Run with no RepairPolicy configured returned nil error on a generate failure")
+	}
+	if len(exec.calls) != 1 {
+		t.Errorf("Executor called %d times, want exactly 1 (no repair configured, no retry)", len(exec.calls))
+	}
+}

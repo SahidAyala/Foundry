@@ -17,6 +17,28 @@ import (
 // pass/fail, so fail is the trigger (backlog PR-011).
 const verdictFail = "fail"
 
+// generateStepFailure marks an error returned by a generate Step's own
+// attempt to produce an Outcome (routing, cost estimation, or the
+// Executor call itself — e.g. a CLI exiting non-zero, or a model
+// response executor.ParsePatch cannot find a unified diff in) as
+// eligible for the Pipeline's own bounded repair, symmetric to a failed
+// verify Judgment: both mean "this attempt did not produce a usable
+// Outcome," and Produce already knows how to spend remaining repair
+// budget retrying that. Before this type existed, any generate Step
+// error ended the Act immediately, even with repair budget left unspent
+// — unlike a failing verify Judgment, which already retried. Any other
+// Step kind's error (verify infrastructure, approve, apply, record,
+// checkpoint) is deliberately left as a plain error and still ends the
+// Act immediately: those failures are not "the model produced a bad
+// Outcome," so retrying via the same repair mechanism would not be
+// safe or meaningful for them.
+type generateStepFailure struct {
+	err error
+}
+
+func (g *generateStepFailure) Error() string { return g.err.Error() }
+func (g *generateStepFailure) Unwrap() error { return g.err }
+
 // Strategy is the pluggable means by which an Act's Outcome and Judgment
 // are produced, once Context has been gathered and a Budget tracker is in
 // place (docs/02-architecture/execution.md). The Engine owns control flow
@@ -147,7 +169,25 @@ func (s PipelineStrategy) Produce(ctx context.Context, act *domain.Act, intent *
 				rc.reporter.RepairSkipped(err.Error())
 				break
 			}
-			return err
+			var genErr *generateStepFailure
+			if !errors.As(err, &genErr) {
+				return err
+			}
+			// A generate Step that failed outright (rather than producing
+			// an Outcome a verify Step could judge) is treated exactly
+			// like a failed verify Judgment below: spend remaining repair
+			// budget retrying it, and only return the error once that
+			// budget is exhausted — see generateStepFailure's own doc
+			// comment for why this is safe to do for a generate Step's
+			// own failure specifically, unlike any other Step kind's.
+			judgment = &domain.Judgment{Verdict: verdictFail, Checked: []string{"generate: " + genErr.Error()}}
+			act.JudgmentVerdict = judgment.Verdict
+			act.CheckedFindings = judgment.Checked
+			if attempt >= s.Pipeline.Repair.MaxAttempts {
+				return err
+			}
+			rc.reporter.Repairing()
+			continue
 		}
 		if terminal {
 			return nil
@@ -202,7 +242,7 @@ func runSteps(ctx context.Context, pipelineName string, act *domain.Act, intent 
 			start := time.Now()
 			o, err := executeGenerateStep(ctx, rc, step, intent, stepConsidered, attempt)
 			if err != nil {
-				return outcome, judgment, false, err
+				return outcome, judgment, false, &generateStepFailure{err: err}
 			}
 			outcome = o
 			// Intent is set here, by the Engine, rather than by any
