@@ -134,6 +134,15 @@ func NewSession(ctx context.Context, root string, in io.Reader, out io.Writer, n
 		verifier = verify.Compose(verifier, aireview.NewVerifier(cfg.AIReviewModel, os.Getenv(cfg.AIReviewAPIKeyEnv), cfg.AIReviewBaseURL))
 	}
 
+	// AIReviewClaudeModel is the same kind of supplementary layer as
+	// AIReviewModel above, but runs Claude Code's own CLI (the caller's
+	// existing subscription) instead of an HTTP call — see its own doc
+	// comment in project.Config for the same-model-review tradeoff this
+	// implies.
+	if cfg.AIReviewClaudeModel != "" {
+		verifier = verify.Compose(verifier, claude.NewReviewer(cfg.AIReviewClaudeModel))
+	}
+
 	var construct project.ExecutorConstructor
 	if len(newNamedExecutor) > 0 {
 		construct = newNamedExecutor[0]

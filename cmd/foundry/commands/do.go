@@ -146,6 +146,15 @@ func wireEngine(ctx context.Context, repoPath string, stdin io.Reader, stdout io
 		verifier = verify.Compose(verifier, aireview.NewVerifier(cfg.AIReviewModel, os.Getenv(cfg.AIReviewAPIKeyEnv), cfg.AIReviewBaseURL))
 	}
 
+	// AIReviewClaudeModel is the same kind of supplementary layer as
+	// AIReviewModel above, but runs Claude Code's own CLI (the caller's
+	// existing subscription) instead of an HTTP call — see its own doc
+	// comment in project.Config for the same-model-review tradeoff this
+	// implies.
+	if cfg.AIReviewClaudeModel != "" {
+		verifier = verify.Compose(verifier, claude.NewReviewer(cfg.AIReviewClaudeModel))
+	}
+
 	pipelines, err := (project.ProjectLoader{}).LoadRegistry(ctx, repoPath, cfg)
 	if err != nil {
 		return nil, nil, nil, err

@@ -123,6 +123,25 @@ func TestNewSession_AIReviewModelRequiresBaseURL(t *testing.T) {
 	}
 }
 
+// TestNewSession_AIReviewClaudeModelNeedsNoBaseURL covers the deliberate
+// difference from AIReviewModel above: AIReviewClaudeModel runs Claude
+// Code's own CLI (the caller's existing subscription), not an HTTP call
+// against a named endpoint, so it has no base-URL requirement to
+// validate — setting it alone must construct a Session cleanly.
+func TestNewSession_AIReviewClaudeModelNeedsNoBaseURL(t *testing.T) {
+	root := initGitRepo(t)
+	if err := os.MkdirAll(filepath.Join(root, ".foundry"), 0o755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".foundry", "config.json"), []byte(`{"ai_review_claude_model": "opus"}`), 0o644); err != nil {
+		t.Fatalf("write config.json: %v", err)
+	}
+
+	if _, err := session.NewSession(context.Background(), root, &bytes.Buffer{}, &bytes.Buffer{}, newScriptedExecutorFactory(scriptedPatch)); err != nil {
+		t.Fatalf("NewSession with only ai_review_claude_model set failed: %v", err)
+	}
+}
+
 // TestNewSession_NotInteractiveForNonFileIO confirms the gate ADR-0012's
 // rich REPL line editor depends on (Session.Interactive) computes false
 // for every non-*os.File input/output — exactly what every other test in
