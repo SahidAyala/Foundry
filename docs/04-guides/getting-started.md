@@ -259,6 +259,21 @@ When a generate Step's Outcome is produced, Foundry automatically records the Ac
 
 A response the reviewer can't parse into a clear pass/fail verdict is always treated as a failure, never silently passed through — the raw response text is preserved in the failed verdict's findings for debugging. **Not validated live**: no real OpenAI/Gemini/Ollama/Groq/DeepSeek endpoint or key is available in this environment; tested against fixture HTTP responses shaped like the documented Chat Completions API only.
 
+### AI review via your own Claude Code subscription
+
+`ai_review_claude_model` is an alternative to `ai_review_model`/`ai_review_base_url` above for a project with no separate review vendor available: instead of an HTTP call to an OpenAI-Chat-Completions-compatible endpoint, it runs Claude Code's own `-p` CLI — the same mechanism `pr_summary_model` already uses — against whichever Claude Code subscription is already authenticated on the machine running Foundry. No API key or base URL is needed:
+
+```json
+{
+  "ai_review_claude_model": "opus"
+}
+```
+
+- `ai_review_claude_model` — an alias (`"opus"`, `"sonnet"`, `"haiku"`, `"fable"`) or full model name, passed to the CLI's own `--model` flag. Leaving this unset (the default) means no Claude-CLI review layer is added at all. It composes with `ai_review_model` via the same `verify.Compose` seam — set either, both, or neither.
+- Same pass/fail parsing discipline as `ai_review_model`: an unparseable response is always a failure, never a silent pass.
+
+Weigh this against the same-vendor tradeoff noted above (this repository's own `.foundry/config.json` deliberately uses a *third*, independent vendor — GitHub Models — specifically so review isn't the same model re-checking its own work). `ai_review_claude_model` lets Claude Code review a diff Claude Code itself wrote, which is a weaker check than an independent vendor's — a project sets it because it has chosen that tradeoff (e.g. only a Claude subscription is available, no separate API key), not because it's the recommended default.
+
 ## Authored Knowledge (optional)
 
 A Pipeline's `apply` Step can declare `"target": "knowledge-note"` to write its output as a plain Markdown file under `.foundry/knowledge/`, one per contributing Act. A later Act's naive lexical retrieval automatically surfaces relevant notes back into its own considered Evidence — no separate indexing step needed. See [../02-architecture/knowledge.md](../02-architecture/knowledge.md) and [RFC-0005](../01-rfcs/RFC-0005-authored-knowledge-retrieval.md) (still Draft — Proposed as an RFC, though the store's own format and durability questions are ratified by [ADR-0007](../03-adrs/ADR-0007-knowledge-and-semantic-store.md)).
