@@ -202,6 +202,27 @@ func TestWireEngine_AIReviewModelRequiresBaseURL(t *testing.T) {
 	}
 }
 
+// TestWireEngine_AIReviewClaudeModelNeedsNoBaseURL covers the deliberate
+// difference from AIReviewModel above: AIReviewClaudeModel runs Claude
+// Code's own CLI (the caller's existing subscription), not an HTTP call
+// against a named endpoint, so it has no base-URL requirement to
+// validate — setting it alone must wire cleanly, not fail the way setting
+// ai_review_model alone does.
+func TestWireEngine_AIReviewClaudeModelNeedsNoBaseURL(t *testing.T) {
+	root := t.TempDir()
+	if err := (project.ProjectLoader{}).Scaffold(root); err != nil {
+		t.Fatalf("Scaffold failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".foundry", "config.json"), []byte(`{"ai_review_claude_model": "opus"}`), 0o644); err != nil {
+		t.Fatalf("write config.json: %v", err)
+	}
+
+	newExecutor := func(workspace string) engine.Executor { return executor.NewScriptedExecutor("") }
+	if _, _, _, err := wireEngine(context.Background(), root, strings.NewReader(""), &bytes.Buffer{}, newExecutor, nil, "default"); err != nil {
+		t.Fatalf("wireEngine with only ai_review_claude_model set failed: %v", err)
+	}
+}
+
 const wireEngineScriptedPatch = "diff --git a/wire_engine_test_file.txt b/wire_engine_test_file.txt\n" +
 	"new file mode 100644\n" +
 	"--- /dev/null\n" +
