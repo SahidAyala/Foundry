@@ -136,6 +136,23 @@ func TestExecute_Timeout(t *testing.T) {
 	}
 }
 
+// TestSetTimeout_OverridesDefault confirms SetTimeout takes effect on a
+// ClaudeExecutor built via NewClaudeExecutor (the constructor a project
+// actually gets, unlike newExecutor's own test-only struct literal
+// above) — cmd/foundry/main.go's namedExecutor is the real caller this
+// pins.
+func TestSetTimeout_OverridesDefault(t *testing.T) {
+	e := NewClaudeExecutor("/repo", "")
+	if got, want := e.Timeout(), 5*time.Minute; got != want {
+		t.Fatalf("Timeout() before SetTimeout = %s, want the unmodified default %s", got, want)
+	}
+
+	e.SetTimeout(10 * time.Minute)
+	if got, want := e.Timeout(), 10*time.Minute; got != want {
+		t.Errorf("Timeout() after SetTimeout(%s) = %s, want %s", want, got, want)
+	}
+}
+
 func TestExecute_Failure(t *testing.T) {
 	e := newExecutor(&fakeRunner{err: errors.New("exit status 1"), stderr: "boom on line 3"})
 

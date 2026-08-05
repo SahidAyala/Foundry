@@ -62,6 +62,25 @@ func NewClaudeExecutor(workspace, model string) *ClaudeExecutor {
 	}
 }
 
+// SetTimeout overrides how long Execute waits for the Claude Code CLI
+// before giving up (defaultTimeout, 5 minutes, otherwise) — a project
+// whose own repository or Intent genuinely needs longer per call (a
+// large codebase, a multi-file change) sets this via
+// project.ExecutorConfig.TimeoutSeconds on a named "claude"-vendor
+// entry in .foundry/executors.json, rather than always failing at a
+// fixed ceiling with no way to raise it.
+func (e *ClaudeExecutor) SetTimeout(d time.Duration) {
+	e.timeout = d
+}
+
+// Timeout returns the duration Execute currently waits for the Claude
+// Code CLI before giving up — the counterpart to SetTimeout, so a
+// caller (or a test) can confirm what actually took effect without a
+// package-private field to inspect directly.
+func (e *ClaudeExecutor) Timeout() time.Duration {
+	return e.timeout
+}
+
 var _ engine.Executor = (*ClaudeExecutor)(nil)
 
 // Execute runs Claude Code against the workspace and returns the proposed

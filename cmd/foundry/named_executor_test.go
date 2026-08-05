@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/SahidAyala/Foundry/executor/claude"
 	"github.com/SahidAyala/Foundry/executor/copilotcli"
@@ -28,6 +29,44 @@ func TestNamedExecutor_ClaudeVendorConstructsClaudeExecutor(t *testing.T) {
 	}
 	if _, ok := exec.(*claude.ClaudeExecutor); !ok {
 		t.Errorf("namedExecutor(vendor=claude) = %T, want *claude.ClaudeExecutor", exec)
+	}
+}
+
+// TestNamedExecutor_ClaudeVendorAppliesTimeoutSeconds confirms
+// TimeoutSeconds overrides executor/claude.ClaudeExecutor's own
+// 5-minute default when a project's own repository or Intent needs a
+// longer single Execute call than that ceiling allows.
+func TestNamedExecutor_ClaudeVendorAppliesTimeoutSeconds(t *testing.T) {
+	exec, err := namedExecutor(project.ExecutorConfig{
+		Vendor:         "claude",
+		TimeoutSeconds: 600,
+	}, "/repo")
+	if err != nil {
+		t.Fatalf("namedExecutor failed: %v", err)
+	}
+	claudeExec, ok := exec.(*claude.ClaudeExecutor)
+	if !ok {
+		t.Fatalf("namedExecutor(vendor=claude) = %T, want *claude.ClaudeExecutor", exec)
+	}
+	if want := 600 * time.Second; claudeExec.Timeout() != want {
+		t.Errorf("Timeout() = %s, want %s", claudeExec.Timeout(), want)
+	}
+}
+
+// TestNamedExecutor_ClaudeVendorKeepsDefaultTimeoutWhenUnset confirms an
+// unset TimeoutSeconds (the common case) leaves ClaudeExecutor's own
+// 5-minute default untouched — this field is purely additive.
+func TestNamedExecutor_ClaudeVendorKeepsDefaultTimeoutWhenUnset(t *testing.T) {
+	exec, err := namedExecutor(project.ExecutorConfig{Vendor: "claude"}, "/repo")
+	if err != nil {
+		t.Fatalf("namedExecutor failed: %v", err)
+	}
+	claudeExec, ok := exec.(*claude.ClaudeExecutor)
+	if !ok {
+		t.Fatalf("namedExecutor(vendor=claude) = %T, want *claude.ClaudeExecutor", exec)
+	}
+	if want := 5 * time.Minute; claudeExec.Timeout() != want {
+		t.Errorf("Timeout() = %s, want the unmodified default %s", claudeExec.Timeout(), want)
 	}
 }
 
