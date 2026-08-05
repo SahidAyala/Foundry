@@ -31,6 +31,16 @@ type ExecutorConfig struct {
 	// Groq, DeepSeek, and others document an explicit OpenAI-compatible
 	// endpoint); ignored by every other vendor.
 	BaseURL string `json:"base_url"`
+
+	// TimeoutSeconds overrides how long a single Execute call may run
+	// before the Executor gives up, in seconds. Zero (the default) means
+	// "use the vendor's own built-in default" — for the "claude" vendor,
+	// executor/claude.NewClaudeExecutor's own 5-minute default, unchanged.
+	// Currently only consulted for the "claude" vendor (cmd/foundry/main.go's
+	// namedExecutor); a project setting this on any other vendor sees no
+	// effect yet, since no other vendor's Executor exposes a configurable
+	// timeout to apply it to.
+	TimeoutSeconds int `json:"timeout_seconds"`
 }
 
 // LoadExecutorConfig reads and decodes root's conventional Executor

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/SahidAyala/Foundry/cmd/foundry/commands"
 	"github.com/SahidAyala/Foundry/engine"
@@ -82,7 +83,11 @@ func claudeExecutor(workspace string) engine.Executor {
 func namedExecutor(cfg project.ExecutorConfig, workspace string) (engine.Executor, error) {
 	switch cfg.Vendor {
 	case "claude":
-		return claude.NewClaudeExecutor(workspace, cfg.Model), nil
+		exec := claude.NewClaudeExecutor(workspace, cfg.Model)
+		if cfg.TimeoutSeconds > 0 {
+			exec.SetTimeout(time.Duration(cfg.TimeoutSeconds) * time.Second)
+		}
+		return exec, nil
 	case "openai":
 		return openai.NewExecutor(cfg.Model, os.Getenv(cfg.APIKeyEnv)), nil
 	case "gemini":
