@@ -129,9 +129,21 @@ func (c *CLI) finalize(ctx context.Context, act *domain.Act, repoPath string) er
 	case act.JudgmentVerdict == engine.VerdictRejected:
 		// An approve Step inside the Pipeline already declined.
 		approved = false
+	case act.DeclaresApproveStep:
+		// This Pipeline declares its own approve Step (RFC-0002 §9 Phase
+		// 4), opting into the guarantee that a failing Judgment is never
+		// presented for approval (engine/strategy.go's
+		// stopsShortOnFailure) — but this attempt never reached it
+		// (most likely: repair exhausted on a failing verify Judgment
+		// first). Falling through to the CLI's own fallback prompt below
+		// would silently override that guarantee for exactly the
+		// Pipeline shape it was written for — the fallback exists only
+		// for a Pipeline that never declares this Step at all.
+		approved = false
 	default:
-		// No approve Step ran — this Pipeline still relies on the CLI's
-		// own prompt.
+		// No approve Step exists in this Pipeline at all — this
+		// Pipeline still relies on the CLI's own prompt, exactly as
+		// before RFC-0002 §9 Phase 4 existed.
 		authority, ok, err := PromptForApproval(c.in, c.out, act)
 		if err != nil {
 			return err
@@ -145,7 +157,11 @@ func (c *CLI) finalize(ctx context.Context, act *domain.Act, repoPath string) er
 	}
 
 	if !approved {
-		fmt.Fprintln(c.out, "Declined; nothing was applied or recorded.")
+		if act.DeclaresApproveStep && act.JudgmentVerdict != engine.VerdictRejected {
+			fmt.Fprintf(c.out, "Verdict: %s — repair exhausted before this Pipeline's own approve Step; nothing was applied or recorded.\n", act.JudgmentVerdict)
+		} else {
+			fmt.Fprintln(c.out, "Declined; nothing was applied or recorded.")
+		}
 		return nil
 	}
 

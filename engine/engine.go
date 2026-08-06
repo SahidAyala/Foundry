@@ -213,6 +213,7 @@ func (e *Engine) Resume(ctx context.Context, act *domain.Act) (*domain.Act, erro
 	if startIdx >= len(strategy.Pipeline.Steps) {
 		return nil, fmt.Errorf("%w: act %s: already reached its last declared step — nothing to resume", ErrCannotResume, act.ID)
 	}
+	act.DeclaresApproveStep = declaresApproveStep(strategy.Pipeline.Steps)
 
 	spent := &tracker{budget: DefaultBudget(), iterations: act.Iterations, costUSD: act.CostEstimateUSD}
 	rc := runContext{

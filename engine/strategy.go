@@ -139,6 +139,8 @@ var _ Strategy = PipelineStrategy{}
 // Resume) reaches a genuine terminal disposition, the checkpoint is
 // deleted — it exists only to survive an interruption, never past one.
 func (s PipelineStrategy) Produce(ctx context.Context, act *domain.Act, intent *domain.Intent, considered []string, rc runContext) error {
+	act.DeclaresApproveStep = declaresApproveStep(s.Pipeline.Steps)
+
 	var outcome *domain.Outcome
 	var judgment *domain.Judgment
 
@@ -352,6 +354,23 @@ func runSteps(ctx context.Context, pipelineName string, act *domain.Act, intent 
 		}
 	}
 	return outcome, judgment, false, nil
+}
+
+// declaresApproveStep reports whether steps contains an approve Step —
+// a static fact about a Pipeline document, recorded onto domain.Act by
+// Produce/Resume so cli.CLI.finalize can tell "this Pipeline declares
+// its own approve Step, but this attempt's repair exhausted before
+// reaching it" apart from "this Pipeline never declares one at all"
+// (the built-in "default"/"review", which still rely on finalize's own
+// fallback prompt). See domain.Act.DeclaresApproveStep's own doc
+// comment for why that distinction matters.
+func declaresApproveStep(steps []Step) bool {
+	for _, step := range steps {
+		if step.Kind == domain.StepKindApprove {
+			return true
+		}
+	}
+	return false
 }
 
 // stopsShortOnFailure reports whether kind is a trust-boundary Step

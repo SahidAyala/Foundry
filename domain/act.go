@@ -15,16 +15,30 @@ type Act struct {
 	// Pipeline is the name of the Pipeline that produced this Act — set
 	// once, at Engine.RunBudgeted. Resume (engine/engine.go) needs it to
 	// look up the same declared Steps an interrupted attempt was running.
-	Pipeline        string     `json:"pipeline,omitempty"`
-	CreatedAt       time.Time  `json:"created_at"`
-	ConsideredFiles []string   `json:"considered_files"`
-	CheckedFindings []string   `json:"checked_findings"`
-	Patch           string     `json:"patch"`
-	JudgmentVerdict string     `json:"judgment_verdict"`
-	ApprovedBy      string     `json:"approved_by"`
-	ApprovedAt      *time.Time `json:"approved_at"`
-	Iterations      int        `json:"iterations"`
-	CostEstimateUSD float64    `json:"cost_estimate_usd"`
+	Pipeline string `json:"pipeline,omitempty"`
+	// DeclaresApproveStep records whether Pipeline itself declares an
+	// approve Step (RFC-0002 §9 Phase 4) — a static fact about the
+	// Pipeline document, set once by PipelineStrategy.Produce/Resume,
+	// independent of whether this particular attempt ever actually
+	// reached that Step. cli.CLI.finalize needs this distinction: a
+	// Pipeline that declares its own approve Step opts into the
+	// guarantee that a failing Judgment is never presented for
+	// approval (engine/strategy.go's stopsShortOnFailure) — if repair
+	// exhausts before reaching it, that is a fact about *this attempt*,
+	// not evidence the Pipeline never had one, and finalize's own
+	// fallback prompt (for a Pipeline that truly never declares this
+	// Step, e.g. the built-in "default"/"review") must never run in
+	// that case.
+	DeclaresApproveStep bool       `json:"declares_approve_step,omitempty"`
+	CreatedAt           time.Time  `json:"created_at"`
+	ConsideredFiles     []string   `json:"considered_files"`
+	CheckedFindings     []string   `json:"checked_findings"`
+	Patch               string     `json:"patch"`
+	JudgmentVerdict     string     `json:"judgment_verdict"`
+	ApprovedBy          string     `json:"approved_by"`
+	ApprovedAt          *time.Time `json:"approved_at"`
+	Iterations          int        `json:"iterations"`
+	CostEstimateUSD     float64    `json:"cost_estimate_usd"`
 	// ActualCostUSD is the sum of every generate Step's own ActualCostUSD
 	// that was reported (ADR-0011, docs/03-adrs/ADR-0011-cost-as-a-first-class-constraint.md)
 	// — nil until at least one Executor reports one, distinguishing "never

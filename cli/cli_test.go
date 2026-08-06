@@ -611,6 +611,70 @@ func TestCLI_Do_PipelineRejectedNeverPromptsAndAppliesNothing(t *testing.T) {
 	}
 }
 
+// TestCLI_Do_ApproveDeclaredButUnreachedNeverFallsBackToPrompt is the
+// regression test for a real incident: a Pipeline declaring its own
+// approve Step (feature/bugfix/release/issue) exhausted repair on a
+// verify Judgment that never once passed, so the approve Step was never
+// reached (engine/strategy.go's stopsShortOnFailure). Before
+// domain.Act.DeclaresApproveStep existed, finalize could not tell that
+// apart from "this Pipeline never declares an approve Step at all" and
+// fell back to its own prompt — which, in the field, wrote a
+// review-flagged, verification-failing patch straight into a
+// developer's real, unrelated working tree.
+func TestCLI_Do_ApproveDeclaredButUnreachedNeverFallsBackToPrompt(t *testing.T) {
+	repo := initGitRepo(t)
+
+	store, err := record.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("record.NewFileStore failed: %v", err)
+	}
+	gate, err := verify.NewGate("all-pass", &verify.Validator{Name: "check", Cmd: "exit 1"})
+	if err != nil {
+		t.Fatalf("verify.NewGate failed: %v", err)
+	}
+	pipeline := engine.Pipeline{
+		Name: "feature",
+		Steps: []engine.Step{
+			{ID: "generate", Kind: domain.StepKindGenerate},
+			{ID: "verify", Kind: domain.StepKindVerify},
+			{ID: "approve", Kind: domain.StepKindApprove},
+			{ID: "apply", Kind: domain.StepKindApply},
+			{ID: "record", Kind: domain.StepKindRecord},
+		},
+		Repair: engine.RepairPolicy{MaxAttempts: 1, Target: "generate"},
+	}
+	eng := engine.NewEngine(emptyGatherer{}, executor.NewScriptedExecutor(newFilePatch("APPLIED.md")), gate, repo, pipeline)
+	// A stub Authority that would approve anything asked of it — present
+	// only to prove finalize's own fallback prompt never gets the chance
+	// to ask it anything, since the Pipeline's own approve Step (never
+	// reached) is the only Authority call this Pipeline shape permits.
+	eng.SetAuthority(stubAuthority{authority: "should-never-be-consulted", approved: true})
+
+	var out bytes.Buffer
+	c := cli.NewCLI(eng, store, strings.NewReader("y\n"), &out)
+
+	if err := c.Do(context.Background(), "add a feature", repo); err != nil {
+		t.Fatalf("Do failed: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(repo, "APPLIED.md")); !os.IsNotExist(err) {
+		t.Error("a patch that never passed verification was applied to the real repo")
+	}
+	acts, err := store.List(context.Background())
+	if err != nil {
+		t.Fatalf("store.List failed: %v", err)
+	}
+	if len(acts) != 0 {
+		t.Errorf("an unapproved, verification-failing Act was recorded (%d acts), want 0", len(acts))
+	}
+	if strings.Contains(out.String(), "Approve and apply?") {
+		t.Errorf("finalize fell back to its own prompt for a Pipeline that declares its own approve Step, got:\n%s", out.String())
+	}
+	if strings.Contains(out.String(), "should-never-be-consulted") {
+		t.Errorf("the fallback Authority was consulted even though the Pipeline's own approve Step was never reached, got:\n%s", out.String())
+	}
+}
+
 // newCLIWithApplyPipeline is newCLIWithApprovePipeline plus an apply Step,
 // wired to the real workspace.GitApplier — proving the Step actually
 // mutates repoPath, not a fake standing in for it.
