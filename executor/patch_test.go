@@ -1,6 +1,9 @@
 package executor
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // sampleDiff ends in a newline because git apply rejects a patch whose last
 // line is unterminated; ParsePatch guarantees this normalization.
@@ -87,5 +90,43 @@ func TestParsePatch_Empty(t *testing.T) {
 func TestParsePatch_NoDiff(t *testing.T) {
 	if _, err := ParsePatch("just some prose, no diff here"); err == nil {
 		t.Fatal("ParsePatch returned nil error for prose input")
+	}
+}
+
+// TestParsePatch_MultiHunk exercises a file with two hunks whose declared
+// counts are both correct — the common case validateHunks must not reject.
+func TestParsePatch_MultiHunk(t *testing.T) {
+	patch := "diff --git a/x b/x\n--- a/x\n+++ b/x\n" +
+		"@@ -1,2 +1,3 @@\n a\n+b\n c\n" +
+		"@@ -10,2 +11,2 @@\n-x\n+y\n z\n"
+	if _, err := ParsePatch(patch); err != nil {
+		t.Fatalf("ParsePatch rejected a valid multi-hunk diff: %v", err)
+	}
+}
+
+// TestParsePatch_HunkHeaderMiscount reproduces the corrupt-patch failure
+// mode found in production (Act a1069b4300a3dee4): a hunk header claims one
+// more old/new line than its body actually contains. Left unvalidated,
+// `git apply` doesn't fail until it overruns into the next hunk's header —
+// far from the actual defect and useless as a repair signal.
+func TestParsePatch_HunkHeaderMiscount(t *testing.T) {
+	patch := "diff --git a/x b/x\n--- a/x\n+++ b/x\n" +
+		"@@ -1,3 +1,2 @@\n a\n b\n" + // declares 3 old lines, body has only 2
+		"@@ -10,1 +11,1 @@\n z\n"
+	_, err := ParsePatch(patch)
+	if err == nil {
+		t.Fatal("ParsePatch accepted a hunk whose header miscounts its body")
+	}
+	if !strings.Contains(err.Error(), "miscounted") {
+		t.Errorf("error = %q, want it to explain the miscount", err)
+	}
+}
+
+// TestParsePatch_MalformedHunkLine catches a hunk body line with no
+// +/-/context marker — content git apply cannot classify at all.
+func TestParsePatch_MalformedHunkLine(t *testing.T) {
+	patch := "diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1,1 +1,1 @@\nno marker on this line\n"
+	if _, err := ParsePatch(patch); err == nil {
+		t.Fatal("ParsePatch accepted a hunk body line with no diff marker")
 	}
 }
