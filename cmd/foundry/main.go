@@ -80,22 +80,43 @@ func claudeExecutor(workspace string) engine.Executor {
 // Executor contract and ADR-0006's explicit-pin routing already cover any
 // number of named vendors. An unrecognized vendor is a clear, named
 // configuration error rather than a silent no-op.
+// timeoutSetter is implemented by every CLI-backed Executor — the ones
+// whose deadline has to cover a whole agent session rather than one HTTP
+// request, and therefore the only ones a project realistically needs to
+// tune. Asserting on the behavior rather than switching per vendor means a
+// future CLI-backed Executor honors timeout_seconds by implementing the
+// pair, with no change here.
+type timeoutSetter interface {
+	SetTimeout(time.Duration)
+}
+
+// withTimeout applies cfg.TimeoutSeconds to e when the project set one and
+// e can take it, and returns e either way. Until this existed only the
+// "claude" vendor read the field, so a project could not raise (or lower)
+// the ceiling for the Gemini or Copilot CLIs at all — both agents subject
+// to exactly the same "reads the repository before answering" reality.
+func withTimeout(e engine.Executor, cfg project.ExecutorConfig) engine.Executor {
+	if cfg.TimeoutSeconds <= 0 {
+		return e
+	}
+	if setter, ok := e.(timeoutSetter); ok {
+		setter.SetTimeout(time.Duration(cfg.TimeoutSeconds) * time.Second)
+	}
+	return e
+}
+
 func namedExecutor(cfg project.ExecutorConfig, workspace string) (engine.Executor, error) {
 	switch cfg.Vendor {
 	case "claude":
-		exec := claude.NewClaudeExecutor(workspace, cfg.Model)
-		if cfg.TimeoutSeconds > 0 {
-			exec.SetTimeout(time.Duration(cfg.TimeoutSeconds) * time.Second)
-		}
-		return exec, nil
+		return withTimeout(claude.NewClaudeExecutor(workspace, cfg.Model), cfg), nil
 	case "openai":
 		return openai.NewExecutor(cfg.Model, os.Getenv(cfg.APIKeyEnv)), nil
 	case "gemini":
-		return geminicli.NewExecutor(workspace, cfg.Model), nil
+		return withTimeout(geminicli.NewExecutor(workspace, cfg.Model), cfg), nil
 	case "gemini-api":
 		return gemini.NewExecutor(cfg.Model, os.Getenv(cfg.APIKeyEnv)), nil
 	case "copilot":
-		return copilotcli.NewExecutor(workspace, cfg.Model), nil
+		return withTimeout(copilotcli.NewExecutor(workspace, cfg.Model), cfg), nil
 	case "openai-compatible":
 		if cfg.BaseURL == "" {
 			return nil, fmt.Errorf("foundry: vendor %q requires base_url in .foundry/executors.json (e.g. Ollama, Groq, DeepSeek — any endpoint speaking the Chat Completions shape)", cfg.Vendor)

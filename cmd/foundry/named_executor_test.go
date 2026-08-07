@@ -55,7 +55,9 @@ func TestNamedExecutor_ClaudeVendorAppliesTimeoutSeconds(t *testing.T) {
 
 // TestNamedExecutor_ClaudeVendorKeepsDefaultTimeoutWhenUnset confirms an
 // unset TimeoutSeconds (the common case) leaves ClaudeExecutor's own
-// 5-minute default untouched — this field is purely additive.
+// built-in default untouched — this field is purely additive. That default
+// is 30 minutes: the deadline has to cover a whole agent session, not one
+// HTTP request.
 func TestNamedExecutor_ClaudeVendorKeepsDefaultTimeoutWhenUnset(t *testing.T) {
 	exec, err := namedExecutor(project.ExecutorConfig{Vendor: "claude"}, "/repo")
 	if err != nil {
@@ -65,7 +67,7 @@ func TestNamedExecutor_ClaudeVendorKeepsDefaultTimeoutWhenUnset(t *testing.T) {
 	if !ok {
 		t.Fatalf("namedExecutor(vendor=claude) = %T, want *claude.ClaudeExecutor", exec)
 	}
-	if want := 5 * time.Minute; claudeExec.Timeout() != want {
+	if want := 30 * time.Minute; claudeExec.Timeout() != want {
 		t.Errorf("Timeout() = %s, want the unmodified default %s", claudeExec.Timeout(), want)
 	}
 }
@@ -173,5 +175,43 @@ func TestNamedExecutor_UnknownVendorFails(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "some-future-vendor") {
 		t.Errorf("error = %q, want it to name the unrecognized vendor", err.Error())
+	}
+}
+
+// TestNamedExecutor_EveryCLIBackedVendorHonorsTimeoutSeconds closes a real
+// gap: until withTimeout existed, only the "claude" vendor read
+// timeout_seconds, so a project could not adjust the ceiling for the Gemini
+// or Copilot CLIs at all — both agents subject to exactly the same "reads
+// the repository before answering" reality that makes the default large.
+func TestNamedExecutor_EveryCLIBackedVendorHonorsTimeoutSeconds(t *testing.T) {
+	for _, vendor := range []string{"claude", "gemini", "copilot"} {
+		t.Run(vendor, func(t *testing.T) {
+			exec, err := namedExecutor(project.ExecutorConfig{Vendor: vendor, TimeoutSeconds: 900}, "/repo")
+			if err != nil {
+				t.Fatalf("namedExecutor failed: %v", err)
+			}
+			reader, ok := exec.(interface{ Timeout() time.Duration })
+			if !ok {
+				t.Fatalf("%s executor (%T) advertises no Timeout()", vendor, exec)
+			}
+			if got, want := reader.Timeout(), 15*time.Minute; got != want {
+				t.Errorf("Timeout() = %s, want the configured %s", got, want)
+			}
+		})
+	}
+}
+
+// TestNamedExecutor_HTTPVendorsKeepTheirOwnDeadline documents the
+// deliberate asymmetry: an HTTP-API vendor sends one completion request, so
+// it neither needs the 30-minute agent-session ceiling nor exposes
+// SetTimeout — passing timeout_seconds to one is a no-op, not an error.
+func TestNamedExecutor_HTTPVendorsKeepTheirOwnDeadline(t *testing.T) {
+	t.Setenv("FOUNDRY_TEST_KEY", "k")
+	exec, err := namedExecutor(project.ExecutorConfig{Vendor: "openai", APIKeyEnv: "FOUNDRY_TEST_KEY", TimeoutSeconds: 900}, "/repo")
+	if err != nil {
+		t.Fatalf("namedExecutor failed: %v", err)
+	}
+	if _, ok := exec.(interface{ SetTimeout(time.Duration) }); ok {
+		t.Error("an HTTP-API Executor now exposes SetTimeout — update this test and the ExecutorConfig doc if that is deliberate")
 	}
 }

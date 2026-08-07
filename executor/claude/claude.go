@@ -26,7 +26,27 @@ import (
 
 const (
 	defaultExecutable = "claude"
-	defaultTimeout    = 5 * time.Minute
+	// defaultTimeout bounds one Execute call. It is deliberately far
+	// larger than the per-request deadline an HTTP-API Executor
+	// (executor/openai, executor/gemini) uses, because these are not the
+	// same kind of call: those send one completion request, while Claude
+	// Code is an *agent* — given a prompt it reads the repository with its
+	// own tools, often for dozens of turns, before answering.
+	//
+	// The original 5 minutes was inherited from the HTTP framing and was
+	// simply wrong here. Measured against a ~1,300-file project with
+	// Foundry's own ~96 KB prompt, a single call to the fastest model took
+	// 98 seconds and roughly 30 tool calls; a plan or implement Step on a
+	// larger model routinely exceeds five minutes. A deadline below the
+	// real distribution does not protect anything — it converts working
+	// calls into failures, and each retry pays for the same work again
+	// before hitting the same wall.
+	//
+	// A timeout exists to catch a genuine hang, so it should sit well past
+	// where real work finishes, not in the middle of it. Lower it per
+	// Executor with timeout_seconds in .foundry/executors.json for a
+	// project that wants a tighter leash (an unattended CI run).
+	defaultTimeout = 30 * time.Minute
 )
 
 // ClaudeExecutor proposes an Outcome by running the Claude Code CLI in a

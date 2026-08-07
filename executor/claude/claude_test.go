@@ -143,7 +143,7 @@ func TestExecute_Timeout(t *testing.T) {
 // pins.
 func TestSetTimeout_OverridesDefault(t *testing.T) {
 	e := NewClaudeExecutor("/repo", "")
-	if got, want := e.Timeout(), 5*time.Minute; got != want {
+	if got, want := e.Timeout(), defaultTimeout; got != want {
 		t.Fatalf("Timeout() before SetTimeout = %s, want the unmodified default %s", got, want)
 	}
 
@@ -314,5 +314,18 @@ func TestParsePatch_Empty(t *testing.T) {
 func TestParsePatch_NoDiff(t *testing.T) {
 	if _, err := parsePatch("just some prose, no diff here"); err == nil {
 		t.Fatal("parsePatch returned nil error for prose input")
+	}
+}
+
+// TestDefaultTimeout_CoversAnAgentSession pins the value itself, not just
+// that a default exists. Claude Code reads the repository with its own
+// tools before answering; the original 5 minutes was inherited from the
+// "one HTTP request" framing and sat in the middle of the real
+// distribution, turning working calls into failures and paying for the
+// same work again on every retry. See defaultTimeout's own comment for the
+// measurements.
+func TestDefaultTimeout_CoversAnAgentSession(t *testing.T) {
+	if got, want := defaultTimeout, 30*time.Minute; got != want {
+		t.Errorf("defaultTimeout = %s, want %s", got, want)
 	}
 }

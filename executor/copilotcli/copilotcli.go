@@ -40,7 +40,13 @@ import (
 
 const (
 	defaultExecutable = "copilot"
-	defaultTimeout    = 5 * time.Minute
+	// defaultTimeout bounds one Execute call. Like executor/claude's, this is a
+	// CLI-backed *agent* — it reads the repository with its own tools
+	// before answering — not a single HTTP completion, so it gets the
+	// same 30-minute ceiling for the same reason: see
+	// executor/claude's own defaultTimeout for the measurements. Lower
+	// it per Executor with timeout_seconds in .foundry/executors.json.
+	defaultTimeout = 30 * time.Minute
 )
 
 // Executor proposes an Outcome by running the GitHub Copilot CLI in a
@@ -67,6 +73,22 @@ func NewExecutor(workspace, model string) *Executor {
 		timeout:    defaultTimeout,
 		runner:     execRunner{},
 	}
+}
+
+// SetTimeout overrides how long Execute waits for the Copilot CLI before
+// giving up (defaultTimeout otherwise), so a project whose work genuinely
+// needs a different ceiling sets timeout_seconds on this vendor's entry in
+// .foundry/executors.json instead of being stuck with the built-in
+// default. Mirrors executor/claude.ClaudeExecutor's own pair exactly.
+func (e *Executor) SetTimeout(d time.Duration) {
+	e.timeout = d
+}
+
+// Timeout returns the deadline Execute currently applies — the counterpart
+// to SetTimeout, and the seam the Engine reads to narrate how much of the
+// deadline a long-running call has consumed (engine.executorTimeout).
+func (e *Executor) Timeout() time.Duration {
+	return e.timeout
 }
 
 var _ engine.Executor = (*Executor)(nil)

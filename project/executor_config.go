@@ -34,12 +34,17 @@ type ExecutorConfig struct {
 
 	// TimeoutSeconds overrides how long a single Execute call may run
 	// before the Executor gives up, in seconds. Zero (the default) means
-	// "use the vendor's own built-in default" — for the "claude" vendor,
-	// executor/claude.NewClaudeExecutor's own 5-minute default, unchanged.
-	// Currently only consulted for the "claude" vendor (cmd/foundry/main.go's
-	// namedExecutor); a project setting this on any other vendor sees no
-	// effect yet, since no other vendor's Executor exposes a configurable
-	// timeout to apply it to.
+	// "use the vendor's own built-in default" — 30 minutes for every
+	// CLI-backed vendor ("claude", "gemini", "copilot"), whose deadline
+	// has to cover a whole agent session reading the repository with its
+	// own tools, and 5 minutes for the HTTP-API vendors ("openai",
+	// "gemini-api", "openai-compatible"), which send one completion
+	// request.
+	//
+	// Honored by every vendor whose Executor exposes SetTimeout — all
+	// three CLI-backed ones today (cmd/foundry/main.go's withTimeout). An
+	// HTTP-API vendor's entry still ignores it: those have no configurable
+	// deadline to apply it to.
 	TimeoutSeconds int `json:"timeout_seconds"`
 }
 
