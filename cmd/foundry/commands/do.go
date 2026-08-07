@@ -164,11 +164,23 @@ func wireEngine(ctx context.Context, repoPath string, stdin io.Reader, stdout io
 		return nil, nil, nil, err
 	}
 
+	// The Reporter is built before the Executors so each one can be wired
+	// to narrate its own live output through it (cli.TraceExecutor, opt-in
+	// via FOUNDRY_VERBOSE) — an Executor has no other way to reach the
+	// terminal, since it sits below the Engine and is handed no writer.
+	reporter := cli.NewReporter(stdout)
+
 	def := newExecutor(repoPath)
+	cli.TraceExecutor(def, reporter)
 	repoGatherer := gatherer.Compose(gatherer.NewNaiveGatherer(repoPath), knowledge.NewGatherer(repoPath))
 	eng := engine.NewEngine(repoGatherer, def, verifier, repoPath, pipeline)
 
-	registry, err := project.BuildExecutorRegistry(repoPath, newNamedExecutor)
+	// The project-configured Executors (.foundry/executors.json) get the
+	// same live narration as the default one above; BuildExecutorRegistry
+	// hands back a registry rather than its contents, so this is the only
+	// point they can be reached.
+	traced := project.WrapConstructor(newNamedExecutor, func(e engine.Executor) { cli.TraceExecutor(e, reporter) })
+	registry, err := project.BuildExecutorRegistry(repoPath, traced)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -184,7 +196,7 @@ func wireEngine(ctx context.Context, repoPath string, stdin io.Reader, stdout io
 	}
 	eng.SetApplierRegistry(appliers)
 
-	eng.SetReporter(cli.NewReporter(stdout))
+	eng.SetReporter(reporter)
 	eng.SetAuthority(cli.InteractiveAuthority{In: stdin, Out: stdout})
 	eng.SetApplier(workspace.GitApplier{})
 	eng.SetCheckpointer(store)

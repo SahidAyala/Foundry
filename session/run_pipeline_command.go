@@ -46,7 +46,18 @@ func (cmd RunPipelineCommand) Run(ctx context.Context, s *Session, args string) 
 	if err != nil {
 		return err
 	}
-	eng.SetReporter(cli.NewReporter(s.Out))
+	// Closed once this Act is done: unlike one-shot `foundry do`, this
+	// process outlives the Act, and a Reporter's live-progress heartbeat
+	// must not still be printing elapsed-time lines over the next prompt.
+	reporter := cli.NewReporter(s.Out)
+	defer cli.CloseReporter(reporter)
+	eng.SetReporter(reporter)
+
+	// Point the session's long-lived Executors at this Act's Reporter, and
+	// unpoint them when it ends — narrating into a Reporter whose Act is
+	// over would print over the next prompt.
+	s.Trace().To(reporter)
+	defer s.Trace().To(nil)
 	eng.SetAuthority(cli.InteractiveAuthority{In: s.In, Out: s.Out})
 	eng.SetApplier(workspace.GitApplier{})
 	eng.SetCheckpointer(s.Recorder())
