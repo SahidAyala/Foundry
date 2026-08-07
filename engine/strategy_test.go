@@ -697,20 +697,43 @@ func TestPipelineStrategy_GenerateErrorExhaustsRepairBudgetReturnsError(t *testi
 	verifier := &fakeVerifier{verdict: "pass"}
 	eng := engine.NewEngine(&fakeGatherer{files: []string{"main.go"}}, exec, verifier, "", pipeline)
 
-	// Run returns (nil, err) for any non-budget Produce error — the same
-	// contract every other Step-failure path already has (engine.go's
-	// RunBudgeted: "This is the one case [ErrBudgetExceeded] where both
-	// return values are non-nil") — so this asserts only on err, not on a
-	// discarded act.
-	_, err := eng.Run(context.Background(), &domain.Intent{Text: "test"})
+	// Run hands back the Act alongside the error here — one of the two
+	// cases where both return values are non-nil (engine.go's
+	// RunBudgeted), because an Act that burned its whole repair budget on
+	// failed Executor calls is worth recording rather than discarding.
+	act, err := eng.Run(context.Background(), &domain.Intent{Text: "test"})
 	if err == nil {
 		t.Fatal("Run with a generate Step failing on every attempt returned nil error")
+	}
+	if !errors.Is(err, engine.ErrExecuteFailed) {
+		t.Errorf("error = %v, want it to wrap engine.ErrExecuteFailed", err)
 	}
 	if !strings.Contains(err.Error(), "boom-2") {
 		t.Errorf("error = %q, want it to carry the last attempt's own failure (%q)", err.Error(), "boom-2")
 	}
 	if len(exec.calls) != 2 {
 		t.Fatalf("Executor called %d times, want 2 (initial attempt + the one allowed repair)", len(exec.calls))
+	}
+
+	if act == nil {
+		t.Fatal("Run returned no Act: the failed attempt would leave no evidence anywhere")
+	}
+	if act.JudgmentVerdict != engine.VerdictExecuteFailed {
+		t.Errorf("JudgmentVerdict = %q, want %q", act.JudgmentVerdict, engine.VerdictExecuteFailed)
+	}
+	// Every round's cause, not only the last: the first failures used to be
+	// discarded outright.
+	findings := strings.Join(act.CheckedFindings, "\n")
+	for _, want := range []string{"boom-1", "boom-2", "attempt 1", "attempt 2"} {
+		if !strings.Contains(findings, want) {
+			t.Errorf("CheckedFindings = %v, want them to include %q", act.CheckedFindings, want)
+		}
+	}
+	// A failed generate Step must leave no StepRecord: act.Steps doubles as
+	// the resume position, so a Step recorded without completing would make
+	// a later resume skip it.
+	if len(act.Steps) != 0 {
+		t.Errorf("act.Steps = %v, want none recorded for a generate Step that never completed", act.Steps)
 	}
 }
 

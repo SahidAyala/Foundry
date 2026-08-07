@@ -2,8 +2,10 @@ package engine
 
 import (
 	"log/slog"
+	"time"
 
 	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/model"
 )
 
 // SlogReporter implements Reporter by emitting structured, leveled log
@@ -64,8 +66,52 @@ func (r *SlogReporter) Verified(iteration int, judgment *domain.Judgment) {
 	)
 }
 
-func (r *SlogReporter) Repairing() {
-	r.logger.Info("act.repair.start")
+func (r *SlogReporter) Repairing(reason string) {
+	r.logger.Info("act.repair.start", "reason", reason)
+}
+
+// StepStarting, ExecutorStarting, and ExecutorFinished implement the
+// optional Reporter extensions (engine/reporter.go), so the structured log
+// stream carries the Pipeline walk and the Execute call's own boundaries —
+// the two things that were previously invisible for the entire minutes-long
+// window an Executor runs in. ModelFailover (FailoverReporter) is
+// implemented for the same reason: it was already emitted by the Engine but
+// no Reporter in this repository listened for it.
+func (r *SlogReporter) StepStarting(attempt, index, total int, stepID, kind string) {
+	r.logger.Info("act.step.start",
+		"attempt", attempt,
+		"index", index,
+		"total", total,
+		"step_id", stepID,
+		"kind", kind,
+	)
+}
+
+func (r *SlogReporter) ExecutorStarting(stepID, executor string, timeout time.Duration) {
+	args := []any{"step_id", stepID, "executor", executor}
+	if timeout > 0 {
+		args = append(args, "timeout", timeout.String())
+	}
+	r.logger.Info("act.executor.start", args...)
+}
+
+func (r *SlogReporter) ExecutorFinished(stepID, executor string, elapsed time.Duration, err error) {
+	args := []any{"step_id", stepID, "executor", executor, "elapsed", elapsed.Round(time.Millisecond).String()}
+	if err != nil {
+		r.logger.Warn("act.executor.failed", append(args, "error", err.Error())...)
+		return
+	}
+	r.logger.Info("act.executor.done", args...)
+}
+
+func (r *SlogReporter) ModelFailover(stepID, from, to string, class model.FailureClass, cause error) {
+	r.logger.Warn("act.model.failover",
+		"step_id", stepID,
+		"from", from,
+		"to", to,
+		"class", string(class),
+		"cause", cause.Error(),
+	)
 }
 
 func (r *SlogReporter) RepairSkipped(reason string) {

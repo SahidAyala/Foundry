@@ -17,6 +17,43 @@ import (
 // pass/fail, so fail is the trigger (backlog PR-011).
 const verdictFail = "fail"
 
+// verificationFailedReason and generateFailedReason are the two causes
+// that spend a repair round, passed to Reporter.Repairing so narration
+// states which one actually happened. Before Repairing carried a reason,
+// every round was announced as a verification failure — including the
+// rounds where no verify Step ever ran because the generate Step itself
+// failed (a timed-out Executor call, output with no parseable diff), which
+// is the single most confusing thing a Foundry run could print: the
+// reported cause was not the real one, and the real one appeared nowhere
+// until the Act's final error.
+const (
+	verificationFailedReason = "verification failed"
+	generateFailedReason     = "generate step failed"
+)
+
+// VerdictExecuteFailed is the Act-level JudgmentVerdict recorded when a
+// generate Step failed on every attempt its Pipeline allowed, so no
+// Outcome was ever produced to judge. It is deliberately distinct from
+// verdictFail ("verification looked at an Outcome and rejected it") and
+// from VerdictBudgetExceeded ("the Budget stopped us"): all three end an
+// Act without an applied patch, but only this one means Foundry never got
+// a candidate at all — a materially different thing to find in the Record
+// weeks later, and the difference between a model that proposed something
+// wrong and a call that never came back.
+const VerdictExecuteFailed = "execute-failed"
+
+// ErrExecuteFailed marks the error Produce returns once a generate Step
+// has failed on every attempt allowed. Callers use it the same way they
+// already use ErrBudgetExceeded: it means the Engine is handing back a
+// usable Act alongside the error — one whose Judgment records what
+// happened — rather than the bare error every other Step failure returns.
+// Without this distinction the Act was discarded outright
+// (Engine.RunBudgeted returned nil for it), so a run that spent fifteen
+// minutes across three timed-out rounds left nothing on disk at all: no
+// Record, and no checkpoint either, since a failed generate Step never
+// completes and so is never checkpointed.
+var ErrExecuteFailed = errors.New("engine: generate step failed on every attempt")
+
 // generateStepFailure marks an error returned by a generate Step's own
 // attempt to produce an Outcome (routing, cost estimation, or the
 // Executor call itself — e.g. a CLI exiting non-zero, or a model
@@ -143,6 +180,12 @@ func (s PipelineStrategy) Produce(ctx context.Context, act *domain.Act, intent *
 
 	var outcome *domain.Outcome
 	var judgment *domain.Judgment
+	// genFailures accumulates one entry per attempt whose generate Step
+	// failed outright, so the Act carries every round's cause rather than
+	// only the last one. A three-round run that timed out every time used
+	// to surface exactly one error message — the third — and discard the
+	// first two entirely.
+	var genFailures []string
 
 	for attempt := 0; ; attempt++ {
 		steps := s.Pipeline.Steps
@@ -182,13 +225,55 @@ func (s PipelineStrategy) Produce(ctx context.Context, act *domain.Act, intent *
 			// budget is exhausted — see generateStepFailure's own doc
 			// comment for why this is safe to do for a generate Step's
 			// own failure specifically, unlike any other Step kind's.
+			// judgment carries only this attempt's own failure: it is what
+			// repairContext feeds the next attempt, and `considered`
+			// already accumulates one repairContext per round, so putting
+			// the whole history here would repeat every earlier round in
+			// every later prompt.
 			judgment = &domain.Judgment{Verdict: verdictFail, Checked: []string{"generate: " + genErr.Error()}}
+			genFailures = append(genFailures, fmt.Sprintf("generate step failed (attempt %d): %s", attempt+1, genErr.Error()))
 			act.JudgmentVerdict = judgment.Verdict
-			act.CheckedFindings = judgment.Checked
+			act.CheckedFindings = genFailures
 			if attempt >= s.Pipeline.Repair.MaxAttempts {
-				return err
+				// Two genuinely different endings share this branch, and
+				// only one of them is terminal.
+				//
+				// If some Step of some attempt already completed, a
+				// checkpoint exists on disk (rc.checkpoints.Save runs after
+				// every completed Step), so this is an *interruption*
+				// `foundry resume` can continue — the reading
+				// session.TestRunPipelineCommand_SavesCheckpointOnInterruption
+				// deliberately pins for a mid-repair Executor crash. Return
+				// the plain error, leaving both the checkpoint and the
+				// caller's behavior exactly as they were: recording a Record
+				// for an Act that is still resumable would give the same Act
+				// ID two terminal destinies, and the second Write would fail
+				// outright against the write-once Record (ADR-0002).
+				if len(act.Steps) > 0 {
+					return err
+				}
+				// Otherwise nothing completed, so nothing exists anywhere:
+				// no Outcome to judge, no Step recorded, and no checkpoint —
+				// a failed generate Step never completes, so it is never
+				// checkpointed. This Act consumed real time and budget and
+				// would vanish entirely (I8), exactly as the run that
+				// motivated this did: three timed-out rounds, fifteen
+				// minutes, and nothing on disk afterwards. ErrExecuteFailed
+				// tells the caller to record it; see Engine.RunBudgeted and
+				// cli.CLI.reportFailedRun. Nothing needs deleting here, so
+				// ADR-0002's "a checkpoint lives only until an Act is
+				// terminal" holds without a delete.
+				//
+				// Deliberately no StepRecord is appended for the failed
+				// generate Step either: act.Steps doubles as the resume
+				// position (Engine.Resume uses len(act.Steps) as the index
+				// of the first not-yet-completed Step), so recording a Step
+				// that did not complete would make a later resume skip it —
+				// and would break the len(act.Steps) test just above.
+				act.JudgmentVerdict = VerdictExecuteFailed
+				return fmt.Errorf("%w: %w", ErrExecuteFailed, err)
 			}
-			rc.reporter.Repairing()
+			rc.reporter.Repairing(generateFailedReason + ": " + genErr.Error())
 			continue
 		}
 		if terminal {
@@ -201,7 +286,7 @@ func (s PipelineStrategy) Produce(ctx context.Context, act *domain.Act, intent *
 		if judgment.Verdict != verdictFail || attempt >= s.Pipeline.Repair.MaxAttempts {
 			break
 		}
-		rc.reporter.Repairing()
+		rc.reporter.Repairing(verificationFailedReason)
 	}
 
 	// act.JudgmentVerdict/CheckedFindings are already set — by the verify
@@ -231,10 +316,15 @@ func (s PipelineStrategy) Produce(ctx context.Context, act *domain.Act, intent *
 // successfully completed Step survives on disk, exactly the state
 // `foundry resume` needs.
 func runSteps(ctx context.Context, pipelineName string, act *domain.Act, intent *domain.Intent, steps []Step, considered []string, outcome *domain.Outcome, judgment *domain.Judgment, attempt int, rc runContext) (*domain.Outcome, *domain.Judgment, bool, error) {
-	for _, step := range steps {
+	for i, step := range steps {
 		if judgment != nil && judgment.Verdict == verdictFail && stopsShortOnFailure(step.Kind) {
 			break
 		}
+		// Announced after the stopsShortOnFailure guard, never before: a
+		// Step the attempt deliberately skips was not started, and saying
+		// it was would be exactly the kind of narration this reports
+		// against.
+		reportStepStarting(rc.reporter, attempt+1, i+1, len(steps), step.ID, step.Kind)
 		switch step.Kind {
 		case domain.StepKindGenerate:
 			stepConsidered := considered

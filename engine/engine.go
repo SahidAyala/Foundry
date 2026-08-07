@@ -149,7 +149,11 @@ func (e *Engine) Run(ctx context.Context, intent *domain.Intent) (*domain.Act, e
 // call would exceed the Budget on the Strategy's first attempt, the Engine
 // halts and returns the Act — its verdict set to VerdictBudgetExceeded and
 // its usage recorded — together with an error wrapping ErrBudgetExceeded.
-// This is the one case where both return values are non-nil.
+// A generate Step that fails on every attempt its Pipeline allows behaves
+// the same way: the Act comes back with VerdictExecuteFailed and every
+// attempt's cause in its findings, alongside an error wrapping
+// ErrExecuteFailed. Those are the only two cases where both return values
+// are non-nil.
 func (e *Engine) RunBudgeted(ctx context.Context, intent *domain.Intent, budget *domain.Budget) (*domain.Act, error) {
 	act := domain.NewAct(intent.Text)
 	act.Pipeline = e.pipelineName
@@ -175,7 +179,14 @@ func (e *Engine) RunBudgeted(ctx context.Context, intent *domain.Intent, budget 
 		spent:           spent,
 	}
 	if err := e.strategy.Produce(ctx, act, intent, considered, rc); err != nil {
-		if errors.Is(err, ErrBudgetExceeded) {
+		// Two failures hand back a usable Act alongside the error: a
+		// Budget refusal, and a generate Step that failed on every
+		// attempt allowed (ErrExecuteFailed). Both describe an Act that
+		// genuinely happened and consumed budget; discarding it would
+		// leave no evidence anywhere, since neither ever completes a Step
+		// and so neither is ever checkpointed. Every other Step failure
+		// still returns no Act.
+		if errors.Is(err, ErrBudgetExceeded) || errors.Is(err, ErrExecuteFailed) {
 			return act, err
 		}
 		return nil, err
