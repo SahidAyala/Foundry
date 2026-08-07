@@ -84,6 +84,31 @@ func LoadExecutorConfig(root string) (map[string]ExecutorConfig, error) {
 // calls whatever ExecutorConstructor it is handed.
 type ExecutorConstructor func(cfg ExecutorConfig, workspace string) (engine.Executor, error)
 
+// WrapConstructor returns construct with wrap applied to every Executor it
+// successfully builds — the seam a composition root needs to attach
+// something to the project-configured Executors it never sees again
+// afterwards (BuildExecutorRegistry hands back a registry, not its
+// contents). Its one use today is attaching live-output narration
+// (cli.TraceExecutor); wrap takes and returns nothing, so it can only
+// configure an Executor, never substitute or wrap the Executor itself.
+//
+// A nil construct — every caller that configures no named Executor,
+// production and test alike — is returned untouched, so wrapping is safe to
+// apply unconditionally.
+func WrapConstructor(construct ExecutorConstructor, wrap func(engine.Executor)) ExecutorConstructor {
+	if construct == nil {
+		return nil
+	}
+	return func(cfg ExecutorConfig, workspace string) (engine.Executor, error) {
+		e, err := construct(cfg, workspace)
+		if err != nil {
+			return nil, err
+		}
+		wrap(e)
+		return e, nil
+	}
+}
+
 // BuildExecutorRegistry reads root's ExecutorsFile (via LoadExecutorConfig)
 // and constructs an engine.ExecutorRegistry from it, calling construct once
 // per named entry. A missing or empty file returns an empty registry

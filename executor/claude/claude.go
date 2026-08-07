@@ -38,6 +38,12 @@ type ClaudeExecutor struct {
 	executable string
 	timeout    time.Duration
 	runner     runner
+
+	// progress, when non-nil, receives a one-line summary of each event
+	// Claude Code emits while it works (see stream.go). Nil — the default
+	// — leaves the invocation and the output parsing exactly as they were
+	// before streaming existed.
+	progress func(string)
 }
 
 // NewClaudeExecutor returns an executor that runs Claude Code in workspace,
@@ -73,6 +79,18 @@ func (e *ClaudeExecutor) SetTimeout(d time.Duration) {
 	e.timeout = d
 }
 
+// SetProgress installs sink as the destination for live narration of what
+// Claude Code is doing during a call: the model it resolved, each tool it
+// invokes, and its final turn count and cost. Installing a sink switches
+// the invocation into the CLI's own line-delimited event mode (stream.go);
+// leaving it nil keeps the invocation and output parsing byte-for-byte what
+// they were before streaming existed. sink is called from the goroutine
+// running Execute, one line at a time, and must not block for long — see
+// execRunner.RunStream.
+func (e *ClaudeExecutor) SetProgress(sink func(string)) {
+	e.progress = sink
+}
+
 // Timeout returns the duration Execute currently waits for the Claude
 // Code CLI before giving up — the counterpart to SetTimeout, so a
 // caller (or a test) can confirm what actually took effect without a
@@ -99,16 +117,40 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, intent *domain.Intent, con
 	if e.model != "" {
 		args = append(args, "--model", e.model)
 	}
-	stdout, stderr, err := e.runner.Run(ctx, e.workspace, e.executable, args, prompt)
+
+	// Streaming needs both a sink to narrate to and a runner that supports
+	// it; a configured runner that doesn't (any test fake predating
+	// stream.go) silently keeps the buffered path rather than losing the
+	// call.
+	streamer, canStream := e.runner.(streamRunner)
+	stream := e.progress != nil && canStream
+
+	var (
+		reader         *streamReader
+		stdout, stderr string
+		err            error
+	)
+	if stream {
+		reader = &streamReader{sink: e.progress}
+		args = append(args, streamJSONArgs...)
+		stdout, stderr, err = streamer.RunStream(ctx, e.workspace, e.executable, args, prompt, reader.line)
+	} else {
+		stdout, stderr, err = e.runner.Run(ctx, e.workspace, e.executable, args, prompt)
+	}
+
 	if err != nil {
 		switch {
 		case errors.Is(err, exec.ErrNotFound):
 			return nil, fmt.Errorf("claude: executable %q not found in PATH", e.executable)
 		case errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded):
-			return nil, fmt.Errorf("claude: timed out after %s", e.timeout)
+			return nil, timeoutError(e.timeout, reader, stdout, stderr)
 		default:
 			return nil, executionError(err, stdout, stderr)
 		}
+	}
+
+	if stream {
+		return e.streamedOutcome(reader, stdout, stderr)
 	}
 
 	patch, err := parsePatch(stdout)
@@ -116,6 +158,92 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, intent *domain.Intent, con
 		return nil, err
 	}
 	return &domain.Outcome{Patch: patch}, nil
+}
+
+// streamedOutcome builds the Outcome from a completed streaming call: the
+// patch comes from the CLI's own terminal result event rather than from raw
+// stdout, which in this mode holds JSON events rather than the model's
+// answer. A stream that ended without a result event, or whose result event
+// reports an error, is a failed call — never a silently empty patch.
+func (e *ClaudeExecutor) streamedOutcome(reader *streamReader, stdout, stderr string) (*domain.Outcome, error) {
+	switch {
+	case reader.isError:
+		return nil, fmt.Errorf("claude: the CLI reported the run as failed%s", detailOf(reader.result, stderr))
+	case !reader.sawResult:
+		return nil, fmt.Errorf("claude: the CLI's event stream ended without a result%s", detailOf(lastLines(stdout, maxRecentNarration), stderr))
+	}
+
+	patch, err := parsePatch(reader.result)
+	if err != nil {
+		return nil, err
+	}
+	// ActualCostUSD is what the CLI itself charged for this call (ADR-0011
+	// reported Evidence). It is available only in streaming mode, because
+	// only the result event carries it — a non-streaming call leaves it nil,
+	// exactly as every call did before.
+	return &domain.Outcome{Patch: patch, ActualCostUSD: reader.costUSD}, nil
+}
+
+// timeoutError explains a call that hit its deadline. Before this, the
+// message was "claude: timed out after 5m0s" and nothing else: whatever the
+// CLI had done in those minutes was buffered inside execRunner and thrown
+// away, so a run that timed out three times in a row (once per repair
+// round) produced no evidence at all about what it had been doing. Now the
+// last events narrated during the call — or, for a non-streaming call, the
+// tail of whatever it had written — travel with the error.
+func timeoutError(timeout time.Duration, reader *streamReader, stdout, stderr string) error {
+	var last string
+	if reader != nil && len(reader.recent) > 0 {
+		last = strings.Join(reader.recent, "\n")
+	} else {
+		last = lastLines(stdout, maxRecentNarration)
+	}
+
+	if strings.TrimSpace(last) == "" && strings.TrimSpace(stderr) == "" {
+		return fmt.Errorf("claude: timed out after %s with no output at all "+
+			"(the CLI may be waiting on authentication, or the Intent may need a longer timeout — "+
+			"run `claude -p \"say ok\"` in the workspace to check, and see executors.json's timeout_seconds)", timeout)
+	}
+	return fmt.Errorf("claude: timed out after %s%s", timeout, detailOf(last, stderr))
+}
+
+// detailOf renders whichever of a call's output and stderr carry content,
+// as indented trailing detail on an error message.
+func detailOf(out, stderr string) string {
+	out, stderr = strings.TrimSpace(out), strings.TrimSpace(stderr)
+	var b strings.Builder
+	if out != "" {
+		b.WriteString("\nlast output:\n" + indent(out))
+	}
+	if stderr != "" {
+		b.WriteString("\nstderr:\n" + indent(stderr))
+	}
+	return b.String()
+}
+
+// lastLines returns at most n trailing non-empty lines of s.
+func lastLines(s string, n int) string {
+	var kept []string
+	for _, line := range strings.Split(strings.TrimSpace(s), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	if len(kept) > n {
+		kept = kept[len(kept)-n:]
+	}
+	return strings.Join(kept, "\n")
+}
+
+// indent prefixes every line of s with two spaces, so multi-line detail
+// reads as attached to the error rather than as more error messages.
+func indent(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		lines[i] = "  " + line
+	}
+	return strings.Join(lines, "\n")
 }
 
 // executionError builds a diagnostic error for a failed Claude Code

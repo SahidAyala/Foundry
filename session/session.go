@@ -82,6 +82,19 @@ type Session struct {
 	cfg           project.Config
 	ticketFetcher ticket.Fetcher
 	models        *model.Registry
+
+	// trace routes the Executors' own live output to whichever Reporter
+	// the running command created. Built once, with the Executors; each
+	// command points it at its own Reporter for the duration of one Act.
+	trace *cli.TraceRelay
+}
+
+// Trace returns the relay a command points at its own Reporter while it
+// runs an Act, so the session's long-lived Executors narrate into the
+// short-lived Reporter actually on screen (opt-in via FOUNDRY_VERBOSE; see
+// cli.TraceRelay).
+func (s *Session) Trace() *cli.TraceRelay {
+	return s.trace
 }
 
 // NewSession resolves root's full Pipeline registry (built-in plus
@@ -147,10 +160,21 @@ func NewSession(ctx context.Context, root string, in io.Reader, out io.Writer, n
 	if len(newNamedExecutor) > 0 {
 		construct = newNamedExecutor[0]
 	}
-	executors, err := project.BuildExecutorRegistry(root, construct)
+
+	// Executors are built once here but narrate through a Reporter created
+	// per slash command, so their live output (opt-in via FOUNDRY_VERBOSE)
+	// is routed through a relay each command points at its own Reporter —
+	// see cli.TraceRelay for why the indirection is needed.
+	trace := cli.NewTraceRelay()
+	executors, err := project.BuildExecutorRegistry(root, project.WrapConstructor(construct, func(e engine.Executor) {
+		cli.TraceExecutorTo(e, trace.Line)
+	}))
 	if err != nil {
 		return nil, fmt.Errorf("session: build executor registry: %w", err)
 	}
+
+	def := newExecutor(root)
+	cli.TraceExecutorTo(def, trace.Line)
 
 	appliers, err := buildApplierRegistry(root, cfg)
 	if err != nil {
@@ -167,8 +191,9 @@ func NewSession(ctx context.Context, root string, in io.Reader, out io.Writer, n
 		checkpoints: checkpoints,
 		gatherer:    gatherer.Compose(gatherer.NewNaiveGatherer(root), knowledge.NewGatherer(root)),
 		verifier:    verifier,
-		executor:    newExecutor(root),
+		executor:    def,
 		executors:   executors,
+		trace:       trace,
 		appliers:    appliers,
 		cfg:         cfg,
 	}, nil
