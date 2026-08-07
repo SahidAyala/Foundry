@@ -77,10 +77,31 @@ func (c *CLI) Do(ctx context.Context, intent string, repoPath string) error {
 
 	act, err := c.engine.Run(ctx, &domain.Intent{Text: intent})
 	if err != nil {
-		return fmt.Errorf("cli: run: %w", err)
+		return c.reportFailedRun(ctx, act, err)
 	}
 
 	return c.finalize(ctx, act, repoPath)
+}
+
+// reportFailedRun handles a Run that produced no usable Outcome. An Act
+// whose generate Step failed on every attempt allowed
+// (engine.ErrExecuteFailed) never reaches the trust boundary — there is
+// nothing to approve or apply — but it consumed real time and budget, and
+// every attempt's cause is the only evidence of that. Recording it here is
+// the same reasoning as finalize's apply-failure path: an Act that actually
+// happened must not vanish without a trace (I8), and this failure has no
+// other mechanism that would ever record it — a failed generate Step
+// completes no Step, so it leaves no checkpoint for `foundry resume`
+// either. Every other Run failure comes back with no Act at all and is
+// simply reported.
+func (c *CLI) reportFailedRun(ctx context.Context, act *domain.Act, err error) error {
+	if act == nil || !errors.Is(err, engine.ErrExecuteFailed) {
+		return fmt.Errorf("cli: run: %w", err)
+	}
+	if writeErr := c.recorder.Write(ctx, act); writeErr != nil {
+		return fmt.Errorf("cli: run: %w (additionally failed to record: %v)", err, writeErr)
+	}
+	return fmt.Errorf("cli: run: %w (recorded as Act %s — `foundry show %s` has every attempt's cause)", err, act.ID, act.ID)
 }
 
 // checkpointLoader is the one method Resume needs from a

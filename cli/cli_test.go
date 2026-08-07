@@ -897,3 +897,122 @@ func TestCLI_Do_RepoPathMustExist(t *testing.T) {
 		t.Fatal("Do with nonexistent repo path returned nil error")
 	}
 }
+
+// failingExecutor fails every call, the way a timed-out or unauthenticated
+// coding-agent CLI does.
+type failingExecutor struct {
+	err   error
+	calls int
+}
+
+func (e *failingExecutor) Execute(ctx context.Context, intent *domain.Intent, considered []string) (*domain.Outcome, error) {
+	e.calls++
+	return nil, e.err
+}
+
+// TestCLI_Do_RecordsAnActWhoseGenerateStepNeverSucceeded covers the failure
+// that previously left nothing behind at all: the Executor failed on every
+// attempt, so no Step ever completed (no checkpoint) and the Engine
+// discarded the Act (no Record). The only trace was one error line naming
+// the last attempt's cause — after which `foundry log` and `foundry show`
+// had nothing to show for the minutes and money the run spent.
+func TestCLI_Do_RecordsAnActWhoseGenerateStepNeverSucceeded(t *testing.T) {
+	t.Setenv("USER", "tester")
+	repo := initGitRepo(t)
+
+	store, err := record.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("record.NewFileStore failed: %v", err)
+	}
+	gate, err := verify.NewGate("all-pass", &verify.Validator{Name: "check", Cmd: "exit 0"})
+	if err != nil {
+		t.Fatalf("verify.NewGate failed: %v", err)
+	}
+
+	exec := &failingExecutor{err: errors.New("claude: timed out after 5m0s")}
+	eng := engine.NewEngine(emptyGatherer{}, exec, gate, repo, engine.DefaultPipeline())
+
+	var out bytes.Buffer
+	c := cli.NewCLI(eng, store, strings.NewReader(""), &out)
+
+	err = c.Do(context.Background(), "add a feature", repo)
+	if err == nil {
+		t.Fatal("Do with an Executor failing every attempt returned nil error")
+	}
+	if !strings.Contains(err.Error(), "timed out after 5m0s") {
+		t.Errorf("error = %q, want the Executor's own cause", err)
+	}
+	if !strings.Contains(err.Error(), "foundry show") {
+		t.Errorf("error = %q, want it to point at the recorded Act", err)
+	}
+
+	acts, listErr := store.List(context.Background())
+	if listErr != nil {
+		t.Fatalf("store.List failed: %v", listErr)
+	}
+	if len(acts) != 1 {
+		t.Fatalf("recorded %d Acts, want 1 — a run that spent real budget must leave a trace", len(acts))
+	}
+
+	act, loadErr := store.Read(context.Background(), acts[0].ID)
+	if loadErr != nil {
+		t.Fatalf("store.Read failed: %v", loadErr)
+	}
+	if act.JudgmentVerdict != engine.VerdictExecuteFailed {
+		t.Errorf("JudgmentVerdict = %q, want %q", act.JudgmentVerdict, engine.VerdictExecuteFailed)
+	}
+	if act.ApprovedAt != nil {
+		t.Error("a recorded failure must never carry an approval: nothing was ever produced to approve")
+	}
+	findings := strings.Join(act.CheckedFindings, "\n")
+	if !strings.Contains(findings, "timed out after 5m0s") {
+		t.Errorf("CheckedFindings = %v, want each attempt's cause", act.CheckedFindings)
+	}
+	// The default Pipeline allows one repair round, and both attempts'
+	// causes must be there — not only the last.
+	if exec.calls != 2 {
+		t.Fatalf("Executor called %d times, want 2 (initial attempt + one repair)", exec.calls)
+	}
+	if strings.Count(findings, "timed out after 5m0s") != exec.calls {
+		t.Errorf("CheckedFindings = %v, want one entry per failed attempt (%d)", act.CheckedFindings, exec.calls)
+	}
+}
+
+// TestCLI_Do_OtherRunFailuresAreStillJustReported keeps the new recording
+// narrow: a failure the Engine does not hand an Act back for (here, gather)
+// is reported exactly as before, with nothing written.
+func TestCLI_Do_OtherRunFailuresAreStillJustReported(t *testing.T) {
+	repo := initGitRepo(t)
+
+	store, err := record.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("record.NewFileStore failed: %v", err)
+	}
+	gate, err := verify.NewGate("all-pass", &verify.Validator{Name: "check", Cmd: "exit 0"})
+	if err != nil {
+		t.Fatalf("verify.NewGate failed: %v", err)
+	}
+
+	eng := engine.NewEngine(failingGatherer{}, executor.NewScriptedExecutor(newFilePatch("X.md")), gate, repo, engine.DefaultPipeline())
+
+	var out bytes.Buffer
+	c := cli.NewCLI(eng, store, strings.NewReader(""), &out)
+
+	if err := c.Do(context.Background(), "add a feature", repo); err == nil {
+		t.Fatal("Do with a failing Gatherer returned nil error")
+	}
+
+	acts, listErr := store.List(context.Background())
+	if listErr != nil {
+		t.Fatalf("store.List failed: %v", listErr)
+	}
+	if len(acts) != 0 {
+		t.Errorf("recorded %d Acts, want 0: the Engine handed back no Act to record", len(acts))
+	}
+}
+
+type failingGatherer struct{}
+
+func (failingGatherer) Gather(ctx context.Context, intent *domain.Intent) ([]string, error) {
+	return nil, errors.New("gather: no such directory")
+}

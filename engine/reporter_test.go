@@ -18,7 +18,7 @@ func TestMultiReporter_FansOutEveryEventToEachReporter(t *testing.T) {
 	m.Executed(1, &cost)
 	m.Verifying(1)
 	m.Verified(1, &domain.Judgment{Verdict: "pass"})
-	m.Repairing()
+	m.Repairing("verification failed")
 	m.RepairSkipped("budget too low")
 	m.BudgetExceeded("cap reached")
 
@@ -48,7 +48,7 @@ func TestMultiReporter_ZeroReportersIsNoop(t *testing.T) {
 	m.Executed(1, &cost)
 	m.Verifying(1)
 	m.Verified(1, &domain.Judgment{Verdict: "pass"})
-	m.Repairing()
+	m.Repairing("verification failed")
 	m.RepairSkipped("reason")
 	m.BudgetExceeded("reason")
 }
