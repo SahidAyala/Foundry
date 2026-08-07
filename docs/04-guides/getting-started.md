@@ -290,6 +290,24 @@ Setting the `FOUNDRY_LOG` environment variable to any non-empty value adds struc
 FOUNDRY_LOG=1 foundry do "<intent>" --repo /path/to/your/repo 2>foundry.jsonl
 ```
 
+The stream also carries the Pipeline walk (`act.step.start`, one per Step, with its ID and kind), the boundaries of each Executor call (`act.executor.start` / `act.executor.done` / `act.executor.failed`, with the resolved model, the deadline, and how long the call took), and every automatic model failover (`act.model.failover`).
+
+## Following a long call while it runs
+
+An Executor call is the slowest thing an Act does — minutes, against a 5-minute default deadline (raise it per Executor with `timeout_seconds` in `.foundry/executors.json`). The normal progress narration already shows, per Step, which Executor was resolved and an elapsed-time line every 30 seconds while the call is in flight, so a working run is distinguishable from a hung one.
+
+Setting `FOUNDRY_VERBOSE` to any non-empty value goes further for a Claude Code Executor: Foundry invokes the CLI in its own event-streaming mode and narrates what it is doing as it happens — each tool it runs, each turn it takes, and the final turn count and cost.
+
+```
+FOUNDRY_VERBOSE=1 foundry do "<intent>" --repo /path/to/your/repo
+```
+
+Unset (the default), the Executor is invoked exactly as before and nothing changes. This is opt-in specifically because it changes *how* the CLI is invoked, not just what Foundry prints.
+
+## When an Executor never produces a patch
+
+If a `generate` Step fails on every attempt its Pipeline allows — a timed-out CLI, an unauthenticated one, output with no parseable diff — the Act ends with the verdict `execute-failed` and is **recorded anyway**, with every attempt's own cause in its findings. Nothing was produced, so nothing is approved or applied; `foundry show <id>` is where you read why each round failed, since the error line only names the last one.
+
 ## What "usable for testing" means today, honestly
 
 Real: it builds a real patch through a real Executor against a real repository, verifies it, requires human approval, and records every Act immutably; replay and resume both work; `foundry show` renders a colored, per-Step trace of what happened. Not yet real: multi-user use, true capability-based Executor routing (today's Router is explicit-pin-only), Derived Knowledge. [../00-overview/roadmap.md](../00-overview/roadmap.md)'s current-status table is the honest, up-to-date list of what's shipped per milestone.
@@ -297,5 +315,6 @@ Real: it builds a real patch through a real Executor against a real repository, 
 ## Troubleshooting
 
 - **`claude: executable "claude" not found in PATH`** — install the Claude Code CLI, or configure a named OpenAI or Gemini Executor above and pin every `generate` Step to it.
+- **`claude: timed out after 5m0s`** — the error carries the last events of the call, or says explicitly that nothing arrived at all. Nothing at all usually means the CLI is waiting on authentication (check with `claude -p "say ok"` in the same directory); events that stop mid-work usually mean the work needs longer than the deadline (raise `timeout_seconds`). `FOUNDRY_VERBOSE=1` shows the whole call as it happens.
 - **Foundry refuses to start in a directory** — the target must already be a git repository with at least one commit; `foundry` does not initialize one for you.
 - **A Pipeline with a `remote-pr` apply Step fails to load** — if `require_approval_before_remote_publish` is `true` in `.foundry/config.json`, that Pipeline must declare an `approve` Step before the `remote-pr` one, or registration refuses it outright.
