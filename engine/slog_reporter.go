@@ -77,6 +77,14 @@ func (r *SlogReporter) Repairing(reason string) {
 // window an Executor runs in. ModelFailover (FailoverReporter) is
 // implemented for the same reason: it was already emitted by the Engine but
 // no Reporter in this repository listened for it.
+func (r *SlogReporter) IntentDeclared(text string) {
+	r.logger.Info("act.intent", "text", text)
+}
+
+func (r *SlogReporter) ContextGathered(entries, bytes int) {
+	r.logger.Info("act.gather.done", "entries", entries, "bytes", bytes)
+}
+
 func (r *SlogReporter) StepStarting(attempt, index, total int, stepID, kind string) {
 	r.logger.Info("act.step.start",
 		"attempt", attempt,

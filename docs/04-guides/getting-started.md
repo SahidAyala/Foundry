@@ -294,7 +294,18 @@ The stream also carries the Pipeline walk (`act.step.start`, one per Step, with 
 
 ## Following a long call while it runs
 
-An Executor call is the slowest thing an Act does — minutes, against a 5-minute default deadline (raise it per Executor with `timeout_seconds` in `.foundry/executors.json`). The normal progress narration already shows, per Step, which Executor was resolved and an elapsed-time line every 30 seconds while the call is in flight, so a working run is distinguishable from a hung one.
+Every run starts by restating the Intent exactly as you typed it and reporting how much Context was gathered around it (`42 context entries · 96 KB`) — that size is most of what the Executor has to read, and therefore most of the explanation for how long the call takes.
+
+An Executor call is the slowest thing an Act does — minutes, against a 5-minute default deadline. The normal progress narration shows, per Step, which Executor was resolved and an elapsed-time line every 30 seconds while the call is in flight, so a working run is distinguishable from a hung one.
+
+**Expect to raise `timeout_seconds`.** Claude Code is agentic: given a prompt, it reads the repository with its own tools before answering. Measured against a ~1,300-file project with Foundry's own 96 KB prompt, a single call took 98 seconds and roughly 30 tool calls on the *fastest* model — a `plan` or `implement` Step on a larger model routinely exceeds five minutes. That is the Executor working, not hanging. Set a realistic ceiling per named Executor in `.foundry/executors.json`:
+
+```json
+{
+  "claude-opus":   { "vendor": "claude", "model": "opus",   "timeout_seconds": 1800 },
+  "claude-sonnet": { "vendor": "claude", "model": "sonnet", "timeout_seconds": 1800 }
+}
+```
 
 Setting `FOUNDRY_VERBOSE` to any non-empty value goes further for a Claude Code Executor: Foundry invokes the CLI in its own event-streaming mode and narrates what it is doing as it happens — each tool it runs, each turn it takes, and the final turn count and cost.
 
@@ -315,6 +326,6 @@ Real: it builds a real patch through a real Executor against a real repository, 
 ## Troubleshooting
 
 - **`claude: executable "claude" not found in PATH`** — install the Claude Code CLI, or configure a named OpenAI or Gemini Executor above and pin every `generate` Step to it.
-- **`claude: timed out after 5m0s`** — the error carries the last events of the call, or says explicitly that nothing arrived at all. Nothing at all usually means the CLI is waiting on authentication (check with `claude -p "say ok"` in the same directory); events that stop mid-work usually mean the work needs longer than the deadline (raise `timeout_seconds`). `FOUNDRY_VERBOSE=1` shows the whole call as it happens.
+- **`claude: timed out after 5m0s, still running`** — almost always means the deadline is too low, not that anything is broken: raise `timeout_seconds` (see above). In the default buffered mode Foundry has nothing else to report, because `claude -p` writes its answer only when it finishes. Run with `FOUNDRY_VERBOSE=1` to watch the call event by event; there, a timeout that emitted *no* event at all is real evidence the CLI never started — check it with `claude -p "say ok"` in the same directory.
 - **Foundry refuses to start in a directory** — the target must already be a git repository with at least one commit; `foundry` does not initialize one for you.
 - **A Pipeline with a `remote-pr` apply Step fails to load** — if `require_approval_before_remote_publish` is `true` in `.foundry/config.json`, that Pipeline must declare an `approve` Step before the `remote-pr` one, or registration refuses it outright.

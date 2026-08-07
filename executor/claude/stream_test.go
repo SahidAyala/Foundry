@@ -235,13 +235,30 @@ func TestTimeoutError_FallsBackToRawOutput(t *testing.T) {
 	}
 }
 
-// TestTimeoutError_NoOutputAtAllSuggestsWhatToCheck keeps the genuinely
-// silent case actionable rather than merely honest.
-func TestTimeoutError_NoOutputAtAllSuggestsWhatToCheck(t *testing.T) {
-	got := timeoutError(5*time.Minute, nil, "", "").Error()
-	for _, want := range []string{"no output at all", "authentication", "timeout_seconds"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("error = %q, want it to mention %q", got, want)
+// TestTimeoutError_SilenceMeansDifferentThingsPerMode is the correction of
+// a message that guessed. A buffered `claude -p` writes its answer only
+// when it finishes, so an empty buffer on timeout is guaranteed and proves
+// nothing — blaming authentication there (as this once did) sent a real
+// investigation down the wrong path, when the true cause was that Claude
+// Code explores the repository with its own tools before answering and
+// simply needed longer than the deadline. Only in streaming mode, where
+// events would have been arriving, does silence actually mean the CLI never
+// started.
+func TestTimeoutError_SilenceMeansDifferentThingsPerMode(t *testing.T) {
+	buffered := timeoutError(5*time.Minute, nil, "", "").Error()
+	if strings.Contains(buffered, "authentication") {
+		t.Errorf("error = %q, must not blame authentication: this mode produces no partial output either way", buffered)
+	}
+	for _, want := range []string{"still running", "timeout_seconds", "FOUNDRY_VERBOSE"} {
+		if !strings.Contains(buffered, want) {
+			t.Errorf("error = %q, want it to mention %q", buffered, want)
+		}
+	}
+
+	streamed := timeoutError(5*time.Minute, &streamReader{}, "", "").Error()
+	for _, want := range []string{"without emitting a single event", "authenticated"} {
+		if !strings.Contains(streamed, want) {
+			t.Errorf("streaming error = %q, want it to mention %q", streamed, want)
 		}
 	}
 }

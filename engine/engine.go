@@ -159,11 +159,13 @@ func (e *Engine) RunBudgeted(ctx context.Context, intent *domain.Intent, budget 
 	act.Pipeline = e.pipelineName
 	spent := &tracker{budget: budget}
 
+	reportIntentDeclared(e.reporter, intent.Text)
 	e.reporter.Gathering()
 	considered, err := e.gatherer.Gather(ctx, intent)
 	if err != nil {
 		return nil, fmt.Errorf("engine: gather: %w", err)
 	}
+	reportContextGathered(e.reporter, considered)
 	act.ConsideredFiles = considered
 
 	rc := runContext{
@@ -242,6 +244,11 @@ func (e *Engine) Resume(ctx context.Context, act *domain.Act) (*domain.Act, erro
 
 	outcome, judgment := lastOutcomeAndJudgment(act.Steps)
 	intent := &domain.Intent{Text: act.Intent}
+	// The Intent is restated on resume for the same reason it is on a first
+	// run: whoever is watching needs to know what this Act was asked to do.
+	// No ContextGathered counterpart — Resume never gathers, it reuses what
+	// the interrupted attempt already had.
+	reportIntentDeclared(e.reporter, act.Intent)
 
 	o, j, terminal, err := runSteps(ctx, strategy.Pipeline.Name, act, intent, strategy.Pipeline.Steps[startIdx:], act.ConsideredFiles, outcome, judgment, 0, rc)
 	outcome, judgment = o, j

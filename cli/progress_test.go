@@ -360,3 +360,45 @@ func TestProgressReporter_StylesAreNotNoOps(t *testing.T) {
 		t.Error("progressDimStyle has no foreground color set")
 	}
 }
+
+// TestProgressReporter_IntentIsRestatedAtTheTop covers the ask this came
+// from: the Intent must not be lost. It used to print only in the summary
+// block a successful run ends with, so a failing run never showed it.
+func TestProgressReporter_IntentIsRestatedAtTheTop(t *testing.T) {
+	var out bytes.Buffer
+	NewProgressReporter(&out).IntentDeclared("add a health endpoint\nreturning 200")
+
+	got := out.String()
+	if !strings.Contains(got, "add a health endpoint") {
+		t.Errorf("output = %q, want the Intent restated", got)
+	}
+	// A multi-line Intent stays visibly one block, not several top-level
+	// narration lines.
+	lines := strings.Split(strings.TrimRight(got, "\n"), "\n")
+	if len(lines) != 2 || !strings.HasPrefix(lines[1], "          ") {
+		t.Errorf("output = %q, want continuation lines indented under the first", got)
+	}
+}
+
+func TestProgressReporter_ContextGatheredShowsTheSizeOfThePrompt(t *testing.T) {
+	var out bytes.Buffer
+	NewProgressReporter(&out).ContextGathered(42, 98304)
+
+	got := out.String()
+	for _, want := range []string{"42", "96 KB"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("output = %q, want it to contain %q", got, want)
+		}
+	}
+}
+
+func TestHumanBytes(t *testing.T) {
+	for _, tc := range []struct {
+		n    int
+		want string
+	}{{512, "512 B"}, {1024, "1 KB"}, {98304, "96 KB"}, {2 << 20, "2.0 MB"}} {
+		if got := humanBytes(tc.n); got != tc.want {
+			t.Errorf("humanBytes(%d) = %q, want %q", tc.n, got, tc.want)
+		}
+	}
+}

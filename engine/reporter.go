@@ -71,6 +71,46 @@ type StepReporter interface {
 	StepStarting(attempt, index, total int, stepID, kind string)
 }
 
+// InputReporter is an optional Reporter extension that narrates what an Act
+// was actually given before any model sees it: the Intent exactly as the
+// human wrote it, and how much Context the Gatherer assembled around it.
+// Neither was observable while an Act ran — the Intent appeared only in the
+// summary block a *successful* run prints at the end, so a run that failed
+// showed pages of narration without ever restating what had been asked, and
+// the size of the gathered Context (which is most of what an Executor
+// spends its time reading) was never shown at all.
+type InputReporter interface {
+	// IntentDeclared is called once, before gathering, with the Intent's
+	// own text.
+	IntentDeclared(text string)
+	// ContextGathered is called once the Gatherer returns, with how many
+	// Context entries it produced and their total size in bytes — the
+	// bulk of what the Executor is about to be asked to read.
+	ContextGathered(entries, bytes int)
+}
+
+// reportIntentDeclared calls reporter.IntentDeclared if reporter implements
+// InputReporter, and does nothing otherwise.
+func reportIntentDeclared(reporter Reporter, text string) {
+	if ir, ok := reporter.(InputReporter); ok {
+		ir.IntentDeclared(text)
+	}
+}
+
+// reportContextGathered calls reporter.ContextGathered if reporter
+// implements InputReporter, and does nothing otherwise.
+func reportContextGathered(reporter Reporter, considered []string) {
+	ir, ok := reporter.(InputReporter)
+	if !ok {
+		return
+	}
+	total := 0
+	for _, c := range considered {
+		total += len(c)
+	}
+	ir.ContextGathered(len(considered), total)
+}
+
 // ExecutorReporter is an optional Reporter extension that brackets the one
 // call an Act spends nearly all of its wall-clock time inside: an
 // Executor's Execute. Reporter.Executing already announces that a call is
@@ -189,6 +229,20 @@ func (m MultiReporter) Repairing(reason string) {
 // than on Reporter itself — the MultiReporter satisfies only Reporter, so
 // the type assertions in reportStepStarting/reportExecutorStarting/
 // reportFailover would all fail against it and narrate nothing at all.
+func (m MultiReporter) IntentDeclared(text string) {
+	for _, r := range m.Reporters {
+		reportIntentDeclared(r, text)
+	}
+}
+
+func (m MultiReporter) ContextGathered(entries, bytes int) {
+	for _, r := range m.Reporters {
+		if ir, ok := r.(InputReporter); ok {
+			ir.ContextGathered(entries, bytes)
+		}
+	}
+}
+
 func (m MultiReporter) StepStarting(attempt, index, total int, stepID, kind string) {
 	for _, r := range m.Reporters {
 		reportStepStarting(r, attempt, index, total, stepID, kind)

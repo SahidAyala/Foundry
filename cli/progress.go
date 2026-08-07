@@ -78,11 +78,34 @@ func NewProgressReporter(out io.Writer) *ProgressReporter {
 
 var (
 	_ engine.Reporter         = (*ProgressReporter)(nil)
+	_ engine.InputReporter    = (*ProgressReporter)(nil)
 	_ engine.StepReporter     = (*ProgressReporter)(nil)
 	_ engine.ExecutorReporter = (*ProgressReporter)(nil)
 	_ engine.FailoverReporter = (*ProgressReporter)(nil)
 	_ io.Closer               = (*ProgressReporter)(nil)
 )
+
+// IntentDeclared restates what was asked, at the top of the run. The Intent
+// used to appear only in the summary block a successful run prints at the
+// end, so a failing run — the one you actually need to read — scrolled past
+// without ever showing what it had been told to do.
+func (p *ProgressReporter) IntentDeclared(text string) {
+	p.stopBeat()
+	first, rest := splitFirstLine(strings.TrimSpace(text))
+	p.line(progressActionStyle, "▸ Intent: "+first)
+	for _, line := range rest {
+		p.line(progressActionStyle, "          "+line)
+	}
+}
+
+// ContextGathered reports the size of what was assembled around the Intent.
+// This is most of what an Executor is about to read, and therefore most of
+// the explanation for how long the call takes — a number worth seeing
+// before the wait, not after it.
+func (p *ProgressReporter) ContextGathered(entries, bytes int) {
+	p.stopBeat()
+	p.line(progressDimStyle, fmt.Sprintf("  · %d context entries · %s", entries, humanBytes(bytes)))
+}
 
 func (p *ProgressReporter) Gathering() {
 	p.stopBeat()
@@ -327,6 +350,19 @@ func (p *ProgressReporter) beatLine(hb *heartbeat, s string) {
 func splitFirstLine(s string) (string, []string) {
 	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
 	return lines[0], lines[1:]
+}
+
+// humanBytes renders a byte count the way a human reads a prompt size.
+// Whole KB above a kilobyte: the difference between 96 KB and 96.4 KB is
+// never what a reader is deciding on.
+func humanBytes(n int) string {
+	switch {
+	case n >= 1<<20:
+		return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
+	case n >= 1<<10:
+		return fmt.Sprintf("%d KB", n/(1<<10))
+	}
+	return fmt.Sprintf("%d B", n)
 }
 
 // roundDuration renders d at whole-second precision — the resolution a

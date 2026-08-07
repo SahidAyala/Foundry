@@ -191,18 +191,36 @@ func (e *ClaudeExecutor) streamedOutcome(reader *streamReader, stdout, stderr st
 // round) produced no evidence at all about what it had been doing. Now the
 // last events narrated during the call — or, for a non-streaming call, the
 // tail of whatever it had written — travel with the error.
+// The "no output" case is reported differently depending on the mode,
+// because it means completely different things. Streaming: events were
+// arriving and then stopped, or none ever arrived — real evidence, worth
+// acting on. Buffered: `claude -p` writes its answer only when it finishes,
+// so a killed process leaves an empty buffer *every* time, no matter how
+// healthy the call was. Claiming "the CLI may be waiting on authentication"
+// there — which an earlier version of this message did — is a guess dressed
+// as a finding, and it sent a real investigation down the wrong path when
+// the true cause was simply that Claude Code is agentic: it reads the
+// repository with its own tools before answering, which routinely takes
+// longer than the 5-minute default on a large project.
 func timeoutError(timeout time.Duration, reader *streamReader, stdout, stderr string) error {
 	var last string
-	if reader != nil && len(reader.recent) > 0 {
+	streaming := reader != nil
+	if streaming {
 		last = strings.Join(reader.recent, "\n")
 	} else {
 		last = lastLines(stdout, maxRecentNarration)
 	}
 
 	if strings.TrimSpace(last) == "" && strings.TrimSpace(stderr) == "" {
-		return fmt.Errorf("claude: timed out after %s with no output at all "+
-			"(the CLI may be waiting on authentication, or the Intent may need a longer timeout — "+
-			"run `claude -p \"say ok\"` in the workspace to check, and see executors.json's timeout_seconds)", timeout)
+		if streaming {
+			return fmt.Errorf("claude: timed out after %s without emitting a single event "+
+				"(the CLI never started work — check it is installed and authenticated with "+
+				"`claude -p \"say ok\"` in the workspace)", timeout)
+		}
+		return fmt.Errorf("claude: timed out after %s, still running "+
+			"(no partial output is possible in this mode — `claude -p` writes its answer only when it finishes, "+
+			"and Claude Code explores the repository with its own tools first, which often exceeds this deadline: "+
+			"raise timeout_seconds in .foundry/executors.json, or set FOUNDRY_VERBOSE=1 to watch what it is doing)", timeout)
 	}
 	return fmt.Errorf("claude: timed out after %s%s", timeout, detailOf(last, stderr))
 }

@@ -20,6 +20,20 @@ type observingReporter struct {
 	events        []string
 	repairReasons []string
 	timeouts      []time.Duration
+
+	intent          string
+	gatheredEntries int
+	gatheredBytes   int
+}
+
+func (r *observingReporter) IntentDeclared(text string) {
+	r.events = append(r.events, "intent")
+	r.intent = text
+}
+
+func (r *observingReporter) ContextGathered(entries, bytes int) {
+	r.events = append(r.events, "gathered")
+	r.gatheredEntries, r.gatheredBytes = entries, bytes
 }
 
 func (r *observingReporter) Gathering()                              {}
@@ -57,6 +71,7 @@ func (r *observingReporter) ModelFailover(stepID, from, to string, class model.F
 
 var (
 	_ engine.Reporter         = (*observingReporter)(nil)
+	_ engine.InputReporter    = (*observingReporter)(nil)
 	_ engine.StepReporter     = (*observingReporter)(nil)
 	_ engine.ExecutorReporter = (*observingReporter)(nil)
 	_ engine.FailoverReporter = (*observingReporter)(nil)
@@ -177,6 +192,8 @@ func TestReporter_NarratesEveryStepAndTheExecutorCall(t *testing.T) {
 	}
 
 	want := []string{
+		"intent",
+		"gathered",
 		"step:implement:generate",
 		"executor-start:implement:default executor",
 		"executor-done:default executor",
@@ -345,5 +362,41 @@ func TestPipelineStrategy_ResumableGenerateFailureIsNotRecordedAsTerminal(t *tes
 	}
 	if act != nil {
 		t.Errorf("Run returned an Act (%s) for a resumable interruption, want none: recording it would give one Act ID two terminal destinies", act.ID)
+	}
+}
+
+// TestReporter_IntentAndGatheredContextAreNarrated covers what a run never
+// showed while it was running: what it was asked to do, and how much
+// Context was assembled around that Intent. The Intent used to surface only
+// in the summary block a successful run prints at the end — so a failing
+// run, the one worth reading, never restated it at all.
+func TestReporter_IntentAndGatheredContextAreNarrated(t *testing.T) {
+	pipeline := engine.Pipeline{
+		Name: "bugfix",
+		Steps: []engine.Step{
+			{ID: "implement", Kind: domain.StepKindGenerate},
+			{ID: "verify", Kind: domain.StepKindVerify},
+		},
+	}
+
+	reporter := &observingReporter{}
+	gatherer := &fakeGatherer{files: []string{"aaaa", "bb"}}
+	eng := engine.NewEngine(gatherer, &timeoutExecutor{patch: "a-patch"}, &fakeVerifier{verdict: "pass"}, "", pipeline)
+	eng.SetReporter(reporter)
+
+	if _, err := eng.Run(context.Background(), &domain.Intent{Text: "add a health endpoint"}); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	if reporter.intent != "add a health endpoint" {
+		t.Errorf("declared Intent = %q, want the Intent's own text", reporter.intent)
+	}
+	if reporter.gatheredEntries != 2 || reporter.gatheredBytes != 6 {
+		t.Errorf("gathered = %d entries / %d bytes, want 2 / 6", reporter.gatheredEntries, reporter.gatheredBytes)
+	}
+	// The Intent must be stated before anything is gathered or executed: it
+	// is the frame for everything printed after it.
+	if got := reporter.events[0]; got != "intent" {
+		t.Errorf("first event = %q, want the Intent declared first", got)
 	}
 }
