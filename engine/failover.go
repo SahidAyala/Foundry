@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/SahidAyala/Foundry/domain"
 	"github.com/SahidAyala/Foundry/model"
@@ -71,7 +72,7 @@ func executeGenerateStepWithoutCapabilityCheck(ctx context.Context, rc runContex
 		if err != nil {
 			return nil, wrapStepError(attempt, "route", err)
 		}
-		return runExecuteAttempts(ctx, rc, step.ID, resolved, "", nil, intent, considered, attempt)
+		return runExecuteAttempts(ctx, rc, step.ID, resolved, "", executorLabel(step.Model, step.Executor), nil, intent, considered, attempt)
 	}
 
 	ordered := preferHealthyCandidates(rc.router, step.Preferred)
@@ -79,7 +80,7 @@ func executeGenerateStepWithoutCapabilityCheck(ctx context.Context, rc runContex
 	if err != nil {
 		return nil, wrapStepError(attempt, "route", fmt.Errorf("step %q: %w", step.ID, err))
 	}
-	return runExecuteAttempts(ctx, rc, step.ID, resolved, ordered[0], ordered[1:], intent, considered, attempt)
+	return runExecuteAttempts(ctx, rc, step.ID, resolved, ordered[0], executorLabel(step.Model, step.Executor), ordered[1:], intent, considered, attempt)
 }
 
 // executeGenerateStepWithCapabilityCheck implements capability-aware
@@ -111,7 +112,7 @@ func executeGenerateStepWithCapabilityCheck(ctx context.Context, rc runContext, 
 		if err != nil {
 			return nil, wrapStepError(attempt, "route", err)
 		}
-		return runExecuteAttempts(ctx, rc, step.ID, resolved, "", nil, intent, considered, attempt)
+		return runExecuteAttempts(ctx, rc, step.ID, resolved, "", executorLabel(step.Model, step.Executor), nil, intent, considered, attempt)
 	}
 
 	capable, err := filterCapableCandidates(rc.router, candidates, step.RequireCapabilities)
@@ -124,7 +125,7 @@ func executeGenerateStepWithCapabilityCheck(ctx context.Context, rc runContext, 
 	if err != nil {
 		return nil, wrapStepError(attempt, "route", fmt.Errorf("step %q: %w", step.ID, err))
 	}
-	return runExecuteAttempts(ctx, rc, step.ID, resolved, capable[0], capable[1:], intent, considered, attempt)
+	return runExecuteAttempts(ctx, rc, step.ID, resolved, capable[0], executorLabel(step.Model, step.Executor), capable[1:], intent, considered, attempt)
 }
 
 // filterCapableCandidates returns the subset of candidates (in their
@@ -182,6 +183,44 @@ func preferHealthyCandidates(router Router, candidates []string) []string {
 	return append(ordered, unavailable...)
 }
 
+// executorLabel names, for narration only, what a generate Step's Execute
+// call is about to run against: the Model ID when one was resolved
+// (ADR-0013's Model/Preferred routing), otherwise the Step's own Executor
+// pin, otherwise the Engine's default Executor — which has no name to
+// report, since it is wired in Go by the composition root rather than
+// named by a Pipeline document. It never affects resolution; it exists
+// because narration that hardcodes one vendor's name (as
+// cli.ProgressReporter's "Asking Claude Code for a patch" did, for every
+// Executor including Gemini and OpenAI ones) is worse than no name at all.
+func executorLabel(modelID, pin string) string {
+	switch {
+	case modelID != "":
+		return modelID
+	case pin != "":
+		return pin
+	}
+	return "default executor"
+}
+
+// timeoutAdvertiser is the optional seam an Executor may implement to
+// report its own per-call deadline — every CLI-backed Executor in this
+// repository does, via the SetTimeout/Timeout pair. It is an assertion
+// rather than part of the Executor port because a deadline is not
+// something the Engine needs in order to run a Step: it is used purely to
+// tell a human how much of the budgeted wait has elapsed.
+type timeoutAdvertiser interface {
+	Timeout() time.Duration
+}
+
+// executorTimeout returns the per-call deadline e advertises, or 0 if it
+// advertises none.
+func executorTimeout(e Executor) time.Duration {
+	if t, ok := e.(timeoutAdvertiser); ok {
+		return t.Timeout()
+	}
+	return 0
+}
+
 // runExecuteAttempts runs the shared estimate/charge/Executing/Execute/
 // failover loop given an already-resolved starting Executor (resolved),
 // its own Model ID for narration (currentModel, "" if none applies), and
@@ -192,7 +231,11 @@ func preferHealthyCandidates(router Router, candidates []string) []string {
 // genuinely different cost, so each attempt is estimated and charged on
 // its own terms, exactly as the pre-failover code already charged once
 // per Execute call.
-func runExecuteAttempts(ctx context.Context, rc runContext, stepID string, resolved Executor, currentModel string, remaining []string, intent *domain.Intent, considered []string, attempt int) (*domain.Outcome, error) {
+// fallbackLabel names what is running (for narration only) whenever no
+// Model ID applies to the current attempt — see executorLabel, which the
+// callers use to build it. It plays no part in resolution, which already
+// happened in the caller.
+func runExecuteAttempts(ctx context.Context, rc runContext, stepID string, resolved Executor, currentModel, fallbackLabel string, remaining []string, intent *domain.Intent, considered []string, attempt int) (*domain.Outcome, error) {
 	for {
 		estimate, err := estimateExecuteCostUSD(ctx, resolved, intent, considered)
 		if err != nil {
@@ -208,7 +251,20 @@ func runExecuteAttempts(ctx context.Context, rc runContext, stepID string, resol
 		}
 		rc.reporter.Executing(attempt + 1)
 
+		// The Execute call below is where an Act spends nearly all of its
+		// wall-clock time (minutes, for a CLI-backed Executor), and until
+		// it was bracketed by these two events a caller had nothing to
+		// show for that whole window: not which model was resolved, not
+		// how long the call had been running, and — on failure — not the
+		// cause, until it surfaced as the Act's own error much later.
+		label := currentModel
+		if label == "" {
+			label = fallbackLabel
+		}
+		reportExecutorStarting(rc.reporter, stepID, label, executorTimeout(resolved))
+		start := time.Now()
 		outcome, execErr := resolved.Execute(ctx, intent, considered)
+		reportExecutorFinished(rc.reporter, stepID, label, time.Since(start), execErr)
 		if execErr == nil {
 			rc.reporter.Executed(attempt+1, outcome.ActualCostUSD)
 			return outcome, nil

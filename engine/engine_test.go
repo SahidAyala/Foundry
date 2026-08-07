@@ -444,6 +444,10 @@ func TestScriptedExecutor_Deterministic(t *testing.T) {
 // human-readable strings for assertions.
 type fakeReporter struct {
 	events []string
+	// repairReasons records the cause passed to each Repairing call, so a
+	// test can assert a repair round was narrated with the reason that
+	// actually earned it (a failed generate Step vs a failed verification).
+	repairReasons []string
 }
 
 func (r *fakeReporter) Gathering() { r.events = append(r.events, "gathering") }
@@ -463,7 +467,10 @@ func (r *fakeReporter) Executed(iteration int, actualCostUSD *float64) {
 	}
 	r.events = append(r.events, fmt.Sprintf("executed:%d:%.4f", iteration, *actualCostUSD))
 }
-func (r *fakeReporter) Repairing() { r.events = append(r.events, "repairing") }
+func (r *fakeReporter) Repairing(reason string) {
+	r.events = append(r.events, "repairing")
+	r.repairReasons = append(r.repairReasons, reason)
+}
 func (r *fakeReporter) RepairSkipped(reason string) {
 	r.events = append(r.events, "repair-skipped:"+reason)
 }

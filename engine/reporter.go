@@ -1,6 +1,12 @@
 package engine
 
-import "github.com/SahidAyala/Foundry/domain"
+import (
+	"io"
+	"time"
+
+	"github.com/SahidAyala/Foundry/domain"
+	"github.com/SahidAyala/Foundry/model"
+)
 
 // Reporter observes an Act's lifecycle as the Engine runs it — pure
 // narration, never control flow. Only the Engine decides what runs next
@@ -28,15 +34,87 @@ type Reporter interface {
 	// Budget decision to allow the call already happened in Executing's
 	// pre-execution estimate.
 	Executed(iteration int, actualCostUSD *float64)
-	// Repairing is called once, when a failed first verification earns
-	// the bounded repair attempt.
-	Repairing()
+	// Repairing is called once per repair round the Engine grants, with
+	// the reason the previous attempt did not produce a usable Outcome:
+	// a failed verify Judgment is one cause, but a generate Step that
+	// failed outright (a timed-out or unparseable Executor call) is
+	// another, and both spend the same repair budget
+	// (engine/strategy.go's generateStepFailure). The reason is passed
+	// rather than assumed because a Reporter cannot otherwise tell the
+	// two apart — every repair round used to be narrated as a
+	// verification failure, including the rounds where verification
+	// never ran at all.
+	Repairing(reason string)
 	// RepairSkipped is called instead of a second Executing/Verifying
 	// round when the Budget refuses the repair attempt.
 	RepairSkipped(reason string)
 	// BudgetExceeded is called when the Budget halts the Act before its
 	// first Execute call.
 	BudgetExceeded(reason string)
+}
+
+// StepReporter is an optional Reporter extension: if the Reporter an
+// Engine is using also implements it, StepStarting is called before every
+// Step of every attempt, whatever its kind — so a caller can narrate the
+// Pipeline walk itself ("step 2 of 5: verify"), not only the
+// generate/verify events Reporter already carries. Like FailoverReporter
+// (engine/failover.go), it is deliberately not embedded in Reporter: a
+// Reporter that doesn't implement it simply never receives this
+// narration.
+type StepReporter interface {
+	// StepStarting is called before a Step runs. attempt is the Pipeline
+	// attempt number (1 for the first, 2 for the first repair round);
+	// index is the Step's 1-based position within the Steps this attempt
+	// is walking, out of total. A repair round that jumps to
+	// RepairPolicy.Target walks fewer Steps than the first attempt, so
+	// index/total describe this attempt, not the whole Pipeline document.
+	StepStarting(attempt, index, total int, stepID, kind string)
+}
+
+// ExecutorReporter is an optional Reporter extension that brackets the one
+// call an Act spends nearly all of its wall-clock time inside: an
+// Executor's Execute. Reporter.Executing already announces that a call is
+// about to happen, but it carries neither which Executor was resolved nor
+// when the call ended, so a caller had no way to narrate a long-running
+// call's progress, name the model actually being used, or report the
+// failure at the moment it happened. ExecutorFinished is called on both
+// success and failure, so a Reporter holding live state for the duration
+// of the call (cli.ProgressReporter's elapsed-time heartbeat) always gets
+// a definite end.
+type ExecutorReporter interface {
+	// ExecutorStarting is called immediately before Execute. executor
+	// names what was resolved — a Model ID when the Step declared one,
+	// otherwise the Step's Executor pin, otherwise the Engine's default.
+	// timeout is the per-call deadline the resolved Executor advertises,
+	// or 0 if it advertises none.
+	ExecutorStarting(stepID, executor string, timeout time.Duration)
+	// ExecutorFinished is called once Execute returns, with how long it
+	// took and the error it returned (nil on success).
+	ExecutorFinished(stepID, executor string, elapsed time.Duration, err error)
+}
+
+// reportStepStarting calls reporter.StepStarting if reporter implements
+// StepReporter, and does nothing otherwise.
+func reportStepStarting(reporter Reporter, attempt, index, total int, stepID, kind string) {
+	if sr, ok := reporter.(StepReporter); ok {
+		sr.StepStarting(attempt, index, total, stepID, kind)
+	}
+}
+
+// reportExecutorStarting calls reporter.ExecutorStarting if reporter
+// implements ExecutorReporter, and does nothing otherwise.
+func reportExecutorStarting(reporter Reporter, stepID, executor string, timeout time.Duration) {
+	if er, ok := reporter.(ExecutorReporter); ok {
+		er.ExecutorStarting(stepID, executor, timeout)
+	}
+}
+
+// reportExecutorFinished calls reporter.ExecutorFinished if reporter
+// implements ExecutorReporter, and does nothing otherwise.
+func reportExecutorFinished(reporter Reporter, stepID, executor string, elapsed time.Duration, err error) {
+	if er, ok := reporter.(ExecutorReporter); ok {
+		er.ExecutorFinished(stepID, executor, elapsed, err)
+	}
 }
 
 // noopReporter discards every event. It is the Engine's default so a
@@ -49,7 +127,7 @@ func (noopReporter) Executing(iteration int)                           {}
 func (noopReporter) Verifying(iteration int)                           {}
 func (noopReporter) Verified(iteration int, judgment *domain.Judgment) {}
 func (noopReporter) Executed(iteration int, actualCostUSD *float64)    {}
-func (noopReporter) Repairing()                                        {}
+func (noopReporter) Repairing(reason string)                           {}
 func (noopReporter) RepairSkipped(reason string)                       {}
 func (noopReporter) BudgetExceeded(reason string)                      {}
 
@@ -97,10 +175,58 @@ func (m MultiReporter) Executed(iteration int, actualCostUSD *float64) {
 	}
 }
 
-func (m MultiReporter) Repairing() {
+func (m MultiReporter) Repairing(reason string) {
 	for _, r := range m.Reporters {
-		r.Repairing()
+		r.Repairing(reason)
 	}
+}
+
+// StepStarting, ExecutorStarting, ExecutorFinished, and ModelFailover fan
+// the optional Reporter extensions out too, to whichever Reporters
+// implement each one. Without these, composing a ProgressReporter with a
+// SlogReporter (cli.NewReporter, whenever FOUNDRY_LOG is set) would
+// silently drop every event that lives on an extension interface rather
+// than on Reporter itself — the MultiReporter satisfies only Reporter, so
+// the type assertions in reportStepStarting/reportExecutorStarting/
+// reportFailover would all fail against it and narrate nothing at all.
+func (m MultiReporter) StepStarting(attempt, index, total int, stepID, kind string) {
+	for _, r := range m.Reporters {
+		reportStepStarting(r, attempt, index, total, stepID, kind)
+	}
+}
+
+func (m MultiReporter) ExecutorStarting(stepID, executor string, timeout time.Duration) {
+	for _, r := range m.Reporters {
+		reportExecutorStarting(r, stepID, executor, timeout)
+	}
+}
+
+func (m MultiReporter) ExecutorFinished(stepID, executor string, elapsed time.Duration, err error) {
+	for _, r := range m.Reporters {
+		reportExecutorFinished(r, stepID, executor, elapsed, err)
+	}
+}
+
+func (m MultiReporter) ModelFailover(stepID, from, to string, class model.FailureClass, cause error) {
+	for _, r := range m.Reporters {
+		reportFailover(r, stepID, from, to, class, cause)
+	}
+}
+
+// Close releases whatever any composed Reporter holds open — today, a
+// ProgressReporter's live-elapsed heartbeat goroutine — for the
+// Reporters that implement io.Closer, and ignores the rest. Returns the
+// first error any of them reported, after closing all of them.
+func (m MultiReporter) Close() error {
+	var firstErr error
+	for _, r := range m.Reporters {
+		if c, ok := r.(io.Closer); ok {
+			if err := c.Close(); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
 }
 
 func (m MultiReporter) RepairSkipped(reason string) {

@@ -38,7 +38,7 @@ func TestSlogReporter_EmitsStructuredEventsAtInfoLevel(t *testing.T) {
 	r.Executing(2)
 	r.Verifying(2)
 	r.Verified(2, &domain.Judgment{Verdict: "fail", Checked: []string{"go-test: fail"}})
-	r.Repairing()
+	r.Repairing("verification failed")
 
 	lines := slogLines(t, &buf)
 	if len(lines) != 5 {
